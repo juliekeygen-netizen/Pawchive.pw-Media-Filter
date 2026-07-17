@@ -2301,7 +2301,12 @@
   };
 
   const OverlayManager = {
-    stack: [], scrollY: 0,
+    stack: [],
+    scrollY: 0,
+
+    scrollLock: {
+        active: false,
+    },
     top() { return OverlayManager.stack.at(-1) || null; },
     open({ id = Presets.id(), node, root = node, opener = document.activeElement, modal = false, dismissible = true, onClose = null }) {
       const entry = { id, node, root, opener, modal, dismissible, onClose };
@@ -2317,15 +2322,42 @@
     },
     closeTop(reason = 'dismiss') { const top = OverlayManager.top(); return Boolean(top?.dismissible && OverlayManager.close(top.id, reason)); },
     closeAll(reason = 'cleanup') { [...OverlayManager.stack].reverse().forEach((entry) => OverlayManager.close(entry.id, reason)); },
-    sync() {
-      const modal = OverlayManager.stack.some((entry) => entry.modal);
-      if (modal && !document.documentElement.classList.contains('pmf-scroll-locked')) {
-        OverlayManager.scrollY = window.scrollY; document.documentElement.classList.add('pmf-scroll-locked'); document.body?.classList.add('pmf-scroll-locked');
-      } else if (!modal && document.documentElement.classList.contains('pmf-scroll-locked')) {
-        document.documentElement.classList.remove('pmf-scroll-locked'); document.body?.classList.remove('pmf-scroll-locked'); window.scrollTo?.(0, OverlayManager.scrollY);
-      }
-      OverlayManager.stack.forEach((entry, index) => entry.root?.classList?.toggle('pmf-overlay-inactive', index !== OverlayManager.stack.length - 1));
-    },
+sync() {
+    const modal =
+        OverlayManager.stack.some(
+            (entry) => entry.modal
+        );
+
+    const lock =
+        OverlayManager.scrollLock;
+
+    if (modal && !lock.active) {
+        OverlayManager.scrollY =
+            window.scrollY;
+
+        lock.active =
+            true;
+    } else if (!modal && lock.active) {
+        lock.active =
+            false;
+
+        window.scrollTo?.(
+            0,
+            OverlayManager.scrollY
+        );
+    }
+
+    OverlayManager.stack.forEach(
+        (entry, index) => {
+            entry.root?.classList?.toggle(
+                'pmf-overlay-inactive',
+                index !==
+                    OverlayManager.stack.length -
+                        1
+            );
+        }
+    );
+},
     install(signal) {
       document.addEventListener('pointerdown', (event) => {
         const top = OverlayManager.top(); if (!top?.dismissible) return;
@@ -3910,7 +3942,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     #pmf-global-host{position:relative;z-index:2147483000}.pmf-global-flash{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483600;padding:10px 14px;border:1px solid var(--pmf-border);border-radius:5px;color:var(--pmf-text);box-shadow:0 8px 28px #0009}
     .pmf-creator-card{position:relative!important}.pmf-creator-card-has-badges [data-pmf-creator-content]{box-sizing:border-box!important;padding-right:var(--pmf-creator-badge-width,0)!important}.pmf-creator-card-badges{position:absolute;right:8px;top:50%;transform:translateY(-50%);display:flex;flex-direction:row;gap:var(--pmf-creator-badge-spacing);justify-content:flex-start;align-items:center;pointer-events:none;z-index:4}.pmf-creator-badge-column{display:flex;flex-direction:column;gap:var(--pmf-creator-column-gap);align-items:stretch}.pmf-creator-badge{width:var(--pmf-creator-column-badge-width,auto);height:var(--pmf-creator-badge-height);min-width:var(--pmf-creator-badge-min-width);display:inline-flex;align-items:center;justify-content:center;gap:var(--pmf-creator-badge-gap);padding:0 var(--pmf-creator-badge-padding);border:1px solid currentColor;border-radius:3px;background:#111d;color:#d9dde1;font:600 var(--pmf-creator-badge-font)/1 sans-serif;box-sizing:border-box;white-space:nowrap}.pmf-creator-badge svg{width:var(--pmf-creator-badge-icon);height:var(--pmf-creator-badge-icon);fill:none;stroke:currentColor;stroke-width:1.8}.pmf-creator-badge--videos{color:#d47be5}.pmf-creator-badge--images{color:#67d7b1}.pmf-creator-badge--archives{color:#e4ad51}.pmf-creator-badge--projectFiles{color:#e4ad51}.pmf-creator-badge--externalLinks{color:#62c8ed}.pmf-creator-card-job-status{position:absolute;right:8px;bottom:6px;z-index:5;max-width:60%;padding:3px 6px;border:1px solid var(--pmf-border);border-radius:3px;background:#111e;color:#fff;font:600 10px/1.2 sans-serif;pointer-events:none}.pmf-creator-card-job-active .pmf-creator-card-badges{opacity:.4}
     .pmf-settings-dialog{width:min(920px,calc(100vw - 32px));height:min(700px,calc(100vh - 48px));text-align:left!important}.pmf-settings-layout{display:grid;grid-template-columns:235px minmax(0,1fr);min-height:0;flex:1}.pmf-settings-layout>nav{padding:10px;background:var(--pmf-surface-1);border-right:1px solid var(--pmf-border)}.pmf-settings-layout>nav button{width:100%;min-height:36px;margin:2px 0;padding:0 10px;color:var(--pmf-text);background:transparent;border:0;border-radius:4px;text-align:left;white-space:nowrap}.pmf-settings-layout>nav button.pmf-active{color:#ffb184;background:var(--pmf-accent-soft)}.pmf-settings-content,.pmf-settings-content section,.pmf-settings-content h3,.pmf-settings-content fieldset,.pmf-settings-content legend,.pmf-settings-content p,.pmf-settings-content small{ text-align:left!important}.pmf-settings-content{padding:18px 20px}.pmf-settings-content h3{margin:0 0 15px;color:var(--pmf-accent)}.pmf-settings-content fieldset{border:0;border-top:1px solid var(--pmf-border);margin:13px 0;padding:11px 0 0}.pmf-settings-content legend{color:var(--pmf-accent);font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.07em}.pmf-settings-content label:not(.pmf-inline):not(.pmf-block-label){display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:10px;margin:9px 0;text-align:left!important}.pmf-settings-content input[type="checkbox"],.pmf-settings-content input[type="radio"],.pmf-date-unknown input[type="checkbox"]{width:16px!important;height:16px!important;min-width:16px!important;min-height:0!important;padding:0!important;margin:0!important;flex:0 0 auto!important;accent-color:var(--pmf-accent);vertical-align:middle}.pmf-inline{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:12px;margin:9px 0;text-align:left!important}.pmf-inline input[type="number"]{width:72px;margin-left:auto}.pmf-compact-display-settings{display:grid;grid-template-columns:minmax(0,1fr) 170px;align-items:center;gap:10px 12px;margin:14px 0 2px;padding-top:10px;border-top:1px solid var(--pmf-border)}.pmf-compact-display-settings label{margin:0!important}.pmf-compact-display-settings select{width:170px}.pmf-compact-display-settings.pmf-disabled{opacity:.55}.pmf-setting-chevron-row{display:grid;grid-template-columns:minmax(0,1fr) 34px;align-items:center}.pmf-setting-chevron-row label{margin:9px 0!important}.pmf-setting-chevron-row>button{width:34px;min-height:32px!important;padding:0!important;font-size:22px}.pmf-data-actions{display:flex;flex-wrap:wrap;gap:8px;margin:9px 0}
-    .pmf-accordion{margin:10px 0;border:1px solid var(--pmf-border);border-radius:4px;background:var(--pmf-surface-1);text-align:left!important}.pmf-accordion summary{padding:10px 12px;color:#f1f2f3;cursor:pointer;text-align:left!important;user-select:none}.pmf-accordion>div{padding:0 12px 12px;text-align:left!important}.pmf-settings-dialog textarea{display:block;max-height:220px;margin-top:7px;resize:none;overflow:auto;overscroll-behavior:contain;line-height:1.4;text-align:left!important}.pmf-block-label{display:block;color:#d4d8db;text-align:left!important}.pmf-cache-actions,.pmf-catalogue-actions{display:flex;justify-content:flex-start;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid var(--pmf-border);text-align:left!important}html.pmf-scroll-locked,body.pmf-scroll-locked{overflow:hidden!important;overscroll-behavior:none}:where(#pmf-root,.pmf-modal-backdrop,.pmf-floating-menu) :focus-visible{outline:2px solid var(--pmf-accent-hover)!important;outline-offset:2px}
+    .pmf-accordion{margin:10px 0;border:1px solid var(--pmf-border);border-radius:4px;background:var(--pmf-surface-1);text-align:left!important}.pmf-accordion summary{padding:10px 12px;color:#f1f2f3;cursor:pointer;text-align:left!important;user-select:none}.pmf-accordion>div{padding:0 12px 12px;text-align:left!important}.pmf-settings-dialog textarea{display:block;max-height:220px;margin-top:7px;resize:none;overflow:auto;overscroll-behavior:contain;line-height:1.4;text-align:left!important}.pmf-block-label{display:block;color:#d4d8db;text-align:left!important}.pmf-cache-actions,.pmf-catalogue-actions{display:flex;justify-content:flex-start;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:12px;border-top:1px solid var(--pmf-border);text-align:left!important}html{scrollbar-gutter:stable}.pmf-overlay{overscroll-behavior:contain}.pmf-dialog,.pmf-settings-dialog{overscroll-behavior:contain}:where(#pmf-root,.pmf-modal-backdrop,.pmf-floating-menu) :focus-visible{outline:2px solid var(--pmf-accent-hover)!important;outline-offset:2px}
     @media(max-width:760px){#pmf-root{width:calc(100% - 12px)}.pmf-controls{grid-template-columns:minmax(0,1fr) minmax(145px,160px) 48px;padding:9px;gap:8px}.pmf-controls .pmf-filter-button{grid-column:1/-1}.pmf-controls .pmf-sort-button{grid-column:1}.pmf-controls .pmf-scan-button{grid-column:2}.pmf-controls .pmf-icon-button{grid-column:3}.pmf-status{align-items:flex-start;flex-wrap:wrap}.pmf-status-left{flex-wrap:wrap}.pmf-status-right{width:100%;margin-left:0;text-align:right}.pmf-filter-popover{left:4px;transform:none;width:min(350px,calc(100vw - 20px))}.pmf-settings-layout{grid-template-columns:1fr}.pmf-settings-layout>nav{display:flex;overflow:auto;border-right:0;border-bottom:1px solid var(--pmf-border)}.pmf-settings-layout>nav button{min-width:max-content}.pmf-compact-display-settings{grid-template-columns:1fr}.pmf-compact-display-settings select{width:100%}.pmf-rule-row{grid-template-columns:62px 84px minmax(110px,1fr) 96px 34px;min-width:520px}.pmf-rule-list{overflow-x:auto}.pmf-date-fields.pmf-between{grid-template-columns:minmax(0,250px)}.pmf-confirm-dialog>footer{flex-wrap:wrap}.pmf-confirm-dialog>footer button{flex:1 1 auto}}
   `);
 
