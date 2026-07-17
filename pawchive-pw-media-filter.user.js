@@ -1,8 +1,12 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.8.4
+// @version      0.8.5
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
+// @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
+// @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
+// @downloadURL  https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js
+// @updateURL    https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js
 // @match        https://pawchive.pw/*
 // @match        https://www.pawchive.pw/*
 // @grant        GM_addStyle
