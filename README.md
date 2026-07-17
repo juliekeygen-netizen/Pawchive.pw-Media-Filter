@@ -2,7 +2,11 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.8.4**
+Current version: **0.8.5**
+
+## Installation
+
+[Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
 
 ## v0.8.4 native stylesheet and settings patch
 
@@ -22,12 +26,7 @@ v0.8.3 keeps post schema 2 and IndexedDB version 4. It adds a one-time card-scal
 
 Scanned creators always use the compact Catalogue grid; unscanned creators retain Pawchive's native grid. Filter, preset, search, sort, page/anchor, layout, and scroll state are persisted automatically.
 
-## Installation
 
-1. Install Tampermonkey.
-2. Create a userscript.
-3. Copy the contents of `pawchive-pw-media-filter.user.js`.
-4. Save it and open a Pawchive creator page, post page, or `/artists`.
 
 The script runs only on `pawchive.pw` and `www.pawchive.pw`. Catalogue scans store metadata, not media files.
 
