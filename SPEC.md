@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.8.4 specification
+# Pawchive.pw Media Filter v0.10.0 specification
 
 ## Scope
 
@@ -6,17 +6,49 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.8.4`
+- Userscript and `Config.version`: `0.10.0`
 - Settings: `pmf-settings-v5`
 - Presets: existing key, schema 1
 - Post schema: 2
-- IndexedDB: `pawchive-media-filter`, version 4
+- IndexedDB: `pawchive-media-filter`, version 5
+- Creator directory store: `creatorDirectory`, keyed by `creatorKey`
+- Creator state store: `creatorStates`, keyed by `creatorKey`
 - Post-status store: `postStatuses`, keyed by domain/service/creator/post with a `creatorKey` index
 - Native Favorites sync state: `pmf-favorite-sync-v1`
 - Global quick-status filters: `pmf-post-status-filters-v1`
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
 - Catalogue-only migration marker: `pmf-catalogue-only-migration-v1`
 - Card-scale migration marker: `pmf-card-scale-v083-migrated`
+- Creator filter state: `pmf-creator-filter-state-v1`
+- Creator presets: `pmf-creator-presets-v1`
+- Creator quick filters: `pmf-creator-status-filters-v1`
+- Creator queue restoration: `pmf-creator-queue-session-v1` in `sessionStorage`
+
+## Unified creator index
+
+Every supported `/artists` route uses one PMF-owned toolbar, paginator, and reconstructed creator grid. Native cards remain available as the safe fallback and are hidden only after PMF has captured a healthy template and rendered results. Directory records are independent from Catalogue metadata, so a known creator is not necessarily Scanned. Scanned means a complete or partial local Catalogue exists.
+
+The existing Pawchive creator search field filters the unified index and remains available to Pawchive’s native discovery mechanism. Creator filter, preset, quick-status, sort, and pagination state are separate from post filtering and post presets.
+
+Favorite is Pawchive-native tri-state evidence. Like and Hidden are local creator state. Unknown Favorite matches neither positive nor negative Favorite filters. Hiding does not alter the current filter or immediately remove a card.
+
+## Creator aggregates and sorting
+
+`CreatorCatalogueSummary` version 2 stores source count, classification fingerprint, media post counts, attachment/link totals, earliest/latest publication dates, last update, metadata health, completeness, and Like/Seen/Favorite aggregates with known Favorite coverage. Old complete Catalogues receive bounded idle backfills without changing stored posts or forcing a scan.
+
+Media percentage is `posts containing the media type / total Catalogue posts × 100`. Count and percentage rules support At least, At most, Exactly, and Between. Percentage values are 0–100 with one decimal place. Complete Catalogues are the default aggregate domain; partial results are explicit lower bounds.
+
+Creator sorting keeps stable ties and always places unknown values after known values in both directions. Directory sorts include Popularity, indexed/updated dates, alphabetical name, and service. Catalogue sorts expose posts, dates, media post/attachment/percentage metrics, and status aggregates.
+
+## Creator queue and batches
+
+`CatalogueJobManager` remains the only scheduler. Jobs may carry `batchId`, `batchLabel`, `batchSequence`, `requestedAction`, and `creatorKey`. Confirmed batches freeze selected order, deduplicate creators, respect concurrency 1 or 2, and share the existing request spacing, retries, and 429 cooldown.
+
+Waiting descriptors persist for the tab session. A hard reload restores waiting work and records formerly active work as interrupted. Queue controls include Stop, Move to top, Remove, Retry, Dismiss, Clear completed, and Cancel remaining batch. Failed/stopped/interrupted issues remain until dismissed.
+
+## Settings schema 3
+
+Schema 3 adds independent creator status-badge size/visibility and hidden-card dim settings. Existing false values and nested attachment-badge toggles are preserved. Visual settings preview without a write; Cancel, close, Escape, and outside dismissal restore the opening snapshot; Save performs the final write.
 
 ## v0.8.4 ownership contracts
 

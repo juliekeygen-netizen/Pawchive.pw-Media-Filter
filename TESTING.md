@@ -1,4 +1,33 @@
-# Pawchive.pw Media Filter v0.8.4 testing
+# Pawchive.pw Media Filter v0.10.0 testing
+
+## v0.10.0 unified creator index live matrix
+
+Test at approximately 1920×1080 and 2560×1440.
+
+1. Open `/artists` with many creators and a short result set. Exercise native search, pagination, Back/Forward, refresh, Turbo, and BFCache. Confirm one PMF toolbar/grid/paginator, no blank page, stable card geometry, and native restoration if mounting is interrupted.
+2. Cycle Favorite, Like, Hidden, and Scanned through Off → Match → No match. Confirm unknown Favorite matches neither active Favorite state and partial Catalogues count as Scanned.
+3. Test creator directory, Catalogue, every media child dialog, posts versus attachments/links, all four operators, 0/50/100/decimal/Between percentages, complete-only behavior, partial lower-bound opt-in, post-status aggregates, combined AND rules, and creator presets.
+4. Test every creator sort in both directions. Confirm stable ties, unknown-last behavior, and a stable visible anchor where practical.
+5. On creator profiles test Favorite, Like/Unlike, and Hide/Unhide. Confirm action order/alignment, reload persistence, deduplication after navigation, and no Pawchive request for Like/Hide.
+6. Test creator status badges Small/Medium/Big, every visibility toggle, attachment/status combinations, and the top/middle/bottom right rail. Confirm no empty reservation, content collision, or geometry movement.
+7. Test hidden-card dim Off/Low/Medium/High and Hidden quick-filter Off/Match/No match. Confirm status badges remain readable and disabling removes treatment immediately.
+8. Test empty Queue, manual work, Bulk Update, Bulk Scan, Resume incomplete, concurrency 1/2, Stop, Remove, Move to top, Cancel remaining batch, Clear completed, failure/Retry/Dismiss, reload restoration, and navigation while work continues.
+9. Open Settings, creator filters, every media child, sort, bulk dialog, Queue, and Issues. `document.documentElement.clientWidth` must remain stable within about 1 px and native/PMF content must remain horizontally stationary.
+10. Recheck creator-page Details Field Availability: each centered line contains label, colon, and value; the Main file note is centered.
+
+Automated release command:
+
+```powershell
+node --check .\pawchive-pw-media-filter.user.js
+
+Get-ChildItem .\tests\*.cjs |
+  Where-Object Name -ne 'test-helper.cjs' |
+  Sort-Object Name |
+  ForEach-Object {
+    node $_.FullName
+    if ($LASTEXITCODE) { exit $LASTEXITCODE }
+  }
+```
 
 ## v0.8.4 native stylesheet and settings live matrix (A–O)
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.8.5
+// @version      0.10.0
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -15,13 +15,14 @@
 // @grant        GM_deleteValue
 // @run-at       document-start
 // ==/UserScript==
+/* global globalThis */
 
 (function () {
   'use strict';
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.8.4',
+    version: '0.10.0',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -33,7 +34,7 @@
     catalogueDetailConcurrency: 2,
     creatorListFields: ['id','user','service','title','shared_file','added','published','edited','file','attachments','tags','content'],
     settingsKey: 'pmf-settings-v5',
-    settingsBackupKey: 'pmf-settings-backup-pre-schema-2',
+    settingsBackupKey: 'pmf-settings-backup-pre-schema-3',
     legacySettingsKey: 'pmf-settings-v4',
     oldestSettingsKey: 'pmf-settings-v3',
     ancientSettingsKey: 'pmf-settings-v2',
@@ -42,9 +43,13 @@
     debugKey: 'pmf-debug-v1',
     catalogueOnlyMigrationKey: 'pmf-catalogue-only-migration-v1',
     databaseName: 'pawchive-media-filter',
-    databaseVersion: 4,
+    databaseVersion: 5,
     favoriteSyncKey: 'pmf-favorite-sync-v1',
     postStatusFiltersKey: 'pmf-post-status-filters-v1',
+    creatorFilterStateKey: 'pmf-creator-filter-state-v1',
+    creatorPresetsKey: 'pmf-creator-presets-v1',
+    creatorStatusFiltersKey: 'pmf-creator-status-filters-v1',
+    creatorQueueSessionKey: 'pmf-creator-queue-session-v1',
     cardScaleMigrationKey: 'pmf-card-scale-v083-migrated',
     favoriteSnapshotFreshMs: 10 * 60 * 1000,
     allowedHosts: new Set(['pawchive.pw', 'www.pawchive.pw']),
@@ -74,7 +79,7 @@
   ]);
 
   const DefaultSettings = Object.freeze({
-    settingsSchemaVersion: 2,
+    settingsSchemaVersion: 3,
     compactCardScale: 'big',
     compactThumbnailAspectRatio: '1-1',
     postAttachmentBadgeSize: 'small',
@@ -105,6 +110,15 @@
       types: { favorited: true, liked: true, seen: true },
     },
     seenCardTreatment: {
+      enabled: false,
+      strength: 'medium',
+    },
+    creatorStatusBadgeSize: 'small',
+    creatorStatusBadges: {
+      enabled: true,
+      types: { favorited: true, liked: true, hidden: true, scanned: true },
+    },
+    hiddenCreatorTreatment: {
       enabled: false,
       strength: 'medium',
     },
@@ -218,7 +232,7 @@
     value: Util.clone(DefaultSettings),
     initialized:false,
     schema:Object.freeze({
-      version:2,
+      version:3,
       sizeValues:Object.freeze(['small','medium','big']),
       legacySharedAttachmentSize:'attachmentBadgeSize',
       splitAttachmentSizes:Object.freeze(['postAttachmentBadgeSize','creatorAttachmentBadgeSize']),
@@ -235,6 +249,19 @@
         if(!Settings.schema.sizeValues.includes(source.creatorAttachmentBadgeSize))next.creatorAttachmentBadgeSize=shared;
         delete next.attachmentBadgeSize;
         next.settingsSchemaVersion=2;
+      }
+      if(version<3){
+        next.creatorStatusBadgeSize=Settings.schema.sizeValues.includes(source.creatorStatusBadgeSize)?source.creatorStatusBadgeSize:'small';
+        next.creatorStatusBadges={
+          ...DefaultSettings.creatorStatusBadges,
+          ...(source.creatorStatusBadges||{}),
+          types:{...DefaultSettings.creatorStatusBadges.types,...(source.creatorStatusBadges?.types||{})},
+        };
+        next.hiddenCreatorTreatment={
+          enabled:source.hiddenCreatorTreatment?.enabled===true,
+          strength:['low','medium','high'].includes(source.hiddenCreatorTreatment?.strength)?source.hiddenCreatorTreatment.strength:'medium',
+        };
+        next.settingsSchemaVersion=3;
       }
       return next;
     },
@@ -278,6 +305,15 @@
           ...DefaultSettings.seenCardTreatment,
           ...(safe.seenCardTreatment || {}),
         },
+        creatorStatusBadges: {
+          ...DefaultSettings.creatorStatusBadges,
+          ...(safe.creatorStatusBadges || {}),
+          types: { ...DefaultSettings.creatorStatusBadges.types, ...(safe.creatorStatusBadges?.types || {}) },
+        },
+        hiddenCreatorTreatment: {
+          ...DefaultSettings.hiddenCreatorTreatment,
+          ...(safe.hiddenCreatorTreatment || {}),
+        },
         knownHosts: Util.unique((safe.knownHosts || DefaultSettings.knownHosts).map((value) => String(value).trim().toLowerCase()).filter(Boolean)),
       };
        const migratedScale={original:'big',small:'medium',compact:'small'}[safe.compactCardSize];
@@ -300,10 +336,21 @@
       output.postStatusBadgeSize=['small','medium','big'].includes(safe.postStatusBadgeSize)
         ? safe.postStatusBadgeSize
         : 'small';
+      output.creatorStatusBadgeSize=Settings.schema.sizeValues.includes(safe.creatorStatusBadgeSize)
+        ? safe.creatorStatusBadgeSize
+        : 'small';
       delete output.attachmentBadgeSize;
       output.seenCardTreatment={
         enabled:typeof output.seenCardTreatment?.enabled==='boolean'?output.seenCardTreatment.enabled:false,
         strength:['low','medium','high'].includes(output.seenCardTreatment?.strength)?output.seenCardTreatment.strength:'medium',
+      };
+      output.creatorStatusBadges={
+        enabled:typeof output.creatorStatusBadges?.enabled==='boolean'?output.creatorStatusBadges.enabled:true,
+        types:{...DefaultSettings.creatorStatusBadges.types,...(output.creatorStatusBadges?.types||{})},
+      };
+      output.hiddenCreatorTreatment={
+        enabled:typeof output.hiddenCreatorTreatment?.enabled==='boolean'?output.hiddenCreatorTreatment.enabled:false,
+        strength:['low','medium','high'].includes(output.hiddenCreatorTreatment?.strength)?output.hiddenCreatorTreatment.strength:'medium',
       };
       output.synchronizeNativeFavorites=typeof safe.synchronizeNativeFavorites==='boolean'
         ? safe.synchronizeNativeFavorites
@@ -361,6 +408,11 @@
           types:{...Settings.value.postStatusBadges.types,...(next.postStatusBadges?.types||{})},
         },
         seenCardTreatment:{...Settings.value.seenCardTreatment,...(next.seenCardTreatment||{})},
+        creatorStatusBadges:{
+          ...Settings.value.creatorStatusBadges,...(next.creatorStatusBadges||{}),
+          types:{...Settings.value.creatorStatusBadges.types,...(next.creatorStatusBadges?.types||{})},
+        },
+        hiddenCreatorTreatment:{...Settings.value.hiddenCreatorTreatment,...(next.hiddenCreatorTreatment||{})},
       });
       GM_setValue(Config.settingsKey,Settings.value);
       if(typeof CatalogueJobManager!=='undefined')CatalogueJobManager.setConcurrency(Settings.value.catalogueConcurrentJobs);
@@ -956,6 +1008,8 @@
     metaMemory: new Map(),
     statusMemory: new Map(),
     favoriteSnapshotMemory:new Map(),
+    creatorDirectoryMemory:new Map(),
+    creatorStateMemory:new Map(),
     staleCreators: new Set(),
     open() {
       if (Cache.dbPromise) return Cache.dbPromise;
@@ -980,6 +1034,16 @@
             entries.createIndex('hostSnapshot','hostSnapshot',{unique:false});
           }
           if (!db.objectStoreNames.contains('favoriteSyncMeta')) db.createObjectStore('favoriteSyncMeta',{keyPath:'host'});
+          if (!db.objectStoreNames.contains('creatorDirectory')) {
+            const directory=db.createObjectStore('creatorDirectory',{keyPath:'creatorKey'});
+            directory.createIndex('service','service',{unique:false});
+            directory.createIndex('updatedAt','updatedAt',{unique:false});
+          }
+          if (!db.objectStoreNames.contains('creatorStates')) {
+            const states=db.createObjectStore('creatorStates',{keyPath:'creatorKey'});
+            states.createIndex('liked','liked',{unique:false});
+            states.createIndex('hidden','hidden',{unique:false});
+          }
           if(event.oldVersion<4&&db.objectStoreNames.contains('postStatuses')){
             const cursorRequest=request.transaction.objectStore('postStatuses').openCursor();
             cursorRequest.onsuccess=()=>{const cursor=cursorRequest.result;if(!cursor)return;cursor.update(PostStatus.normalize(cursor.value));cursor.continue();};
@@ -1135,6 +1199,27 @@
         request.onsuccess=()=>{const cursor=request.result;if(!cursor){resolve(result);return;}if(!keys.size||keys.has(String(cursor.key)))result.set(String(cursor.key),cursor.value);cursor.continue();};
         request.onerror=()=>reject(request.error);
       }).catch((error)=>{Logger.warn('Could not batch-read creator metadata.',error);return result;});
+    },
+    async getCreatorDirectory(creatorKeys = []) {
+      const keys=new Set((creatorKeys||[]).map(String).filter(Boolean));const result=new Map();const db=await Cache.open();
+      if(!db){for(const [key,value] of Cache.creatorDirectoryMemory){if(!keys.size||keys.has(key))result.set(key,Util.clone(value));}return result;}
+      return new Promise((resolve,reject)=>{const request=db.transaction('creatorDirectory','readonly').objectStore('creatorDirectory').openCursor();request.onsuccess=()=>{const cursor=request.result;if(!cursor){resolve(result);return;}if(!keys.size||keys.has(String(cursor.key)))result.set(String(cursor.key),cursor.value);cursor.continue();};request.onerror=()=>reject(request.error);}).catch((error)=>{Logger.warn('Could not read creator directory.',error);return result;});
+    },
+    async putCreatorDirectory(records=[]) {
+      const normalized=(records||[]).map(CreatorDirectory.normalize).filter((record)=>record.creatorKey);normalized.forEach((record)=>Cache.creatorDirectoryMemory.set(record.creatorKey,Util.clone(record)));const db=await Cache.open();if(!db)return normalized;
+      await new Promise((resolve,reject)=>{const transaction=db.transaction('creatorDirectory','readwrite');const store=transaction.objectStore('creatorDirectory');normalized.forEach((record)=>store.put(record));transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});return normalized;
+    },
+    async getCreatorStates(creatorKeys=[]) {
+      const keys=new Set((creatorKeys||[]).map(String).filter(Boolean));const result=new Map();const db=await Cache.open();
+      if(!db){for(const [key,value] of Cache.creatorStateMemory){if(!keys.size||keys.has(key))result.set(key,Util.clone(value));}return result;}
+      return new Promise((resolve,reject)=>{const request=db.transaction('creatorStates','readonly').objectStore('creatorStates').openCursor();request.onsuccess=()=>{const cursor=request.result;if(!cursor){resolve(result);return;}if(!keys.size||keys.has(String(cursor.key)))result.set(String(cursor.key),CreatorState.normalize(cursor.value));cursor.continue();};request.onerror=()=>reject(request.error);}).catch((error)=>{Logger.warn('Could not read creator states.',error);return result;});
+    },
+    async getCreatorState(creatorKey) {
+      return (await Cache.getCreatorStates([creatorKey])).get(String(creatorKey))||CreatorState.empty(creatorKey);
+    },
+    async putCreatorState(state) {
+      const next=CreatorState.normalize(state);if(!next.creatorKey)return null;Cache.creatorStateMemory.set(next.creatorKey,Util.clone(next));const db=await Cache.open();if(!db)return next;
+      await new Promise((resolve,reject)=>{const transaction=db.transaction('creatorStates','readwrite');transaction.objectStore('creatorStates').put(next);transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);});Util.dispatch('creator-state',{state:next});return next;
     },
     async putMeta(meta) {
       Cache.metaMemory.set(meta.creatorKey, Util.clone(meta));
@@ -1940,8 +2025,132 @@
     },
   };
 
+  const CreatorDirectory = {
+    normalize(record={}) {
+      const context=record.context||Route.parseCreatorUrl(record.creatorUrl||'')||{};
+      const creatorKey=String(record.creatorKey||context.creatorKey||'');
+      const [domain='',service='',creatorId='']=creatorKey.split('|');
+      const now=Date.now();
+      return {
+        creatorKey,
+        domain:String(record.domain||context.domain||domain||location.hostname),
+        service:String(record.service||context.service||service),
+        creatorId:String(record.creatorId||context.creatorId||creatorId),
+        creatorName:String(record.creatorName||record.displayName||record.creatorId||context.creatorId||'Creator').trim(),
+        creatorUrl:String(record.creatorUrl||context.creatorUrl||''),
+        thumbnailUrl:String(record.thumbnailUrl||''),
+        publicFavoriteCount:Math.max(0,Number(record.publicFavoriteCount)||0),
+        indexedAt:Number(record.indexedAt)||now,
+        updatedAt:Number(record.updatedAt)||now,
+        lastSeenInDirectoryAt:Number(record.lastSeenInDirectoryAt)||now,
+      };
+    },
+    merge(prior={},incoming={}) {
+      const old=CreatorDirectory.normalize(prior);const next=CreatorDirectory.normalize({...old,...incoming});
+      next.indexedAt=Math.min(old.indexedAt||next.indexedAt,next.indexedAt);
+      next.updatedAt=Math.max(old.updatedAt||0,next.updatedAt||0);
+      next.lastSeenInDirectoryAt=Math.max(old.lastSeenInDirectoryAt||0,next.lastSeenInDirectoryAt||0);
+      return next;
+    },
+    fromCard(info) {
+      const image=info.card?.querySelector?.('img');const favorites=String(info.card?.textContent||'').match(/([\d,]+)\s+favorites?/i);
+      return CreatorDirectory.normalize({
+        ...info.context,creatorName:info.creatorName,creatorUrl:info.link?.href||'',
+        thumbnailUrl:image?.currentSrc||image?.src||'',publicFavoriteCount:Number(String(favorites?.[1]||'').replace(/,/g,''))||0,
+      });
+    },
+  };
+
+  const CreatorState = {
+    empty(creatorKey=''){const now=Date.now();return{creatorKey:String(creatorKey),liked:false,likedAt:0,hidden:false,hiddenAt:0,favoriteDirectValue:null,favoriteDirectObservedAt:0,createdAt:now,updatedAt:now,source:'local'};},
+    normalize(state={}) {
+      const base=CreatorState.empty(state.creatorKey);return{...base,...state,creatorKey:String(state.creatorKey||''),liked:state.liked===true,likedAt:Math.max(0,Number(state.likedAt)||0),hidden:state.hidden===true,hiddenAt:Math.max(0,Number(state.hiddenAt)||0),favoriteDirectValue:typeof state.favoriteDirectValue==='boolean'?state.favoriteDirectValue:null,favoriteDirectObservedAt:Math.max(0,Number(state.favoriteDirectObservedAt)||0),createdAt:Number(state.createdAt)||base.createdAt,updatedAt:Number(state.updatedAt)||base.updatedAt,source:String(state.source||'local')};
+    },
+    async set(creatorKey,patch,source='local') {
+      const current=await Cache.getCreatorState(creatorKey);const now=Date.now();const next=CreatorState.normalize({...current,...patch,creatorKey,source,updatedAt:now});
+      if('liked'in patch)next.likedAt=patch.liked?now:0;if('hidden'in patch)next.hiddenAt=patch.hidden?now:0;if('favoriteDirectValue'in patch)next.favoriteDirectObservedAt=now;
+      return Cache.putCreatorState(next);
+    },
+    async toggle(creatorKey,field) {const current=await Cache.getCreatorState(creatorKey);return CreatorState.set(creatorKey,{[field]:!current[field]},'creator-action');},
+  };
+
+  const CreatorStatusFilters = {
+    fields:['favorite','liked','hidden','scanned'],values:['off','match','no-match'],
+    normalize(value={}){return Object.fromEntries(CreatorStatusFilters.fields.map((field)=>[field,CreatorStatusFilters.values.includes(value?.[field])?value[field]:'off']));},
+    load(){return CreatorStatusFilters.normalize(GM_getValue(Config.creatorStatusFiltersKey,{}));},
+    save(value){const next=CreatorStatusFilters.normalize(value);GM_setValue(Config.creatorStatusFiltersKey,next);return next;},
+    cycle(value){return{off:'match',match:'no-match','no-match':'off'}[value]||'match';},
+    matches(record,filters=CreatorStatusFilters.load()) {
+      const tests={favorite:record.favorite,liked:Boolean(record.state?.liked),hidden:Boolean(record.state?.hidden),scanned:Boolean(record.scanned)};
+      return CreatorStatusFilters.fields.every((field)=>{const mode=filters[field];if(mode==='off')return true;const value=tests[field];if(value==null)return false;return mode==='match'?value===true:value===false;});
+    },
+  };
+
+  const CreatorPresets = {
+    normalize(record={}){return{version:1,activeId:String(record.activeId||'default'),presets:Array.isArray(record.presets)&&record.presets.length?record.presets.map((preset,index)=>({id:String(preset.id||`creator-preset-${index}`),name:String(preset.name||`Preset ${index+1}`),state:CreatorFilterEngine.normalizeState(preset.state||{})})):[{id:'default',name:'Default',state:CreatorFilterEngine.normalizeState({})}]};},
+    load(){return CreatorPresets.normalize(GM_getValue(Config.creatorPresetsKey,{}));},
+    save(record){const next=CreatorPresets.normalize(record);GM_setValue(Config.creatorPresetsKey,next);return next;},
+    create(record,name,state){const next=CreatorPresets.normalize(record);const id=`creator-preset-${Date.now()}-${Math.random().toString(36).slice(2)}`;next.presets.push({id,name:String(name||'Creator preset').trim().slice(0,80),state:CreatorFilterEngine.normalizeState(state)});next.activeId=id;return CreatorPresets.save(next);},
+    apply(record,id){const next=CreatorPresets.normalize(record);const preset=next.presets.find((item)=>item.id===id);if(!preset)return null;next.activeId=id;CreatorPresets.save(next);return CreatorFilterEngine.normalizeState(preset.state);},
+  };
+
+  const CreatorAggregateCondition = {
+    operators:['at-least','at-most','exactly','between'],
+    normalize(rule={},percentage=false) {
+      const limit=percentage?100:Number.MAX_SAFE_INTEGER;const round=(value)=>percentage?Math.round(Util.clamp(Number(value)||0,0,limit)*10)/10:Math.max(0,Math.floor(Number(value)||0));
+      const operator=CreatorAggregateCondition.operators.includes(rule.operator)?rule.operator:'at-least';const from=round(rule.from??rule.value);const to=round(rule.to??from);
+      return{operator,from,to:Math.max(from,to)};
+    },
+    valid(rule={},percentage=false){const value=CreatorAggregateCondition.normalize(rule,percentage);return value.from>=0&&(!percentage||value.to<=100)&&value.to>=value.from;},
+    test(actual,rule={}) {
+      if(actual==null||!Number.isFinite(Number(actual)))return false;const value=CreatorAggregateCondition.normalize(rule,Boolean(rule.percentage));const number=Number(actual);
+      return value.operator==='at-most'?number<=value.from:value.operator==='exactly'?number===value.from:value.operator==='between'?number>=value.from&&number<=value.to:number>=value.from;
+    },
+    percentage(posts,total){return total>0?Math.round((Math.max(0,Number(posts)||0)/total)*1000)/10:0;},
+  };
+
+  const DefaultCreatorFilterState = Object.freeze({
+    service:'all',catalogueState:'any',includePartialLowerBounds:false,publicFavorites:null,dateIndexedFrom:'',dateIndexedTo:'',dateUpdatedFrom:'',dateUpdatedTo:'',
+    totalPosts:null,lastCatalogueUpdateFrom:'',lastCatalogueUpdateTo:'',earliestPublishedFrom:'',latestPublishedTo:'',publishedWithinFrom:'',publishedWithinTo:'',
+    media:{},postStatuses:{},customRules:[],
+  });
+
+  const CreatorFilterEngine = {
+    normalizeState(value={}) {
+      const safe=value&&typeof value==='object'?value:{};const media={};
+      ['videos','images','archives','projectFiles','externalLinks','customExtensions'].forEach((type)=>{const source=safe.media?.[type]||{};media[type]={enabled:source.enabled===true,measure:String(source.measure||'posts'),count:CreatorAggregateCondition.normalize(source.count||source),percentageEnabled:source.percentageEnabled===true,percentage:CreatorAggregateCondition.normalize(source.percentage||{},true)};});
+      const postStatuses={};['liked','seen','favorited'].forEach((type)=>{const source=safe.postStatuses?.[type]||{};postStatuses[type]={enabled:source.enabled===true,count:CreatorAggregateCondition.normalize(source.count||source),percentageEnabled:source.percentageEnabled===true,percentage:CreatorAggregateCondition.normalize(source.percentage||{},true)};});
+      return{...Util.clone(DefaultCreatorFilterState),...safe,service:String(safe.service||'all'),catalogueState:['any','complete','partial','unscanned'].includes(safe.catalogueState)?safe.catalogueState:'any',includePartialLowerBounds:safe.includePartialLowerBounds===true,publicFavorites:safe.publicFavorites?CreatorAggregateCondition.normalize(safe.publicFavorites):null,totalPosts:safe.totalPosts?CreatorAggregateCondition.normalize(safe.totalPosts):null,media,postStatuses,customRules:Array.isArray(safe.customRules)?safe.customRules.slice(0,50):[]};
+    },
+    requiresCatalogue(state){const value=CreatorFilterEngine.normalizeState(state);return value.catalogueState!=='any'||Object.values(value.media).some((rule)=>rule.enabled)||Object.values(value.postStatuses||{}).some((rule)=>rule?.enabled);},
+    mediaMetric(record,type,rule){const media=record.summary?.media?.[type]||{};return rule.measure==='attachments'||rule.measure==='links'?Number(media.attachments??media.links??0):Number(media.posts||0);},
+    matches(record,state) {
+      const value=CreatorFilterEngine.normalizeState(state);if(value.service!=='all'&&record.directory?.service!==value.service)return false;
+      if(value.publicFavorites&&!CreatorAggregateCondition.test(record.directory?.publicFavoriteCount,value.publicFavorites))return false;const inDate=(stamp,from,to)=>{const number=Number(stamp)||0;return(!from||number>=Date.parse(from))&&(!to||number<=Date.parse(to)+86400000-1);};if(!inDate(record.directory?.indexedAt,value.dateIndexedFrom,value.dateIndexedTo)||!inDate(record.directory?.updatedAt,value.dateUpdatedFrom,value.dateUpdatedTo))return false;
+      const completeness=record.summary?.completeness||record.catalogueState||'unscanned';if(value.catalogueState!=='any'&&completeness!==value.catalogueState)return false;
+      if(value.totalPosts&&!CreatorAggregateCondition.test(record.summary?.sourcePostCount,value.totalPosts))return false;
+      if(record.summary){if(!inDate(record.summary.lastCatalogueUpdateAt,value.lastCatalogueUpdateFrom,value.lastCatalogueUpdateTo))return false;if(value.earliestPublishedFrom&&Number(record.summary.earliestPublishedAt)<Date.parse(value.earliestPublishedFrom))return false;if(value.latestPublishedTo&&Number(record.summary.latestPublishedAt)>Date.parse(value.latestPublishedTo)+86400000-1)return false;if(value.publishedWithinFrom&&Number(record.summary.latestPublishedAt)<Date.parse(value.publishedWithinFrom))return false;if(value.publishedWithinTo&&Number(record.summary.earliestPublishedAt)>Date.parse(value.publishedWithinTo)+86400000-1)return false;}
+      for(const [type,rule] of Object.entries(value.media)){if(!rule.enabled)continue;if(!record.summary)return false;if(completeness!=='complete'&&!value.includePartialLowerBounds)return false;const media=record.summary.media?.[type]||{posts:0};if(!CreatorAggregateCondition.test(CreatorFilterEngine.mediaMetric(record,type,rule),rule.count))return false;if(rule.percentageEnabled&&!CreatorAggregateCondition.test(CreatorAggregateCondition.percentage(media.posts,record.summary.sourcePostCount),{...rule.percentage,percentage:true}))return false;}
+      for(const [type,rule] of Object.entries(value.postStatuses)){if(!rule.enabled)continue;if(!record.summary||completeness!=='complete'&&!value.includePartialLowerBounds)return false;const statuses=record.summary.statuses||{};if(type==='favorited'&&Number(statuses.favoriteKnown)<Number(record.summary.sourcePostCount))return false;const count=Number(statuses[type]||0);if(!CreatorAggregateCondition.test(count,rule.count))return false;if(rule.percentageEnabled&&!CreatorAggregateCondition.test(CreatorAggregateCondition.percentage(count,record.summary.sourcePostCount),{...rule.percentage,percentage:true}))return false;}
+      if(value.customRules.some((rule)=>rule.enabled&&record.customRuleResults?.[rule.id]!==true))return false;
+      return true;
+    },
+  };
+
+  const CreatorSorter = {
+    normalize(mode='popularity',direction='desc'){return{mode:String(mode||'popularity'),direction:direction==='asc'?'asc':'desc'};},
+    value(record,mode) {
+      const directory=record.directory||{};const summary=record.summary||{};const values={popularity:directory.publicFavoriteCount,indexed:directory.indexedAt,updated:directory.updatedAt,alphabetical:String(directory.creatorName||'').toLocaleLowerCase(),service:String(directory.service||''),posts:summary.sourcePostCount,latest:summary.latestPublishedAt,earliest:summary.earliestPublishedAt,catalogueUpdated:summary.lastCatalogueUpdateAt,liked:summary.statuses?.liked,seen:summary.statuses?.seen,favorited:summary.statuses?.favoriteKnown===summary.sourcePostCount?summary.statuses?.favorited:null};
+      if(mode in values)return values[mode];const [type,metric='posts']=mode.split(':');const media=summary.media?.[type];return media?(metric==='percentage'?CreatorAggregateCondition.percentage(media.posts,summary.sourcePostCount):media[metric]??media.posts):null;
+    },
+    sort(records,options={}) {
+      const {mode,direction}=CreatorSorter.normalize(options.mode,options.direction);const sign=direction==='asc'?1:-1;
+      return records.map((record,index)=>({record,index,value:CreatorSorter.value(record,mode)})).sort((a,b)=>{const aUnknown=a.value==null||a.value==='',bUnknown=b.value==null||b.value==='';if(aUnknown!==bUnknown)return aUnknown?1:-1;if(aUnknown)return a.index-b.index;const compared=typeof a.value==='string'?a.value.localeCompare(b.value):Number(a.value)-Number(b.value);return compared?compared*sign:a.index-b.index;}).map((item)=>item.record);
+    },
+  };
+
   const CreatorCatalogueSummary = {
-    version:1,
+    version:2,
     fingerprint(settings=Settings.value) {
       const normalized=(values)=>Util.normalizeExtensions(values||[]).values.sort();
       return JSON.stringify({version:CreatorCatalogueSummary.version,schemaVersion:Config.schemaVersion,videoExtensions:normalized(settings.videoExtensions),imageExtensions:normalized(settings.imageExtensions),archiveExtensions:normalized(settings.archiveExtensions),projectExtensions:normalized(settings.projectExtensions)});
@@ -1950,18 +2159,23 @@
       return (posts||[]).filter((post)=>post?.cacheSources?.catalogue===true&&post.scanSchemaVersion===Config.schemaVersion);
     },
     compute(posts,catalogueState={},now=Date.now()) {
-      const usable=CreatorCatalogueSummary.cataloguePosts(posts);const safe=(value)=>Math.max(0,Number(value)||0);
-      const counts=usable.reduce((total,post)=>{total.videos+=safe(post.videoCount);total.images+=safe(post.imageCount);total.archives+=safe(post.archiveCount);total.projectFiles+=safe(post.projectFileCount);total.externalLinks+=safe(post.externalLinkCount);return total;},{videos:0,images:0,archives:0,projectFiles:0,externalLinks:0});
-      return {version:CreatorCatalogueSummary.version,computedAt:now,sourcePostCount:usable.length,classificationFingerprint:CreatorCatalogueSummary.fingerprint(),counts,retryableMetadataCount:Util.unique((catalogueState.retryableMetadataIds||[]).map(String)).length,malformedRecordCount:CatalogueModel.evaluateCoverage(catalogueState).malformedListRecordCount};
+      const usable=CreatorCatalogueSummary.cataloguePosts(posts);const safe=(value)=>Math.max(0,Number(value)||0);const media={videos:{posts:0,attachments:0},images:{posts:0,attachments:0},archives:{posts:0,attachments:0},projectFiles:{posts:0,attachments:0},externalLinks:{posts:0,links:0}};
+      let earliestPublishedAt=null,latestPublishedAt=null;usable.forEach((post)=>{[['videos','videoCount'],['images','imageCount'],['archives','archiveCount'],['projectFiles','projectFileCount']].forEach(([type,key])=>{const count=safe(post[key]);media[type].attachments+=count;if(count>0)media[type].posts+=1;});const links=safe(post.externalLinkCount);media.externalLinks.links+=links;if(links>0)media.externalLinks.posts+=1;const stamp=Date.parse(post.published||post.publishedAt||'');if(Number.isFinite(stamp)){earliestPublishedAt=earliestPublishedAt==null?stamp:Math.min(earliestPublishedAt,stamp);latestPublishedAt=latestPublishedAt==null?stamp:Math.max(latestPublishedAt,stamp);}});
+      const evaluation=CatalogueModel.evaluateCoverage(catalogueState);const counts=Object.fromEntries(Object.entries(media).map(([key,value])=>[key,value.attachments??value.links??0]));
+      return {version:CreatorCatalogueSummary.version,computedAt:now,sourcePostCount:usable.length,classificationFingerprint:CreatorCatalogueSummary.fingerprint(),media,counts,earliestPublishedAt,latestPublishedAt,lastCatalogueUpdateAt:Number(catalogueState.lastUpdateCheckAt||catalogueState.completedAt||now),statuses:{liked:0,seen:0,favorited:0,favoriteKnown:0},retryableMetadataCount:Util.unique((catalogueState.retryableMetadataIds||[]).map(String)).length,malformedRecordCount:evaluation.malformedListRecordCount,completeness:evaluation.coverageComplete?'complete':usable.length?'partial':'unscanned'};
     },
     valid(summary,catalogueState,sourcePostCount=null) {
       const coverage=CatalogueModel.evaluateCoverage(catalogueState||{});const count=sourcePostCount==null?Math.max(0,Number(catalogueState?.storedPostCount)||0):Math.max(0,Number(sourcePostCount)||0);
-      return Boolean(coverage.coverageComplete&&summary&&summary.version===CreatorCatalogueSummary.version&&summary.classificationFingerprint===CreatorCatalogueSummary.fingerprint()&&Math.max(0,Number(summary.sourcePostCount)||0)===count&&summary.counts);
+      return Boolean(summary&&summary.version===CreatorCatalogueSummary.version&&summary.classificationFingerprint===CreatorCatalogueSummary.fingerprint()&&Math.max(0,Number(summary.sourcePostCount)||0)===count&&summary.media&&summary.completeness);
     },
     async recomputeAndPersist(context,catalogueState=null) {
-      const posts=await Cache.getCreatorPosts(context.creatorKey);const meta=await Cache.getMeta(context.creatorKey)||{creatorKey:context.creatorKey};const state=catalogueState||CatalogueModel.normalize(meta,{restoreTransient:false}).catalogue;const summary=CreatorCatalogueSummary.compute(posts,state);
+      const posts=await Cache.getCreatorPosts(context.creatorKey);const meta=await Cache.getMeta(context.creatorKey)||{creatorKey:context.creatorKey};const state=catalogueState||CatalogueModel.normalize(meta,{restoreTransient:false}).catalogue;const summary=CreatorCatalogueSummary.compute(posts,state);const statuses=await Cache.getCreatorStatuses(context.creatorKey);summary.statuses=statuses.reduce((total,status)=>{const value=PostStatus.normalize(status);if(value.liked)total.liked+=1;if(value.seen)total.seen+=1;if(typeof value.favoriteDirectValue==='boolean'){total.favoriteKnown+=1;if(value.favoriteDirectValue)total.favorited+=1;}return total;},{liked:0,seen:0,favorited:0,favoriteKnown:0});
       await Cache.patchMeta(context.creatorKey,{catalogue:{...state,storedPostCount:summary.sourcePostCount,creatorCardSummary:summary}});
       return summary;
+    },
+    statusRefreshTimers:new Map(),
+    scheduleStatusRefresh(creatorKey) {
+      clearTimeout(CreatorCatalogueSummary.statusRefreshTimers.get(creatorKey));CreatorCatalogueSummary.statusRefreshTimers.set(creatorKey,setTimeout(async()=>{CreatorCatalogueSummary.statusRefreshTimers.delete(creatorKey);const meta=await Cache.getMeta(creatorKey);const summary=meta?.catalogue?.creatorCardSummary;if(!summary||summary.version!==CreatorCatalogueSummary.version)return;const statuses=await Cache.getCreatorStatuses(creatorKey);const totals=statuses.reduce((total,status)=>{const value=PostStatus.normalize(status);if(value.liked)total.liked+=1;if(value.seen)total.seen+=1;if(typeof value.favoriteDirectValue==='boolean'){total.favoriteKnown+=1;if(value.favoriteDirectValue)total.favorited+=1;}return total;},{liked:0,seen:0,favorited:0,favoriteKnown:0});await Cache.patchMeta(creatorKey,{catalogue:{creatorCardSummary:{...summary,statuses:totals,computedAt:Date.now()}}});},250));
     },
   };
 
@@ -2110,6 +2324,22 @@
     },
   };
 
+  const CreatorCardRightRail = {
+    order:['favorited','liked','hidden','scanned'],
+    icon(type){return type==='favorited'?Icons.star:type==='liked'?Icons.heart:type==='hidden'?Icons.eye:Icons.check;},
+    label(type,meta){if(type!=='scanned')return{favorited:'Favorited by me',liked:'Liked by me',hidden:'Hidden'}[type];const coverage=CatalogueModel.evaluateCoverage(CatalogueModel.normalize(meta||{},{restoreTransient:false}).catalogue);return coverage.coverageComplete?'Scanned · complete Catalogue':'Scanned · partial Catalogue';},
+    active(type,state,meta){if(type==='favorited')return state?.favoriteDirectValue===true;if(type==='liked')return state?.liked===true;if(type==='hidden')return state?.hidden===true;const catalogue=CatalogueModel.normalize(meta||{},{restoreTransient:false}).catalogue;return Number(catalogue.storedPostCount)>0||Object.keys(catalogue.pageCoverage||{}).length>0;},
+    render(info,meta,state) {
+      const card=info.card;card.querySelector('.pmf-creator-card-right-rail')?.remove();CreatorCardBadgeRenderer.render(info,meta);const attachment=card.querySelector('.pmf-creator-card-badges');const settings=Settings.value.creatorStatusBadges;const active=CreatorCardRightRail.order.filter((type)=>settings.enabled&&settings.types?.[type]&&CreatorCardRightRail.active(type,state,meta));
+      if(!attachment&&!active.length){card.style.removeProperty('--pmf-creator-rail-width');HiddenCreatorTreatment.apply(card,state);return null;}
+      const rail=document.createElement('span');rail.className='pmf-creator-card-right-rail';rail.dataset.pmfOwned='true';const top=document.createElement('span');top.className='pmf-creator-status-group pmf-creator-status-top';const middle=document.createElement('span');middle.className='pmf-creator-status-group pmf-creator-status-middle';const bottom=document.createElement('span');bottom.className='pmf-creator-status-group pmf-creator-status-bottom';
+      active.forEach((type)=>{const badge=document.createElement('span');badge.className=`pmf-creator-status-badge pmf-creator-status-${type} pmf-creator-status-size-${Settings.value.creatorStatusBadgeSize}`;badge.dataset.pmfOwned='true';badge.innerHTML=CreatorCardRightRail.icon(type);badge.title=CreatorCardRightRail.label(type,meta);badge.setAttribute('aria-label',badge.title);(type==='favorited'||type==='liked'?top:bottom).append(badge);});
+      if(attachment)middle.append(attachment);rail.append(top,middle,bottom);card.append(rail);card.classList.add('pmf-creator-card-has-rail');HiddenCreatorTreatment.apply(card,state);
+      requestAnimationFrame(()=>{if(!rail.isConnected)return;const width=Math.ceil(rail.getBoundingClientRect().width||rail.scrollWidth||0);card.style.setProperty('--pmf-creator-rail-width',`${width+12}px`);card.style.setProperty('--pmf-creator-badge-width',`${width+12}px`);});return rail;
+    },
+    cleanup(card){card?.querySelector?.('.pmf-creator-card-right-rail')?.remove();card?.classList?.remove('pmf-creator-card-has-rail');card?.style?.removeProperty('--pmf-creator-rail-width');HiddenCreatorTreatment.cleanup(card);CreatorCardBadgeRenderer.cleanup(card);},
+  };
+
   const GlobalUI = {
     ensureHost() {
       let host=document.querySelector('#pmf-global-host');if(host)return host;host=document.createElement('div');host.id='pmf-global-host';host.dataset.pmfOwned='true';host.dataset.pmfInstance=INSTANCE_ID;document.body?.append(host);return host;
@@ -2186,34 +2416,41 @@
   };
 
   const CatalogueJobManager = {
-    pendingJobs:[],activeJobs:new Map(),recentJobs:new Map(),queuedByCreator:new Map(),listeners:new Set(),concurrency:1,sequence:0,suspendedDescriptors:[],suspendedSettlement:Promise.resolve(),maintenanceActive:false,maintenanceWaiters:[],
+    pendingJobs:[],activeJobs:new Map(),recentJobs:new Map(),queuedByCreator:new Map(),listeners:new Set(),concurrency:1,sequence:0,batchSequence:0,sessionRestored:false,suspendedDescriptors:[],suspendedSettlement:Promise.resolve(),maintenanceActive:false,maintenanceWaiters:[],
     activeForCreator(creatorKey){return CatalogueJobManager.activeJobs.get(creatorKey)||null;},
     queuedForCreator(creatorKey){return CatalogueJobManager.queuedByCreator.get(creatorKey)||null;},
     recentForCreator(creatorKey){return CatalogueJobManager.recentJobs.get(creatorKey)||null;},
     jobForCreator(creatorKey){return CatalogueJobManager.activeForCreator(creatorKey)||CatalogueJobManager.queuedForCreator(creatorKey)||CatalogueJobManager.recentForCreator(creatorKey);},
     queuePosition(creatorKey){const index=CatalogueJobManager.pendingJobs.findIndex((job)=>job.creatorKey===creatorKey);return index<0?0:index+1;},
-    snapshot(){return{pending:[...CatalogueJobManager.pendingJobs],active:[...CatalogueJobManager.activeJobs.values()],recent:[...CatalogueJobManager.recentJobs.values()],concurrency:CatalogueJobManager.concurrency};},
+    snapshot(){return{pending:[...CatalogueJobManager.pendingJobs],active:[...CatalogueJobManager.activeJobs.values()],recent:[...CatalogueJobManager.recentJobs.values()],issues:[...CatalogueJobManager.recentJobs.values()].filter((job)=>['failed','stopped','interrupted'].includes(job.status)),concurrency:CatalogueJobManager.concurrency};},
     subscribe(listener){CatalogueJobManager.listeners.add(listener);listener(CatalogueJobManager.snapshot());return()=>CatalogueJobManager.listeners.delete(listener);},
     notify(){const snapshot=CatalogueJobManager.snapshot();CatalogueJobManager.listeners.forEach((listener)=>{try{listener(snapshot);}catch(error){Logger.warn('Catalogue job subscriber failed.',error);}});},
     setConcurrency(value){CatalogueJobManager.concurrency=[1,2].includes(Number(value))?Number(value):1;CatalogueJobManager.notify();CatalogueJobManager.pump();return CatalogueJobManager.concurrency;},
     acquireMaintenanceSlot(){if(!CatalogueJobManager.maintenanceActive&&CatalogueJobManager.activeJobs.size<CatalogueJobManager.concurrency){CatalogueJobManager.maintenanceActive=true;CatalogueJobManager.notify();return Promise.resolve();}return new Promise((resolve)=>CatalogueJobManager.maintenanceWaiters.push(resolve));},
     releaseMaintenanceSlot(){CatalogueJobManager.maintenanceActive=false;CatalogueJobManager.notify();CatalogueJobManager.pump();},
     grantMaintenance(){if(CatalogueJobManager.maintenanceActive||!CatalogueJobManager.maintenanceWaiters.length||CatalogueJobManager.activeJobs.size>=CatalogueJobManager.concurrency)return false;CatalogueJobManager.maintenanceActive=true;CatalogueJobManager.maintenanceWaiters.shift()?.();CatalogueJobManager.notify();return true;},
-    enqueue(context,requestedAction,{creatorName=context.creatorId,front=false}={}) {
+    enqueue(context,requestedAction,{creatorName=context.creatorId,front=false,batchId='',batchLabel='',batchSequence=0}={}) {
       const existing=CatalogueJobManager.activeForCreator(context.creatorKey)||CatalogueJobManager.queuedForCreator(context.creatorKey);if(existing)return{accepted:false,state:existing.status==='queued'?'already-queued':'already-active',job:existing,position:CatalogueJobManager.queuePosition(context.creatorKey)};
-      const job={id:`catalogue-job-${Date.now()}-${++CatalogueJobManager.sequence}`,creatorKey:context.creatorKey,creatorName,context:{...context},requestedAction,kind:requestedAction,status:'queued',queuedAt:Date.now(),progress:{kind:requestedAction},controller:null,result:null,error:null};if(front)CatalogueJobManager.pendingJobs.unshift(job);else CatalogueJobManager.pendingJobs.push(job);CatalogueJobManager.queuedByCreator.set(job.creatorKey,job);Logger.info({operation:'catalogue-job-enqueued',creatorKey:job.creatorKey,requestedAction,queuePosition:CatalogueJobManager.queuePosition(job.creatorKey),queueLength:CatalogueJobManager.pendingJobs.length,activeCount:CatalogueJobManager.activeJobs.size,concurrency:CatalogueJobManager.concurrency});CatalogueJobManager.notify();CatalogueJobManager.pump();return{accepted:true,state:job.status==='running'?'started':'queued',job,position:CatalogueJobManager.queuePosition(job.creatorKey)};
+      const job={id:`catalogue-job-${Date.now()}-${++CatalogueJobManager.sequence}`,creatorKey:context.creatorKey,creatorName,context:{...context},requestedAction,kind:requestedAction,status:'queued',queuedAt:Date.now(),batchId:String(batchId||''),batchLabel:String(batchLabel||''),batchSequence:Number(batchSequence)||0,progress:{kind:requestedAction},controller:null,result:null,error:null};if(front)CatalogueJobManager.pendingJobs.unshift(job);else CatalogueJobManager.pendingJobs.push(job);CatalogueJobManager.queuedByCreator.set(job.creatorKey,job);CatalogueJobManager.persistSession();Logger.info({operation:'catalogue-job-enqueued',creatorKey:job.creatorKey,requestedAction,queuePosition:CatalogueJobManager.queuePosition(job.creatorKey),queueLength:CatalogueJobManager.pendingJobs.length,activeCount:CatalogueJobManager.activeJobs.size,concurrency:CatalogueJobManager.concurrency});CatalogueJobManager.notify();CatalogueJobManager.pump();return{accepted:true,state:job.status==='running'?'started':'queued',job,position:CatalogueJobManager.queuePosition(job.creatorKey)};
     },
     async reevaluate(job){if(job.requestedAction==='metadata-retry')return'metadata-retry';const meta=await Cache.getMeta(job.creatorKey);const action=ArtistCatalogueAction.forState(meta,null);return action==='build'?'build':action==='resume'?'resume':'update';},
-    pump(){Logger.info({operation:'catalogue-queue-pump',activeCount:CatalogueJobManager.activeJobs.size,queueLength:CatalogueJobManager.pendingJobs.length,concurrency:CatalogueJobManager.concurrency});if(CatalogueJobManager.grantMaintenance())return;while(CatalogueJobManager.activeJobs.size+(CatalogueJobManager.maintenanceActive?1:0)<CatalogueJobManager.concurrency&&CatalogueJobManager.pendingJobs.length){const job=CatalogueJobManager.pendingJobs.shift();CatalogueJobManager.queuedByCreator.delete(job.creatorKey);job.done=CatalogueJobManager.startJob(job);}},
+    pump(){Logger.info({operation:'catalogue-queue-pump',activeCount:CatalogueJobManager.activeJobs.size,queueLength:CatalogueJobManager.pendingJobs.length,concurrency:CatalogueJobManager.concurrency});if(CatalogueJobManager.grantMaintenance())return;while(CatalogueJobManager.activeJobs.size+(CatalogueJobManager.maintenanceActive?1:0)<CatalogueJobManager.concurrency&&CatalogueJobManager.pendingJobs.length){const job=CatalogueJobManager.pendingJobs.shift();CatalogueJobManager.queuedByCreator.delete(job.creatorKey);job.done=CatalogueJobManager.startJob(job);}CatalogueJobManager.persistSession();},
     async startJob(job) {
-      job.status='running';job.startedAt=Date.now();job.controller=new AbortController();CatalogueJobManager.activeJobs.set(job.creatorKey,job);CatalogueJobManager.notify();
+      job.status='running';job.startedAt=Date.now();job.controller=new AbortController();CatalogueJobManager.activeJobs.set(job.creatorKey,job);CatalogueJobManager.persistSession();CatalogueJobManager.notify();
       try{job.kind=await CatalogueJobManager.reevaluate(job);Logger.info({operation:'catalogue-job-started',creatorKey:job.creatorKey,requestedAction:job.requestedAction,resolvedAction:job.kind,activeCount:CatalogueJobManager.activeJobs.size,queueLength:CatalogueJobManager.pendingJobs.length,concurrency:CatalogueJobManager.concurrency});if(job.controller.signal.aborted)throw new DOMException('Aborted','AbortError');const runtime=await CatalogueRunner.loadRuntime(job.context);runtime.jobId=job.id;job.runtime=runtime;job.result=await CatalogueRunner.run({runtime,kind:job.kind,signal:job.controller.signal,onProgress:(progress)=>{job.progress={...job.progress,...progress};CatalogueJobManager.notify();if(Logger.debug)Logger.info({operation:`catalogue-${job.kind}`,creatorKey:job.creatorKey,jobId:job.id,...progress});}});job.status='complete';job.progress={...job.progress,message:job.kind==='metadata-retry'?`${job.result.repaired} optional detail${job.result.repaired===1?'':'s'} repaired`:job.kind==='update'?(job.result.newCount?`${job.result.newCount} new post${job.result.newCount===1?'':'s'} added`:'Catalogue already up to date'):'Scan complete'};}
       catch(error){job.error=error;job.status=error.name==='AbortError'?'stopped':'failed';job.progress={...job.progress,message:error.name==='AbortError'?'Operation stopped':error.message};if(job.runtime){try{const state=job.runtime.catalogueState;const coverage=CatalogueModel.evaluateCoverage(state);state.status=coverage.nextStatus;await CatalogueRunner.persist(job.runtime);}catch(persistError){Logger.warn('Could not persist stopped Catalogue state.',persistError);}}if(error.name!=='AbortError')Logger.error('Catalogue queue job failed.',error);}
-      finally{if(job.status==='complete'&&job.kind!=='metadata-retry'&&Settings.value.synchronizeNativeFavorites){try{await FavoriteSyncCoordinator.ensureFresh({reason:`catalogue-${job.kind}`,force:false});}catch(error){Logger.warn('Catalogue completed, but native Favorite synchronization was unavailable.',error);}}if(CatalogueJobManager.activeJobs.get(job.creatorKey)===job)CatalogueJobManager.activeJobs.delete(job.creatorKey);job.finishedAt=Date.now();Logger.info({operation:'catalogue-job-finished',creatorKey:job.creatorKey,resolvedAction:job.kind,status:job.status,newCount:job.result?.newCount||0,elapsedMs:job.finishedAt-job.startedAt,activeCount:CatalogueJobManager.activeJobs.size,queueLength:CatalogueJobManager.pendingJobs.length});if(!job.suspended&&!job.shutdown){CatalogueJobManager.recentJobs.set(job.creatorKey,job);CatalogueJobManager.notify();CatalogueJobManager.pump();setTimeout(()=>{if(CatalogueJobManager.recentJobs.get(job.creatorKey)===job){CatalogueJobManager.recentJobs.delete(job.creatorKey);CatalogueJobManager.notify();}},job.status==='complete'?3000:4000);}}
+      finally{if(job.status==='complete'&&job.kind!=='metadata-retry'&&Settings.value.synchronizeNativeFavorites){try{await FavoriteSyncCoordinator.ensureFresh({reason:`catalogue-${job.kind}`,force:false});}catch(error){Logger.warn('Catalogue completed, but native Favorite synchronization was unavailable.',error);}}if(CatalogueJobManager.activeJobs.get(job.creatorKey)===job)CatalogueJobManager.activeJobs.delete(job.creatorKey);job.finishedAt=Date.now();CatalogueJobManager.persistSession();Logger.info({operation:'catalogue-job-finished',creatorKey:job.creatorKey,resolvedAction:job.kind,status:job.status,newCount:job.result?.newCount||0,elapsedMs:job.finishedAt-job.startedAt,activeCount:CatalogueJobManager.activeJobs.size,queueLength:CatalogueJobManager.pendingJobs.length});if(!job.suspended&&!job.shutdown){CatalogueJobManager.recentJobs.set(job.creatorKey,job);CatalogueJobManager.notify();CatalogueJobManager.pump();if(job.status==='complete')setTimeout(()=>{if(CatalogueJobManager.recentJobs.get(job.creatorKey)===job){CatalogueJobManager.recentJobs.delete(job.creatorKey);CatalogueJobManager.notify();}},8000);}}
       return job;
     },
     stop(creatorKey){const job=CatalogueJobManager.activeForCreator(creatorKey);if(!job)return false;job.controller?.abort();return true;},
-    removeQueued(creatorKey){const job=CatalogueJobManager.queuedForCreator(creatorKey);if(!job)return false;CatalogueJobManager.pendingJobs=CatalogueJobManager.pendingJobs.filter((item)=>item!==job);CatalogueJobManager.queuedByCreator.delete(creatorKey);job.status='removed';CatalogueJobManager.notify();return true;},
+    removeQueued(creatorKey){const job=CatalogueJobManager.queuedForCreator(creatorKey);if(!job)return false;CatalogueJobManager.pendingJobs=CatalogueJobManager.pendingJobs.filter((item)=>item!==job);CatalogueJobManager.queuedByCreator.delete(creatorKey);job.status='removed';CatalogueJobManager.persistSession();CatalogueJobManager.notify();return true;},
+    moveToTop(creatorKey){const index=CatalogueJobManager.pendingJobs.findIndex((job)=>job.creatorKey===creatorKey);if(index<=0)return index===0;const [job]=CatalogueJobManager.pendingJobs.splice(index,1);CatalogueJobManager.pendingJobs.unshift(job);CatalogueJobManager.persistSession();CatalogueJobManager.notify();return true;},
+    batchCounts(batchId){const jobs=[...CatalogueJobManager.pendingJobs,...CatalogueJobManager.activeJobs.values(),...CatalogueJobManager.recentJobs.values()].filter((job)=>job.batchId===batchId);const count=(status)=>jobs.filter((job)=>status.includes(job.status)).length;return{total:jobs.length,active:count(['running']),waiting:count(['queued']),complete:count(['complete']),failed:count(['failed']),stopped:count(['stopped','interrupted']),remaining:count(['running','queued'])};},
+    cancelBatch(batchId){const keys=CatalogueJobManager.pendingJobs.filter((job)=>job.batchId===batchId).map((job)=>job.creatorKey);keys.forEach((key)=>CatalogueJobManager.removeQueued(key));return keys.length;},
+    clearCompleted(){for(const [key,job] of CatalogueJobManager.recentJobs){if(job.status==='complete')CatalogueJobManager.recentJobs.delete(key);}CatalogueJobManager.notify();},
+    dismiss(creatorKey){const job=CatalogueJobManager.recentJobs.get(creatorKey);if(!job||!['failed','stopped','interrupted'].includes(job.status))return false;CatalogueJobManager.recentJobs.delete(creatorKey);CatalogueJobManager.notify();return true;},
+    persistSession(){const storage=globalThis.sessionStorage;if(!storage)return false;try{const waiting=CatalogueJobManager.pendingJobs.map((job)=>({context:job.context,requestedAction:job.requestedAction,creatorName:job.creatorName,batchId:job.batchId,batchLabel:job.batchLabel,batchSequence:job.batchSequence}));const active=[...CatalogueJobManager.activeJobs.values()].map((job)=>({...job,controller:null,runtime:null,done:null,errorMessage:job.error?.message||''}));storage.setItem(Config.creatorQueueSessionKey,JSON.stringify({version:1,waiting,active,updatedAt:Date.now()}));return true;}catch(error){Logger.warn('Could not persist creator queue.',error);return false;}},
+    restoreSession(){if(CatalogueJobManager.sessionRestored)return false;CatalogueJobManager.sessionRestored=true;const storage=globalThis.sessionStorage;if(!storage)return false;let saved=null;try{saved=JSON.parse(storage.getItem(Config.creatorQueueSessionKey)||'null');}catch(error){Logger.warn('Could not restore creator queue.',error);}if(saved?.version!==1)return false;(saved.active||[]).forEach((job)=>CatalogueJobManager.recentJobs.set(job.creatorKey,{...job,status:'interrupted',progress:{...(job.progress||{}),message:'Interrupted by reload'},error:new Error(job.errorMessage||'Interrupted by reload')}));(saved.waiting||[]).sort((a,b)=>(a.batchSequence||0)-(b.batchSequence||0)).forEach((descriptor)=>CatalogueJobManager.enqueue(descriptor.context,descriptor.requestedAction,{...descriptor}));CatalogueJobManager.notify();return true;},
     suspendForBfcache(){const active=[...CatalogueJobManager.activeJobs.values()];CatalogueJobManager.suspendedDescriptors=[...active.map((job)=>({context:job.context,requestedAction:job.requestedAction,creatorName:job.creatorName})),...CatalogueJobManager.pendingJobs.map((job)=>({context:job.context,requestedAction:job.requestedAction,creatorName:job.creatorName}))];active.forEach((job)=>{job.suspended=true;job.controller?.abort();});CatalogueJobManager.suspendedSettlement=Promise.allSettled(active.map((job)=>job.done).filter(Boolean));CatalogueJobManager.activeJobs.clear();CatalogueJobManager.pendingJobs=[];CatalogueJobManager.queuedByCreator.clear();CatalogueJobManager.notify();},
     async resumeFromBfcache(){const descriptors=CatalogueJobManager.suspendedDescriptors.splice(0);await CatalogueJobManager.suspendedSettlement;descriptors.reverse().forEach((item)=>CatalogueJobManager.enqueue(item.context,item.requestedAction,{creatorName:item.creatorName,front:true}));},
     shutdown(){CatalogueJobManager.activeJobs.forEach((job)=>{job.shutdown=true;job.controller?.abort();});CatalogueJobManager.pendingJobs=[];CatalogueJobManager.activeJobs.clear();CatalogueJobManager.queuedByCreator.clear();CatalogueJobManager.recentJobs.clear();CatalogueJobManager.suspendedDescriptors=[];CatalogueJobManager.suspendedSettlement=Promise.resolve();CatalogueJobManager.notify();},
@@ -2878,10 +3115,27 @@ sync() {
       PostStatusStateCoordinator.revision+=1;
       const statuses=(event.statuses||[event.status]).filter(Boolean).map(PostStatus.normalize);
       statuses.forEach((status)=>{CreatorSessionCache.markStatus(status);if(App.context?.creatorKey===status.creatorKey)App.statuses.set(String(status.postId),status);if(PostPageController.context?.postKey===status.key){PostPageController.status=status;PostPageController.render();}});
+      new Set(statuses.map((status)=>status.creatorKey).filter(Boolean)).forEach((creatorKey)=>CreatorCatalogueSummary.scheduleStatusRefresh(creatorKey));
       if(event.type==='favorites-sync'&&App.context&&!event.summary?.manual)App.loadStatuses(App.context.creatorKey).then(()=>App.render());
       else if(statuses.some((status)=>status.creatorKey===App.context?.creatorKey)){App.restoreAnchorPage();App.render();}
     },
     shutdown(){PostStatusStateCoordinator.unsubscribe?.();PostStatusStateCoordinator.unsubscribe=null;PostStatusStateCoordinator.currentPost=null;},
+  };
+
+  const CardDimTreatment = {
+    strengths:Object.freeze({
+      low:{saturate:.72,brightness:.86,opacity:.84},
+      medium:{saturate:.52,brightness:.74,opacity:.74},
+      high:{saturate:.25,brightness:.56,opacity:.58},
+    }),
+    normalizeStrength(value){return value in CardDimTreatment.strengths?value:'medium';},
+    apply({card,active,enabled,strength='medium',scope='card'}={}) {
+      if(!card)return false;const normalized=CardDimTreatment.normalizeStrength(strength);const prefix=scope==='creator'?'pmf-hidden-creator':'pmf-seen';
+      card.classList.remove(`${prefix}-dimmed`,`${prefix}-dim-low`,`${prefix}-dim-medium`,`${prefix}-dim-high`);
+      if(enabled&&active)card.classList.add(`${prefix}-dimmed`,`${prefix}-dim-${normalized}`);
+      return Boolean(enabled&&active);
+    },
+    cleanup(card,scope='card'){const prefix=scope==='creator'?'pmf-hidden-creator':'pmf-seen';card?.classList?.remove(`${prefix}-dimmed`,`${prefix}-dim-low`,`${prefix}-dim-medium`,`${prefix}-dim-high`);},
   };
 
   const SeenCardTreatment = {
@@ -2895,17 +3149,18 @@ sync() {
     },
     apply(card,post,status=App.statuses?.get?.(String(post?.id))||null) {
       if(!card)return;
-      card.classList?.remove?.('pmf-seen-dimmed','pmf-seen-dim-low','pmf-seen-dim-medium','pmf-seen-dim-high');
       if(!post)return;
       const settings=SeenCardTreatment.currentSettings();
       const normalized=PostStatus.normalize(status||App.statusFor(post));
-      const active=Boolean(settings.enabled&&normalized.seen);
-      if(active){
-        card.classList?.add?.('pmf-seen-dimmed',`pmf-seen-dim-${settings.strength}`);
-      }
+      const active=CardDimTreatment.apply({card,active:Boolean(normalized.seen),enabled:settings.enabled,strength:settings.strength,scope:'post'});
       if(Logger.debug)Logger.info({operation:'seen-card-treatment',creatorKey:App.context?.creatorKey,enabled:settings.enabled,strength:settings.strength,visibleSeenCards:active?1:0,patchedCards:1});
     },
-    cleanup(card){card?.classList?.remove?.('pmf-seen-dimmed','pmf-seen-dim-low','pmf-seen-dim-medium','pmf-seen-dim-high');},
+    cleanup(card){CardDimTreatment.cleanup(card,'post');},
+  };
+
+  const HiddenCreatorTreatment = {
+    apply(card,state,settings=Settings.value.hiddenCreatorTreatment){return CardDimTreatment.apply({card,active:Boolean(state?.hidden),enabled:Boolean(settings?.enabled),strength:settings?.strength,scope:'creator'});},
+    cleanup(card){CardDimTreatment.cleanup(card,'creator');},
   };
 
   const PostStatusBadgeRenderer = {
@@ -3319,8 +3574,8 @@ sync() {
     },
     availabilityHtml(label,item,total){
       const present=Number(item?.presentCount)||0;const absent=Number(item?.absentCount)||0;const invalid=Number(item?.invalidCount)||0;
-      if(total&&present===total&&!absent&&!invalid)return `<div class="pmf-availability-row"><strong>${label}</strong><span>Available for all ${total} posts</span></div>`;
-      return `<div class="pmf-availability-row"><strong>${label}</strong><span>${present} usable${absent?` · ${absent} not supplied`:''}${invalid?` · <em class="pmf-details-warning-text">${invalid} malformed</em>`:''}</span></div>`;
+      if(total&&present===total&&!absent&&!invalid)return `<p class="pmf-availability-row"><strong>${label}:</strong> <span>Available for all ${total} posts</span></p>`;
+      return `<p class="pmf-availability-row"><strong>${label}:</strong> <span>${present} usable${absent?` · ${absent} not supplied`:''}${invalid?` · <em class="pmf-details-warning-text">${invalid} malformed</em>`:''}</span></p>`;
     },
     buildCatalogueDetailsHtml(){
       const {state,evaluation,health,retryIds,reasons,posts,tagDataCount,mainFilePresent,mainFileInvalid}=UI.catalogueDetailsModel();
@@ -3346,7 +3601,7 @@ sync() {
       <section class="pmf-details-section"><h3>Creator-page coverage</h3><p><strong>${verified} of ${required} pages verified</strong></p><p class="pmf-muted">Offsets ${offsets}</p><p class="pmf-muted">${UI.endEvidenceLabel(state.endReason,total)}</p>${missing?`<p class="pmf-details-warning-text">Unverified: ${Util.escapeHtml(missing)}</p>`:''}${failed?`<p class="pmf-details-error-text">Failed: ${Util.escapeHtml(failed)}</p>`:''}${evaluation.coveredOffsets.length?`<details><summary>Show verified offsets</summary><code>${evaluation.coveredOffsets.join(', ')}</code></details>`:''}</section>
       <section class="pmf-details-section"><h3>Stored posts</h3><p>${health.postsStored}${health.postsExpected?` of ${health.postsExpected} expected`:''} posts are available locally.</p><details><summary>Advanced storage information</summary><p>Record schema: ${Config.schemaVersion}<br>Storage: IndexedDB<br>Ownership: Catalogue</p></details></section>
       <section class="pmf-details-section ${retryIds.length?'pmf-details-warning':''}"><h3>Optional metadata</h3><p>${retryIds.length?`${retryIds.length} post${retryIds.length===1?' has':'s have'} explicit signals that more metadata may be available.`:'No optional detail retries are needed.'}</p>${retryIds.length?'<p class="pmf-muted">This does not affect page coverage or current filtering.</p>':''}${retryIds.length?`<details><summary>Show retryable posts and reasons</summary><ul class="pmf-details-id-list">${retryList}</ul></details>`:''}</section>
-      <section class="pmf-details-section"><h3>Field availability</h3>${UI.availabilityHtml('Attachments',availability.attachments,total)}${UI.availabilityHtml('Content',availability.content,total)}<div class="pmf-availability-row"><strong>Tags</strong><span>${tagDataCount} posts include tag data${tagNoData?` · ${tagNoData} contain no tag data`:''}</span></div><div class="pmf-availability-row"><strong>Main file</strong><span>${mainFilePresent} posts have a separate main-file record${noMain?` · ${noMain} do not use one`:''}${mainFileInvalid?` · <em class="pmf-details-warning-text">${mainFileInvalid} malformed</em>`:''}</span><small>Attachments may still exist when no separate main file is used.</small></div></section>
+      <section class="pmf-details-section pmf-field-availability"><h3>Field availability</h3>${UI.availabilityHtml('Attachments',availability.attachments,total)}${UI.availabilityHtml('Content',availability.content,total)}<p class="pmf-availability-row"><strong>Tags:</strong> <span>${tagDataCount} posts include tag data${tagNoData?` · ${tagNoData} contain no tag data`:''}</span></p><p class="pmf-availability-row"><strong>Main file:</strong> <span>${mainFilePresent} posts have a separate main-file record${noMain?` · ${noMain} do not use one`:''}${mainFileInvalid?` · <em class="pmf-details-warning-text">${mainFileInvalid} malformed</em>`:''}</span></p><small class="pmf-availability-note">Attachments may still exist when no separate main file is used.</small></section>
       <section class="pmf-details-section"><h3>Malformed list records</h3>${health.malformedCount?`<p class="pmf-details-warning-text">${health.malformedCount} malformed creator-list record${health.malformedCount===1?'':'s'}.</p><details><summary>Show records</summary><ul>${malformed}</ul></details>`:'<p>No malformed creator-list records were stored.</p>'}</section>
       ${errors?`<section class="pmf-details-section pmf-details-error"><h3>Errors</h3><ul>${errors}</ul></section>`:''}
       <section class="pmf-details-section"><h3>Actions</h3><p>${evaluation.coverageComplete?'Update checks creator-list pages for new posts.':'Resume scan requests only missing or failed creator-list pages.'}</p><p>${retryIds.length?'Optional metadata can be retried using the button above. Retry incomplete requests only the listed individual post details.':'No optional retry action is currently needed.'}</p></section>`;
@@ -3653,7 +3908,11 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         SettingsUI.toggle('postStatusBadgesEnabled',draft.postStatusBadges.enabled,'Show status badges on post cards',{child:'post-status-badges'}),
         SettingsUI.toggle('seenCardTreatmentEnabled',draft.seenCardTreatment.enabled,'Dim seen post cards',{child:'seen-dim'})
       );
-      const creators=SettingsUI.section('Creator cards');creators.append(SettingsUI.toggle('creatorCardBadgesEnabled',draft.creatorCardBadges.enabled,'Show attachment badges on creator cards',{child:'creator-attachment-badges'}));
+      const creators=SettingsUI.section('Creator cards');creators.append(
+        SettingsUI.toggle('creatorCardBadgesEnabled',draft.creatorCardBadges.enabled,'Show attachment badges on creator cards',{child:'creator-attachment-badges'}),
+        SettingsUI.toggle('creatorStatusBadgesEnabled',draft.creatorStatusBadges.enabled,'Show status badges on creator cards',{child:'creator-status-badges'}),
+        SettingsUI.toggle('hiddenCreatorTreatmentEnabled',draft.hiddenCreatorTreatment.enabled,'Dim hidden creator cards',{child:'hidden-creator-dim'})
+      );
       panel.append(cards,creators);return panel;
     },
     buildDetection(draft){
@@ -3681,26 +3940,26 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     },
     showChild(name){
       const dialog=App.ui?.settings?.querySelector?.('.pmf-settings-dialog');if(!dialog)return;const draft=App.ui.settingsDraft;const content=dialog.querySelector('.pmf-settings-content');App.ui.settingsParentScroll=content.scrollTop;content.replaceChildren();
-      const child=SettingsUI.el('div','pmf-settings-child');const back=SettingsUI.action('‹ Back to settings','child-back');back.classList.add('pmf-settings-back');child.append(back,SettingsUI.el('h2','',name==='seen-dim'?'Dim seen post cards':name.includes('status')?'Post status badges':name.includes('creator')?'Creator card attachment badges':'Post card attachment badges'));
-      if(name==='seen-dim'){
-        const appearance=SettingsUI.section('Appearance');const strength=SettingsUI.select('seenCardTreatmentStrength',draft.seenCardTreatment.strength,[['low','Low'],['medium','Medium'],['high','High']]);strength.querySelector('select').disabled=!draft.seenCardTreatment.enabled;appearance.append(SettingsUI.row('Dim strength',strength));child.append(appearance);
+      const child=SettingsUI.el('div','pmf-settings-child');const back=SettingsUI.action('‹ Back to settings','child-back');back.classList.add('pmf-settings-back');const childTitle=name==='seen-dim'?'Dim seen post cards':name==='hidden-creator-dim'?'Hidden creator-card appearance':name==='creator-status-badges'?'Creator-card status badges':name==='post-status-badges'?'Post status badges':name==='creator-attachment-badges'?'Creator card attachment badges':'Post card attachment badges';child.append(back,SettingsUI.el('h2','',childTitle));
+      if(name==='seen-dim'||name==='hidden-creator-dim'){
+        const creator=name==='hidden-creator-dim';const setting=creator?draft.hiddenCreatorTreatment:draft.seenCardTreatment;const appearance=SettingsUI.section('Appearance');const strength=SettingsUI.select(creator?'hiddenCreatorTreatmentStrength':'seenCardTreatmentStrength',setting.strength,[['low','Low'],['medium','Medium'],['high','High']]);strength.querySelector('select').disabled=!setting.enabled;appearance.append(SettingsUI.row('Dim strength',strength));child.append(appearance);
       }else{
-        const status=name==='post-status-badges';const creator=name==='creator-attachment-badges';const key=status?'postStatusBadges':creator?'creatorCardBadges':'catalogueBadges';const choices=status?[['favorited','Favorited'],['liked','Liked'],['seen','Seen']]:[['videos','Videos'],['images','Images'],['archives','Archives'],['projectFiles','Project files'],['externalLinks','External links']];
-        const sizeName=status?'postStatusBadgeSize':creator?'creatorAttachmentBadgeSize':'postAttachmentBadgeSize';const appearance=SettingsUI.section('Appearance');appearance.append(SettingsUI.row(status?'Post status badge size':'Attachment badge size',SettingsUI.select(sizeName,draft[sizeName],[['small','Small'],['medium','Medium'],['big','Big']])));const visible=SettingsUI.section(status?'Visible statuses':'Visible badge types');choices.forEach(([field,label])=>visible.append(SettingsUI.toggle(`child-${key}-${field}`,draft[key].types[field],label)));child.append(appearance,visible);
+        const status=name==='post-status-badges';const creatorStatus=name==='creator-status-badges';const creator=name==='creator-attachment-badges';const key=status?'postStatusBadges':creatorStatus?'creatorStatusBadges':creator?'creatorCardBadges':'catalogueBadges';const choices=status?[['favorited','Favorited'],['liked','Liked'],['seen','Seen']]:creatorStatus?[['favorited','Favorited'],['liked','Liked'],['hidden','Hidden'],['scanned','Scanned']]:[['videos','Videos'],['images','Images'],['archives','Archives'],['projectFiles','Project files'],['externalLinks','External links']];
+        const sizeName=status?'postStatusBadgeSize':creatorStatus?'creatorStatusBadgeSize':creator?'creatorAttachmentBadgeSize':'postAttachmentBadgeSize';const appearance=SettingsUI.section('Appearance');appearance.append(SettingsUI.row(status?'Post status badge size':creatorStatus?'Badge size':'Attachment badge size',SettingsUI.select(sizeName,draft[sizeName],[['small','Small'],['medium','Medium'],['big','Big']])));const visible=SettingsUI.section(status?'Visible statuses':creatorStatus?'Visible badges':'Visible badge types');choices.forEach(([field,label])=>visible.append(SettingsUI.toggle(`child-${key}-${field}`,draft[key].types[field],label)));child.append(appearance,visible);
       }
       content.append(child);App.ui.settingsChild=name;
     },
     collect(dialog,draft){
       const get=(name)=>dialog.querySelector(`[name="${name}"]`);const readExtensions=(name)=>Util.normalizeExtensions(String(get(name)?.value||draft[name].join(',')).split(/[\s,]+/)).values;
       return Settings.normalize({...draft,compactCardScale:get('compactCardScale')?.value||draft.compactCardScale,compactThumbnailAspectRatio:get('compactThumbnailAspectRatio')?.value||draft.compactThumbnailAspectRatio,
-        postAttachmentBadgeSize:get('postAttachmentBadgeSize')?.value||draft.postAttachmentBadgeSize,creatorAttachmentBadgeSize:get('creatorAttachmentBadgeSize')?.value||draft.creatorAttachmentBadgeSize,postStatusBadgeSize:get('postStatusBadgeSize')?.value||draft.postStatusBadgeSize,
+        postAttachmentBadgeSize:get('postAttachmentBadgeSize')?.value||draft.postAttachmentBadgeSize,creatorAttachmentBadgeSize:get('creatorAttachmentBadgeSize')?.value||draft.creatorAttachmentBadgeSize,postStatusBadgeSize:get('postStatusBadgeSize')?.value||draft.postStatusBadgeSize,creatorStatusBadgeSize:get('creatorStatusBadgeSize')?.value||draft.creatorStatusBadgeSize,
         confirmCreatorCardScan:get('confirmCreatorCardScan')?.checked??draft.confirmCreatorCardScan,synchronizeNativeFavorites:get('synchronizeNativeFavorites')?.checked??draft.synchronizeNativeFavorites,
         catalogueConcurrentJobs:Number(get('catalogueConcurrentJobs')?.value||draft.catalogueConcurrentJobs),concurrency:Number(get('concurrency')?.value||draft.concurrency),retryFailed:get('retryFailed')?.checked??draft.retryFailed,
         externalLinkScope:get('externalLinkScope')?.value||draft.externalLinkScope,videoExtensions:readExtensions('videoExtensions'),imageExtensions:readExtensions('imageExtensions'),archiveExtensions:readExtensions('archiveExtensions'),projectExtensions:readExtensions('projectExtensions'),
         projectKeywords:String(get('projectKeywords')?.value||draft.projectKeywords.join('\n')).split(/\n+/).map((value)=>value.trim()).filter(Boolean),knownHosts:String(get('knownHosts')?.value||draft.knownHosts.join('\n')).split(/[\s,]+/).filter(Boolean),
         projectEvidence:Object.fromEntries(Object.keys(draft.projectEvidence).map((key)=>[key,get(`project-${key}`)?.checked??draft.projectEvidence[key]])),
         catalogueBadges:{...draft.catalogueBadges,alwaysShow:get('catalogueBadgesAlways')?.checked??draft.catalogueBadges.alwaysShow},creatorCardBadges:{...draft.creatorCardBadges,enabled:get('creatorCardBadgesEnabled')?.checked??draft.creatorCardBadges.enabled},
-        postStatusBadges:{...draft.postStatusBadges,enabled:get('postStatusBadgesEnabled')?.checked??draft.postStatusBadges.enabled},seenCardTreatment:{...draft.seenCardTreatment,enabled:get('seenCardTreatmentEnabled')?.checked??draft.seenCardTreatment.enabled,strength:get('seenCardTreatmentStrength')?.value||draft.seenCardTreatment.strength}});
+        postStatusBadges:{...draft.postStatusBadges,enabled:get('postStatusBadgesEnabled')?.checked??draft.postStatusBadges.enabled},creatorStatusBadges:{...draft.creatorStatusBadges,enabled:get('creatorStatusBadgesEnabled')?.checked??draft.creatorStatusBadges.enabled},seenCardTreatment:{...draft.seenCardTreatment,enabled:get('seenCardTreatmentEnabled')?.checked??draft.seenCardTreatment.enabled,strength:get('seenCardTreatmentStrength')?.value||draft.seenCardTreatment.strength},hiddenCreatorTreatment:{...draft.hiddenCreatorTreatment,enabled:get('hiddenCreatorTreatmentEnabled')?.checked??draft.hiddenCreatorTreatment.enabled,strength:get('hiddenCreatorTreatmentStrength')?.value||draft.hiddenCreatorTreatment.strength}});
     },
     renderParent(active='general'){
       const dialog=App.ui.settings.querySelector('.pmf-settings-dialog');const content=dialog.querySelector('.pmf-settings-content');const draft=App.ui.settingsDraft;content.replaceChildren(SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft));dialog.querySelectorAll('[data-pmf-settings-tab]').forEach((button)=>button.classList.toggle('pmf-active',button.dataset.pmfSettingsTab===active));content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel)=>panel.hidden=panel.dataset.pmfSettingsPanel!==active);content.scrollTop=App.ui.settingsParentScroll||0;App.ui.settingsChild='';
@@ -3719,32 +3978,162 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       App.ui.settingsOverlayId=OverlayManager.open({node:dialog,root:backdrop,modal:true,onClose:(reason)=>{const preview=App.ui?.settingsPreview;if(preview&&!preview.committed){CompactLayoutEngine.restorePreview({apply:true});AttachmentBadgeSizing.restorePreview();App.render();}if(App.ui){App.ui.previewStatusBadgeSize=null;App.ui.settings=null;App.ui.settingsDraft=null;App.ui.settingsOverlayId=null;}Logger.info({operation:'settings-close',reason});}});
       SettingsUI.renderParent();
       backdrop.addEventListener('click',async(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-pmf-settings-tab]')?.dataset.pmfSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)SettingsUI.renderParent(tab);if(child){App.ui.settingsDraft=SettingsUI.collect(dialog,App.ui.settingsDraft);SettingsUI.showChild(child);}if(action==='child-back')SettingsUI.renderParent('general');if(action==='cancel')UI.closeSettings('cancel');if(action==='save'){App.ui.settingsDraft=SettingsUI.collect(dialog,App.ui.settingsDraft);Settings.save(App.ui.settingsDraft);App.ui.settingsPreview.committed=true;CompactLayoutEngine.restorePreview({apply:false});AttachmentBadgeSizing.commit();CatalogueJobManager.setConcurrency(Settings.value.catalogueConcurrentJobs);UI.closeSettings('save');App.render();App.persistUIState();}if(action==='reset'){App.ui.settingsDraft=Util.clone(DefaultSettings);SettingsUI.renderParent('general');SettingsUI.preview(dialog);}if(action==='sync-favorites')await FavoriteSyncCoordinator.run({manual:true});if(action==='stop-favorites')FavoriteSyncCoordinator.stop();if(action==='clear-creator')UI.confirmClear('catalogue-creator');if(action==='clear-all')UI.confirmClear('catalogue-all');});
-      backdrop.addEventListener('change',(event)=>{if(App.ui.settingsChild){const current=App.ui.settingsDraft;const name=event.target.name;if(name==='seenCardTreatmentStrength')current.seenCardTreatment.strength=event.target.value;else if(['postAttachmentBadgeSize','creatorAttachmentBadgeSize','postStatusBadgeSize'].includes(name))current[name]=event.target.value;else if(name?.startsWith('child-')){const [,key,...fieldParts]=name.split('-');current[key].types[fieldParts.join('-')]=event.target.checked;}SettingsUI.preview(dialog);}else SettingsUI.preview(dialog);});
+      backdrop.addEventListener('change',(event)=>{if(App.ui.settingsChild){const current=App.ui.settingsDraft;const name=event.target.name;if(name==='seenCardTreatmentStrength')current.seenCardTreatment.strength=event.target.value;else if(name==='hiddenCreatorTreatmentStrength')current.hiddenCreatorTreatment.strength=event.target.value;else if(['postAttachmentBadgeSize','creatorAttachmentBadgeSize','postStatusBadgeSize','creatorStatusBadgeSize'].includes(name))current[name]=event.target.value;else if(name?.startsWith('child-')){const [,key,...fieldParts]=name.split('-');current[key].types[fieldParts.join('-')]=event.target.checked;}SettingsUI.preview(dialog);}else SettingsUI.preview(dialog);});
     },
   };
 
   UI.openSettings=SettingsUI.open;
 
+  const CreatorQueuePanel = {
+    render(snapshot=CatalogueJobManager.snapshot()) {
+      const host=CreatorIndexUI.queuePanel;if(!host)return;const active=snapshot.active||[],waiting=snapshot.pending||[],issues=snapshot.issues||[];const complete=(snapshot.recent||[]).filter((job)=>job.status==='complete');const total=active.length+waiting.length+complete.length+issues.length;const completed=complete.length;const percent=total?Math.round(completed/total*100):0;const batchId=waiting.find((job)=>job.batchId)?.batchId||active.find((job)=>job.batchId)?.batchId||'';
+      const row=(job,kind)=>{const progress=job.progress||{};const progressValue=progress.totalPages?Math.round((Number(progress.page)||0)/progress.totalPages*100):progress.total?Math.round((Number(progress.completed)||0)/progress.total*100):0;return`<div class="pmf-queue-row" data-creator-key="${Util.escapeHtml(job.creatorKey)}"><div><strong>${Util.escapeHtml(job.creatorName||job.context?.creatorId||'Creator')}</strong><small>${Util.escapeHtml(progress.message||`${job.kind||job.requestedAction} · ${job.status}`)}</small>${kind==='active'?`<progress max="100" value="${progressValue}"></progress>`:''}</div><span>${kind==='active'?'<button data-queue-action="stop">Stop</button>':kind==='waiting'?'<button data-queue-action="top">Move to top</button><button data-queue-action="remove">Remove</button>':'<button data-queue-action="retry">Retry</button><button data-queue-action="dismiss">Dismiss</button>'}</span></div>`;};
+      host.innerHTML=`<div class="pmf-queue-tabs"><button data-queue-tab="queue" class="pmf-active">Queue</button><button data-queue-tab="issues">Issues${issues.length?` (${issues.length})`:''}</button></div><div data-queue-pane="queue"><section class="pmf-queue-progress"><strong>Overall batch progress</strong><span>${completed} of ${total} complete · ${active.length+waiting.length} remaining · ${active.length} active</span><progress max="100" value="${percent}"></progress><small>Concurrency: ${CatalogueJobManager.concurrency}</small></section>${active.length?`<h3>Active</h3>${active.map((job)=>row(job,'active')).join('')}`:''}${waiting.length?`<h3>Waiting</h3>${waiting.map((job)=>row(job,'waiting')).join('')}`:''}${complete.length?`<details><summary>Recently completed (${complete.length})</summary>${complete.map((job)=>row(job,'complete')).join('')}</details><button data-queue-action="clear-completed">Clear completed</button>`:''}${batchId?` <button data-queue-action="cancel-batch" data-batch-id="${Util.escapeHtml(batchId)}">Cancel remaining batch</button>`:''}${!active.length&&!waiting.length&&!complete.length?'<p class="pmf-help">Queue empty</p>':''}</div><div data-queue-pane="issues" hidden>${issues.length?issues.map((job)=>row(job,'issue')).join(''):'<p class="pmf-help">No queue issues.</p>'}</div>`;
+      CreatorIndexUI.updateQueueLabel(snapshot);
+    },
+    handle(event) {
+      const tab=event.target.closest('[data-queue-tab]')?.dataset.queueTab;if(tab){CreatorIndexUI.queuePanel.querySelectorAll('[data-queue-tab]').forEach((button)=>button.classList.toggle('pmf-active',button.dataset.queueTab===tab));CreatorIndexUI.queuePanel.querySelectorAll('[data-queue-pane]').forEach((pane)=>pane.hidden=pane.dataset.queuePane!==tab);return;}
+      const action=event.target.closest('[data-queue-action]')?.dataset.queueAction;if(!action)return;const key=event.target.closest('[data-creator-key]')?.dataset.creatorKey;
+      if(action==='stop')CatalogueJobManager.stop(key);if(action==='top')CatalogueJobManager.moveToTop(key);if(action==='remove')CatalogueJobManager.removeQueued(key);if(action==='dismiss')CatalogueJobManager.dismiss(key);if(action==='clear-completed')CatalogueJobManager.clearCompleted();if(action==='cancel-batch')CatalogueJobManager.cancelBatch(event.target.closest('[data-batch-id]')?.dataset.batchId);if(action==='retry'){const job=CatalogueJobManager.recentForCreator(key);if(job){CatalogueJobManager.recentJobs.delete(key);CatalogueJobManager.enqueue(job.context,job.requestedAction,{creatorName:job.creatorName,batchId:job.batchId,batchLabel:job.batchLabel,batchSequence:job.batchSequence});}}CreatorQueuePanel.render();
+    },
+  };
+
+  const CreatorIndexUI = {
+    root:null,toolbar:null,grid:null,paginator:null,queuePanel:null,queueButton:null,nativeGrid:null,searchInput:null,records:[],page:1,pageSize:45,query:'',sort:{mode:'popularity',direction:'desc'},filterState:CreatorFilterEngine.normalizeState(GM_getValue(Config.creatorFilterStateKey,{})),statusFilters:CreatorStatusFilters.load(),unsubscribe:null,
+    mount(found) {
+      CreatorIndexUI.cleanup({restoreNative:false});const root=document.createElement('section');root.id='pmf-artists-root';root.dataset.pmfOwned='true';root.dataset.pmfInstance=INSTANCE_ID;const toolbar=document.createElement('section');toolbar.className='pmf-toolbar pmf-creator-index-toolbar';toolbar.innerHTML=`<div class="pmf-controls"><button class="pmf-filter-button" data-creator-index-action="filter">All creators</button><button class="pmf-sort-button" data-creator-index-action="sort">Sort: Popularity <span aria-hidden="true">▼</span></button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-update">Update</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More bulk operations" title="More bulk operations">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div><div class="pmf-status"><div class="pmf-status-left"><strong data-creator-matches>0 matches</strong></div><div class="pmf-status-actions"><button class="pmf-details-link" data-creator-index-action="queue">Queue empty</button></div><div class="pmf-status-right" data-creator-summary>Creator index</div></div><section class="pmf-catalogue-details pmf-creator-queue-panel" hidden></section>`;
+      const paginator=document.createElement('div');paginator.className='pmf-filtered-paginator pmf-creator-index-paginator';paginator.innerHTML=`<div class="pmf-quick-status-filters" aria-label="Creator status filters"></div><small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>`;const quick=paginator.querySelector('.pmf-quick-status-filters');[['favorite',Icons.star,'Favorite creator filter'],['liked',Icons.heart,'Like creator filter'],['hidden',Icons.eye,'Hidden creator filter'],['scanned',Icons.check,'Scanned creator filter']].forEach(([field,icon,label])=>{const button=document.createElement('button');button.type='button';button.dataset.creatorStatusFilter=field;button.innerHTML=`<span class="pmf-quick-status-main">${icon}</span><span class="pmf-quick-status-negate">${Icons.x}</span>`;button.title=label;button.setAttribute('aria-label',label);quick.append(button);});
+      const grid=document.createElement('div');grid.className=`${found.grid.className} pmf-creator-index-grid`;grid.dataset.pmfOwned='true';root.append(toolbar,paginator,grid);found.grid.insertAdjacentElement('beforebegin',root);CreatorIndexUI.root=root;CreatorIndexUI.toolbar=toolbar;CreatorIndexUI.grid=grid;CreatorIndexUI.paginator=paginator;CreatorIndexUI.queuePanel=toolbar.querySelector('.pmf-creator-queue-panel');CreatorIndexUI.queueButton=toolbar.querySelector('[data-creator-index-action="queue"]');CreatorIndexUI.nativeGrid=found.grid;CreatorIndexUI.searchInput=found.main.querySelector('input[type="search"],input[placeholder*="creator" i],input[placeholder*="artist" i]');if(CreatorIndexUI.searchInput){CreatorIndexUI.searchInput.placeholder='Search creators…';CreatorIndexUI.searchInput.addEventListener('input',Util.debounce(()=>{CreatorIndexUI.query=CreatorIndexUI.searchInput.value.trim().toLocaleLowerCase();CreatorIndexUI.page=1;CreatorIndexUI.render();},180));}
+      root.addEventListener('click',(event)=>CreatorIndexUI.handle(event));CreatorIndexUI.queuePanel.addEventListener('click',(event)=>CreatorQueuePanel.handle(event));CreatorIndexUI.unsubscribe=CatalogueJobManager.subscribe((snapshot)=>CreatorQueuePanel.render(snapshot));return root;
+    },
+    setRecords(records){CreatorIndexUI.records=records;CreatorIndexUI.render();if(CreatorIndexUI.grid.children.length)CreatorIndexUI.nativeGrid.hidden=true;},
+    filteredRecords() {
+      const query=CreatorIndexUI.query;return CreatorSorter.sort(CreatorIndexUI.records.filter((record)=>{const text=`${record.directory.creatorName} ${record.directory.service} ${record.directory.creatorId}`.toLocaleLowerCase();return(!query||text.includes(query))&&CreatorStatusFilters.matches(record,CreatorIndexUI.statusFilters)&&CreatorFilterEngine.matches(record,CreatorIndexUI.filterState);}),CreatorIndexUI.sort);
+    },
+    hydrateCard(card,record) {
+      const links=ArtistsDOM.creatorLinks(card);const link=links[0]?.link||card.querySelector('a[href]');if(link)link.href=record.directory.creatorUrl;const nameNode=card.querySelector('[data-creator-name],[data-artist-name],[class*="creator-name"],[class*="artist-name"],h2,h3,h4');if(nameNode)nameNode.textContent=record.directory.creatorName;const image=card.querySelector('img');if(image&&record.directory.thumbnailUrl){image.src=record.directory.thumbnailUrl;image.removeAttribute('srcset');}const favoriteNode=[...card.querySelectorAll('small,span,p')].find((node)=>/\d[\d,]*\s+favorites?/i.test(node.textContent||''));if(favoriteNode)favoriteNode.textContent=`${record.directory.publicFavoriteCount.toLocaleString()} favorites`;return link;
+    },
+    render() {
+      if(!CreatorIndexUI.grid)return;const records=CreatorIndexUI.filteredRecords();const totalPages=Math.max(1,Math.ceil(records.length/CreatorIndexUI.pageSize));CreatorIndexUI.page=Util.clamp(CreatorIndexUI.page,1,totalPages);const start=(CreatorIndexUI.page-1)*CreatorIndexUI.pageSize;const visible=records.slice(start,start+CreatorIndexUI.pageSize);CreatorIndexUI.grid.replaceChildren();
+      visible.forEach((record)=>{const card=record.template.cloneNode(true);card.removeAttribute('id');const link=CreatorIndexUI.hydrateCard(card,record);const info={card,link,context:{creatorKey:record.directory.creatorKey,domain:record.directory.domain,service:record.directory.service,creatorId:record.directory.creatorId,creatorUrl:record.directory.creatorUrl},creatorName:record.directory.creatorName,displayName:record.directory.creatorName,serviceLabel:CreatorDisplayName.serviceLabel(record.directory.service)};CreatorIndexUI.grid.append(card);CreatorCardRightRail.render(info,record.meta,record.state);});
+      CreatorIndexUI.toolbar.querySelector('[data-creator-matches]').textContent=`✓ ${records.length} matches`;const scanned=CreatorIndexUI.records.filter((record)=>record.scanned).length;CreatorIndexUI.toolbar.querySelector('[data-creator-summary]').textContent=`Creator index · ${scanned} scanned · ${CreatorIndexUI.records.length} known`;CreatorIndexUI.paginator.querySelector('.pmf-filtered-count').textContent=records.length?`Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}`:'Showing 0 of 0';const controls=CreatorIndexUI.paginator.querySelector('.pmf-page-controls');controls.replaceChildren();const add=(label,page,disabled=false)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.dataset.creatorPage=String(page);if(page===CreatorIndexUI.page)button.setAttribute('aria-current','page');controls.append(button);};add('‹',CreatorIndexUI.page-1,CreatorIndexUI.page===1);for(let page=Math.max(1,CreatorIndexUI.page-2);page<=Math.min(totalPages,CreatorIndexUI.page+2);page+=1)add(String(page),page);add('›',CreatorIndexUI.page+1,CreatorIndexUI.page===totalPages);CreatorIndexUI.updateQuickFilters();
+    },
+    updateQuickFilters(){CreatorIndexUI.paginator?.querySelectorAll('[data-creator-status-filter]').forEach((button)=>{const mode=CreatorIndexUI.statusFilters[button.dataset.creatorStatusFilter];button.classList.toggle('pmf-match',mode==='match');button.classList.toggle('pmf-no-match',mode==='no-match');button.setAttribute('aria-pressed',mode==='off'?'false':mode==='match'?'true':'mixed');button.title=`${button.dataset.creatorStatusFilter} filter: ${mode}`;});},
+    updateQueueLabel(snapshot=CatalogueJobManager.snapshot()){if(!CreatorIndexUI.queueButton)return;const issues=(snapshot.issues||[]).length;CreatorIndexUI.queueButton.textContent=snapshot.active.length||snapshot.pending.length||issues?`Queue · ${snapshot.active.length} active · ${snapshot.pending.length} waiting${issues?` · ${issues} issue${issues===1?'':'s'}`:''}`:'Queue empty';},
+    handle(event) {
+      const status=event.target.closest('[data-creator-status-filter]')?.dataset.creatorStatusFilter;if(status){CreatorIndexUI.statusFilters[status]=CreatorStatusFilters.cycle(CreatorIndexUI.statusFilters[status]);CreatorStatusFilters.save(CreatorIndexUI.statusFilters);CreatorIndexUI.page=1;CreatorIndexUI.render();return;}const page=event.target.closest('[data-creator-page]')?.dataset.creatorPage;if(page){CreatorIndexUI.page=Number(page);CreatorIndexUI.render();return;}const action=event.target.closest('[data-creator-index-action]')?.dataset.creatorIndexAction;
+      if(action==='queue'){CreatorIndexUI.queuePanel.hidden=!CreatorIndexUI.queuePanel.hidden;return;}if(action==='settings'){CreatorSettingsUI.open(event.target);return;}if(action==='filter'){CreatorFilterUI.open(event.target);return;}if(action==='sort'){CreatorSortUI.open(event.target);return;}if(action==='bulk-update'){CreatorBulkUI.open('update',event.target);return;}if(action==='bulk-menu'){CreatorBulkUI.openMenu(event.target);return;}
+    },
+    cleanup({restoreNative=true}={}){CreatorIndexUI.unsubscribe?.();CreatorIndexUI.unsubscribe=null;CreatorIndexUI.root?.remove();if(restoreNative&&CreatorIndexUI.nativeGrid)CreatorIndexUI.nativeGrid.hidden=false;CreatorIndexUI.root=null;CreatorIndexUI.toolbar=null;CreatorIndexUI.grid=null;CreatorIndexUI.paginator=null;CreatorIndexUI.queuePanel=null;CreatorIndexUI.queueButton=null;CreatorIndexUI.nativeGrid=null;CreatorIndexUI.records=[];},
+  };
+
+  const CreatorSettingsUI = {
+    preview(draft){const committed=Settings.value;Settings.value=Settings.normalize(draft);try{CreatorIndexUI.render();}finally{Settings.value=committed;}},
+    open(opener) {
+      const draft=Util.clone(Settings.value);const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-settings-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Media Filter settings');const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Media Filter settings'));const close=SettingsUI.action('×','cancel');close.className='pmf-icon-close';header.append(close);const layout=SettingsUI.el('div','pmf-settings-layout');const nav=SettingsUI.el('nav');const content=SettingsUI.el('div','pmf-settings-content');const panels=[SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft)];[['general','General'],['default-detection','Default detection'],['scanning','Scanning'],['data','Data & performance']].forEach(([key,label])=>{const button=SettingsUI.action(label,'tab');button.dataset.creatorSettingsTab=key;nav.append(button);});content.append(...panels);layout.append(nav,content);const footer=SettingsUI.el('footer');footer.append(SettingsUI.action('Reset all settings','reset'),SettingsUI.el('span'),SettingsUI.action('Cancel','cancel'));const save=SettingsUI.action('Save & apply','save');save.className='pmf-primary';footer.append(save);dialog.append(header,layout,footer);backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);
+      const show=(name)=>{nav.querySelectorAll('button').forEach((button)=>button.classList.toggle('pmf-active',button.dataset.creatorSettingsTab===name));content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel)=>panel.hidden=panel.dataset.pmfSettingsPanel!==name);};show('general');let committed=false;const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true,onClose:()=>{if(!committed)CreatorIndexUI.render();}});
+      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-creator-settings-tab]')?.dataset.creatorSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)show(tab);if(child)CreatorSettingsUI.openChild(child,draft,event.target);if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='reset'){Object.assign(draft,Util.clone(DefaultSettings));CreatorSettingsUI.preview(draft);}if(action==='save'){const next=SettingsUI.collect(dialog,draft);Settings.save(next);committed=true;OverlayManager.close(overlay,'save');CreatorIndexUI.render();}});
+      backdrop.addEventListener('change',()=>{Object.assign(draft,SettingsUI.collect(dialog,draft));CreatorSettingsUI.preview(draft);});
+    },
+    openChild(name,draft,opener) {
+      const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-small-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');const creatorStatus=name==='creator-status-badges',hidden=name==='hidden-creator-dim',attachment=name==='creator-attachment-badges';const title=creatorStatus?'Creator-card status badges':hidden?'Hidden creator-card appearance':attachment?'Creator card attachment badges':name==='seen-dim'?'Dim seen post cards':'Badge settings';dialog.innerHTML=`<header><strong>${title}</strong><button class="pmf-icon-close" data-child-action="cancel">×</button></header><div class="pmf-editor-body"></div><footer><span></span><button data-child-action="cancel">Cancel</button><button class="pmf-primary" data-child-action="apply">Apply</button></footer>`;const body=dialog.querySelector('.pmf-editor-body');
+      if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Dim strength</span>${SettingsUI.select('strength',draft[key].strength,[['low','Low'],['medium','Medium'],['high','High']]).outerHTML}</div></section>`;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';const fields=creatorStatus?['favorited','liked','hidden','scanned']:attachment?['videos','images','archives','projectFiles','externalLinks']:['favorited','liked','seen'];body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Badge size</span>${SettingsUI.select('size',draft[sizeKey],[['small','Small'],['medium','Medium'],['big','Big']]).outerHTML}</div></section><section class="pmf-settings-section"><h3>Visible badges</h3>${fields.map((field)=>`<label class="pmf-check"><input type="checkbox" name="${field}" ${draft[key].types[field]?'checked':''}> ${field[0].toUpperCase()+field.slice(1)}</label>`).join('')}</section>`;}
+      backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-child-action]')?.dataset.childAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';draft[key].strength=dialog.querySelector('[name="strength"]').value;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';draft[sizeKey]=dialog.querySelector('[name="size"]').value;dialog.querySelectorAll('input[type="checkbox"]').forEach((input)=>{draft[key].types[input.name]=input.checked;});}CreatorSettingsUI.preview(draft);OverlayManager.close(overlay,'apply');}});
+    },
+  };
+
+  const CreatorFilterUI = {
+    open(opener) {
+      let draft=CreatorFilterEngine.normalizeState(CreatorIndexUI.filterState);let presetRecord=CreatorPresets.load();
+      const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-filter-editor pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Creator filters');dialog.innerHTML='<header><strong>Creator filters</strong><button class="pmf-icon-close" data-filter-action="cancel" aria-label="Close creator filters">×</button></header><div class="pmf-editor-body"></div><footer><span></span><button data-filter-action="cancel">Cancel</button><button class="pmf-primary" data-filter-action="apply">Apply</button></footer>';
+      const body=dialog.querySelector('.pmf-editor-body');const dateField=(name,value)=>{const input=SettingsUI.field(name,value);input.type='date';return input;};const summary=(rule)=>{const count=rule?.count||rule||CreatorAggregateCondition.normalize({});return`${count.operator.replace('-',' ')} ${count.from}${count.operator==='between'?`–${count.to}`:''}${rule?.percentageEnabled?` · ${rule.percentage.operator.replace('-',' ')} ${rule.percentage.from}${rule.percentage.operator==='between'?`–${rule.percentage.to}`:''}%`:''}`;};
+      const presets=SettingsUI.section('Creator presets');const presetSelect=SettingsUI.select('creatorPreset',presetRecord.activeId,presetRecord.presets.map((preset)=>[preset.id,preset.name]));const presetActions=SettingsUI.el('div','pmf-settings-actions');presetActions.append(SettingsUI.action('Save current as preset','save-preset'));presets.append(SettingsUI.row('Preset',presetSelect),presetActions);
+      const directory=SettingsUI.section('Directory');directory.append(SettingsUI.row('Service',SettingsUI.select('service',draft.service,[['all','All services'],['patreon','Patreon'],['fanbox','Pixiv Fanbox']])),SettingsUI.toggle('publicFavoritesEnabled',Boolean(draft.publicFavorites),`Public creator favorite count · ${summary(draft.publicFavorites)}`,{child:'creator-aggregate-publicFavorites'}),SettingsUI.row('Date indexed — from',dateField('dateIndexedFrom',draft.dateIndexedFrom)),SettingsUI.row('Date indexed — to',dateField('dateIndexedTo',draft.dateIndexedTo)),SettingsUI.row('Date updated — from',dateField('dateUpdatedFrom',draft.dateUpdatedFrom)),SettingsUI.row('Date updated — to',dateField('dateUpdatedTo',draft.dateUpdatedTo)));
+      const catalogue=SettingsUI.section('Catalogue');catalogue.append(SettingsUI.row('Catalogue state',SettingsUI.select('catalogueState',draft.catalogueState,[['any','Any'],['complete','Complete'],['partial','Partial'],['unscanned','Unscanned']])),SettingsUI.toggle('totalPostsEnabled',Boolean(draft.totalPosts),`Total Catalogue posts · ${summary(draft.totalPosts)}`,{child:'creator-aggregate-totalPosts'}),SettingsUI.row('Last Catalogue update — from',dateField('lastCatalogueUpdateFrom',draft.lastCatalogueUpdateFrom)),SettingsUI.row('Last Catalogue update — to',dateField('lastCatalogueUpdateTo',draft.lastCatalogueUpdateTo)),SettingsUI.row('Earliest published post — from',dateField('earliestPublishedFrom',draft.earliestPublishedFrom)),SettingsUI.row('Latest published post — to',dateField('latestPublishedTo',draft.latestPublishedTo)),SettingsUI.row('Posts published within — from',dateField('publishedWithinFrom',draft.publishedWithinFrom)),SettingsUI.row('Posts published within — to',dateField('publishedWithinTo',draft.publishedWithinTo)),SettingsUI.toggle('includePartial',draft.includePartialLowerBounds,'Include partial Catalogues as lower-bound results'));
+      const media=SettingsUI.section('Media');[['videos','Videos'],['images','Images'],['archives','Archives'],['projectFiles','Project files'],['externalLinks','External links'],['customExtensions','Custom extensions']].forEach(([type,label])=>media.append(SettingsUI.toggle(`media-${type}`,draft.media[type].enabled,`${label} · ${summary(draft.media[type])}`,{child:`creator-media-${type}`})));
+      const status=SettingsUI.section('Post-status aggregates');[['liked','Liked posts'],['seen','Seen posts'],['favorited','Native-favorited posts']].forEach(([type,label])=>status.append(SettingsUI.toggle(`status-${type}`,draft.postStatuses[type].enabled,`${label} · ${summary(draft.postStatuses[type])}`,{child:`creator-status-${type}`})));status.append(SettingsUI.el('p','pmf-help','Native Favorite filters preserve unknown state and require sufficient known-state coverage.'));
+      const custom=SettingsUI.section('Custom Catalogue search rules');custom.append(SettingsUI.el('p','pmf-help','Creator-level custom aggregate rules are evaluated only from locally stored Catalogue data.'));
+      body.append(presets,directory,catalogue,media,status,custom);backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});
+      const syncControls=()=>{const assign=(name,value)=>{const control=dialog.querySelector(`[name="${name}"]`);if(control)control.value=value||'';};assign('service',draft.service);assign('catalogueState',draft.catalogueState);['dateIndexedFrom','dateIndexedTo','dateUpdatedFrom','dateUpdatedTo','lastCatalogueUpdateFrom','lastCatalogueUpdateTo','earliestPublishedFrom','latestPublishedTo','publishedWithinFrom','publishedWithinTo'].forEach((name)=>assign(name,draft[name]));dialog.querySelector('[name="includePartial"]').checked=draft.includePartialLowerBounds;dialog.querySelector('[name="publicFavoritesEnabled"]').checked=Boolean(draft.publicFavorites);dialog.querySelector('[name="totalPostsEnabled"]').checked=Boolean(draft.totalPosts);Object.keys(draft.media).forEach((type)=>{dialog.querySelector(`[name="media-${type}"]`).checked=draft.media[type].enabled;});Object.keys(draft.postStatuses).forEach((type)=>{dialog.querySelector(`[name="status-${type}"]`).checked=draft.postStatuses[type].enabled;});};
+      const collect=()=>{draft.service=dialog.querySelector('[name="service"]').value;draft.catalogueState=dialog.querySelector('[name="catalogueState"]').value;draft.includePartialLowerBounds=dialog.querySelector('[name="includePartial"]').checked;['dateIndexedFrom','dateIndexedTo','dateUpdatedFrom','dateUpdatedTo','lastCatalogueUpdateFrom','lastCatalogueUpdateTo','earliestPublishedFrom','latestPublishedTo','publishedWithinFrom','publishedWithinTo'].forEach((name)=>{draft[name]=dialog.querySelector(`[name="${name}"]`).value;});draft.publicFavorites=dialog.querySelector('[name="publicFavoritesEnabled"]').checked?CreatorAggregateCondition.normalize(draft.publicFavorites||{}):null;draft.totalPosts=dialog.querySelector('[name="totalPostsEnabled"]').checked?CreatorAggregateCondition.normalize(draft.totalPosts||{}):null;Object.keys(draft.media).forEach((type)=>{draft.media[type].enabled=dialog.querySelector(`[name="media-${type}"]`)?.checked||false;});Object.keys(draft.postStatuses).forEach((type)=>{draft.postStatuses[type].enabled=dialog.querySelector(`[name="status-${type}"]`)?.checked||false;});};
+      dialog.querySelector('[name="creatorPreset"]').addEventListener('change',(event)=>{const applied=CreatorPresets.apply(presetRecord,event.target.value);if(applied){draft=applied;syncControls();}});
+      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-filter-action]')?.dataset.filterAction;const settingsAction=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(child?.startsWith('creator-media-'))CreatorFilterUI.openMedia(child.replace('creator-media-',''),draft,event.target);if(child?.startsWith('creator-status-'))CreatorFilterUI.openAggregate(child.replace('creator-status-',''),draft,event.target,{status:true});if(child?.startsWith('creator-aggregate-'))CreatorFilterUI.openAggregate(child.replace('creator-aggregate-',''),draft,event.target);if(settingsAction==='save-preset'){collect();const name=globalThis.prompt?.('Creator preset name','Creator preset');if(name){presetRecord=CreatorPresets.create(presetRecord,name,draft);GlobalUI.flash('Creator preset saved.');}}if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){collect();CreatorIndexUI.filterState=CreatorFilterEngine.normalizeState(draft);GM_setValue(Config.creatorFilterStateKey,CreatorIndexUI.filterState);CreatorIndexUI.page=1;CreatorIndexUI.render();OverlayManager.close(overlay,'apply');}});
+    },
+    openAggregate(type,draft,opener,{status=false}={}) {
+      const target=status?draft.postStatuses:draft;const source=status?target[type]:target[type]||{};const count=CreatorAggregateCondition.normalize(source.count||source);const percentage=CreatorAggregateCondition.normalize(source.percentage||{},true);const title=status?`${type[0].toUpperCase()+type.slice(1)} posts`:type==='publicFavorites'?'Public creator favorite count':'Total Catalogue posts';
+      const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-small-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label',`Configure ${title}`);
+      dialog.innerHTML=`<header><strong>${title}</strong><button class="pmf-icon-close" data-aggregate-action="cancel" aria-label="Close">×</button></header><div class="pmf-editor-body"><section class="pmf-settings-section"><h3>Primary condition</h3><label>Condition<select name="operator">${CreatorAggregateCondition.operators.map((value)=>`<option value="${value}">${value.replace('-',' ')}</option>`).join('')}</select></label><label>Value<input type="number" name="from" min="0" step="1" value="${count.from}"></label><label data-between hidden>To<input type="number" name="to" min="0" step="1" value="${count.to}"></label></section>${status?`<section class="pmf-settings-section"><h3>Catalogue percentage</h3><label class="pmf-check"><input type="checkbox" name="percentageEnabled" ${source.percentageEnabled?'checked':''}> Add percentage condition</label><label>Condition<select name="percentageOperator">${CreatorAggregateCondition.operators.map((value)=>`<option value="${value}">${value.replace('-',' ')}</option>`).join('')}</select></label><label>Percentage<input type="number" name="percentageFrom" min="0" max="100" step=".1" value="${percentage.from}"> %</label><label data-percentage-between hidden>To<input type="number" name="percentageTo" min="0" max="100" step=".1" value="${percentage.to}"> %</label></section>`:''}<p class="pmf-editor-error"></p></div><footer><span></span><button data-aggregate-action="cancel">Cancel</button><button class="pmf-primary" data-aggregate-action="apply">Apply</button></footer>`;
+      backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});
+      const update=()=>{dialog.querySelector('[data-between]').hidden=dialog.querySelector('[name="operator"]').value!=='between';if(status)dialog.querySelector('[data-percentage-between]').hidden=dialog.querySelector('[name="percentageOperator"]').value!=='between';};dialog.querySelector('[name="operator"]').value=count.operator;if(status)dialog.querySelector('[name="percentageOperator"]').value=percentage.operator;update();dialog.addEventListener('change',update);
+      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-aggregate-action]')?.dataset.aggregateAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){const next={operator:dialog.querySelector('[name="operator"]').value,from:Number(dialog.querySelector('[name="from"]').value),to:Number(dialog.querySelector('[name="to"]').value)};const nextPercentage=status?{operator:dialog.querySelector('[name="percentageOperator"]').value,from:Number(dialog.querySelector('[name="percentageFrom"]').value),to:Number(dialog.querySelector('[name="percentageTo"]').value),percentage:true}:null;if(!CreatorAggregateCondition.valid(next)||status&&!CreatorAggregateCondition.valid(nextPercentage,true)){dialog.querySelector('.pmf-editor-error').textContent='Enter ordered values in the allowed range.';return;}if(status)Object.assign(target[type],{count:CreatorAggregateCondition.normalize(next),percentageEnabled:dialog.querySelector('[name="percentageEnabled"]').checked,percentage:CreatorAggregateCondition.normalize(nextPercentage,true)});else target[type]=CreatorAggregateCondition.normalize(next);OverlayManager.close(overlay,'apply');}});
+    },
+    openMedia(type,draft,opener) {
+      const rule=draft.media[type];const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-small-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.innerHTML=`<header><strong>${type}</strong><button class="pmf-icon-close" data-media-action="cancel">×</button></header><div class="pmf-editor-body"><section class="pmf-settings-section"><h3>Primary condition</h3><label>Measure<select name="measure"><option value="posts">Posts containing the type</option><option value="attachments">Total attachments or links</option></select></label><label>Condition<select name="operator">${CreatorAggregateCondition.operators.map((value)=>`<option value="${value}">${value.replace('-',' ')}</option>`).join('')}</select></label><label>Value<input type="number" name="from" min="0" step="1" value="${rule.count.from}"></label><label data-between hidden>To<input type="number" name="to" min="0" step="1" value="${rule.count.to}"></label></section><section class="pmf-settings-section"><h3>Catalogue percentage</h3><label class="pmf-check"><input type="checkbox" name="percentageEnabled" ${rule.percentageEnabled?'checked':''}> Add percentage condition</label><label>Condition<select name="percentageOperator">${CreatorAggregateCondition.operators.map((value)=>`<option value="${value}">${value.replace('-',' ')}</option>`).join('')}</select></label><label>Percentage<input type="number" name="percentageFrom" min="0" max="100" step=".1" value="${rule.percentage.from}"> %</label><label data-percentage-between hidden>To<input type="number" name="percentageTo" min="0" max="100" step=".1" value="${rule.percentage.to}"> %</label><p class="pmf-editor-error"></p></section></div><footer><span></span><button data-media-action="cancel">Cancel</button><button class="pmf-primary" data-media-action="apply">Apply</button></footer>`;backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});const update=()=>{dialog.querySelector('[data-between]').hidden=dialog.querySelector('[name="operator"]').value!=='between';dialog.querySelector('[data-percentage-between]').hidden=dialog.querySelector('[name="percentageOperator"]').value!=='between';};dialog.querySelector('[name="measure"]').value=rule.measure;dialog.querySelector('[name="operator"]').value=rule.count.operator;dialog.querySelector('[name="percentageOperator"]').value=rule.percentage.operator;update();dialog.addEventListener('change',update);backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-media-action]')?.dataset.mediaAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){const count={operator:dialog.querySelector('[name="operator"]').value,from:Number(dialog.querySelector('[name="from"]').value),to:Number(dialog.querySelector('[name="to"]').value)};const percentage={operator:dialog.querySelector('[name="percentageOperator"]').value,from:Number(dialog.querySelector('[name="percentageFrom"]').value),to:Number(dialog.querySelector('[name="percentageTo"]').value),percentage:true};if(!CreatorAggregateCondition.valid(count)||!CreatorAggregateCondition.valid(percentage,true)){dialog.querySelector('.pmf-editor-error').textContent='Enter ordered values in the allowed range.';return;}Object.assign(rule,{measure:dialog.querySelector('[name="measure"]').value,count:CreatorAggregateCondition.normalize(count),percentageEnabled:dialog.querySelector('[name="percentageEnabled"]').checked,percentage:CreatorAggregateCondition.normalize(percentage,true)});OverlayManager.close(overlay,'apply');}});
+    },
+  };
+
+  const CreatorSortUI = {
+    modes:[['popularity','Popularity'],['alphabetical','Alphabetical'],['service','Service'],['indexed','Date indexed'],['updated','Date updated'],['posts','Catalogue post count'],['latest','Latest post'],['earliest','Earliest post'],['videos:posts','Videos — Posts'],['videos:attachments','Videos — Attachments'],['videos:percentage','Videos — Catalogue percentage'],['liked','Liked posts'],['seen','Seen posts'],['favorited','Favorited posts']],
+    open(opener){const menu=SettingsUI.el('div','pmf-floating-menu pmf-surface');menu.setAttribute('role','menu');CreatorSortUI.modes.forEach(([mode,label])=>{const button=SettingsUI.el('button','',label);button.dataset.creatorSort=mode;button.setAttribute('aria-current',String(CreatorIndexUI.sort.mode===mode));menu.append(button);});document.body.append(menu);const rect=opener.getBoundingClientRect();menu.style.left=`${rect.left}px`;menu.style.top=`${rect.bottom+4}px`;const overlay=OverlayManager.open({node:menu,root:menu,opener,dismissible:true});menu.addEventListener('click',(event)=>{const mode=event.target.closest('[data-creator-sort]')?.dataset.creatorSort;if(!mode)return;if(CreatorIndexUI.sort.mode===mode)CreatorIndexUI.sort.direction=CreatorIndexUI.sort.direction==='asc'?'desc':'asc';else CreatorIndexUI.sort={mode,direction:mode==='alphabetical'||mode==='service'?'asc':'desc'};CreatorIndexUI.toolbar.querySelector('[data-creator-index-action="sort"]').textContent=`Sort: ${CreatorSortUI.modes.find((item)=>item[0]===mode)?.[1]} ${CreatorIndexUI.sort.direction==='asc'?'▲':'▼'}`;CreatorIndexUI.render();OverlayManager.close(overlay,'select');});},
+  };
+
+  const CreatorBulkUI = {
+    openMenu(opener){const menu=SettingsUI.el('div','pmf-floating-menu pmf-surface');[['update','Update matching creators'],['build','Scan unscanned creators'],['resume','Retry/Resume incomplete Catalogues']].forEach(([action,label])=>{const button=SettingsUI.el('button','',label);button.dataset.bulkKind=action;menu.append(button);});document.body.append(menu);const rect=opener.getBoundingClientRect();menu.style.left=`${Math.max(8,rect.right-240)}px`;menu.style.top=`${rect.bottom+4}px`;const overlay=OverlayManager.open({node:menu,root:menu,opener});menu.addEventListener('click',(event)=>{const kind=event.target.closest('[data-bulk-kind]')?.dataset.bulkKind;if(kind){OverlayManager.close(overlay,'select');CreatorBulkUI.open(kind,opener);}});},
+    eligible(kind){return CreatorIndexUI.filteredRecords().filter((record)=>kind==='build'?!record.scanned:kind==='resume'?record.scanned&&record.summary?.completeness!=='complete':record.scanned&&!CatalogueJobManager.activeForCreator(record.directory.creatorKey)&&!CatalogueJobManager.queuedForCreator(record.directory.creatorKey));},
+    open(kind,opener){const eligible=CreatorBulkUI.eligible(kind);const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-confirm-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');const label=kind==='build'?'scan':kind==='resume'?'resume':'update';const overLimit=kind==='build'&&eligible.length>150;dialog.innerHTML=`<header><strong>Bulk ${label} creators</strong><button class="pmf-icon-close" data-bulk-action="cancel">×</button></header><div class="pmf-confirm-body"><h3>Scope</h3><label><input type="radio" name="scope" value="page" checked> Current visible result page</label><label><input type="radio" name="scope" value="first"> First <input type="number" name="first" min="1" max="150" value="${Math.min(50,eligible.length||50)}"> matching creators</label><label><input type="radio" name="scope" value="all"> All matching eligible creators</label><p>${eligible.length} eligible · ${CreatorIndexUI.filteredRecords().length-eligible.length} skipped</p>${overLimit?'<p class="pmf-editor-error">Bulk Scan is limited to 150 creators. Reduce the scope.</p>':''}<ol>${eligible.slice(0,8).map((record)=>`<li>${Util.escapeHtml(record.directory.creatorName)}</li>`).join('')}</ol>${eligible.length>8?`<p>…and ${eligible.length-8} more</p>`:''}</div><footer><span></span><button data-bulk-action="cancel">Cancel</button><button class="pmf-primary" data-bulk-action="confirm" ${overLimit?'disabled':''}>Queue ${eligible.length} ${label}${eligible.length===1?'':'s'}</button></footer>`;backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-bulk-action]')?.dataset.bulkAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='confirm'){const scope=dialog.querySelector('[name="scope"]:checked').value;const count=scope==='page'?CreatorIndexUI.pageSize:scope==='first'?Math.max(1,Number(dialog.querySelector('[name="first"]').value)||1):eligible.length;const selected=eligible.slice(scope==='page'?(CreatorIndexUI.page-1)*CreatorIndexUI.pageSize:0,scope==='page'?CreatorIndexUI.page*CreatorIndexUI.pageSize:count);if(kind==='build'&&selected.length>150)return;const batchId=`creator-batch-${Date.now()}-${++CatalogueJobManager.batchSequence}`;selected.forEach((record,index)=>CatalogueJobManager.enqueue({creatorKey:record.directory.creatorKey,domain:record.directory.domain,service:record.directory.service,creatorId:record.directory.creatorId,creatorUrl:record.directory.creatorUrl},kind,{creatorName:record.directory.creatorName,batchId,batchLabel:`Bulk ${label}`,batchSequence:index+1}));OverlayManager.close(overlay,'confirm');CreatorIndexUI.queuePanel.hidden=false;CreatorQueuePanel.render();}});
+    },
+  };
+
+  GM_addStyle(`
+    #pmf-artists-root{width:min(1540px,calc(100% - 24px));margin:10px auto 18px;color:var(--pmf-text);font-family:Arial,sans-serif}
+    .pmf-creator-index-toolbar{width:min(920px,100%);margin:0 auto 12px}
+    .pmf-creator-index-toolbar .pmf-controls{grid-template-columns:minmax(210px,1fr) minmax(210px,1fr) minmax(150px,190px) 52px}
+    .pmf-split-primary{display:grid;grid-template-columns:minmax(0,1fr) 38px;min-width:0}.pmf-split-primary .pmf-scan-button{width:100%}.pmf-split-chevron{padding:0!important;border-left-color:#b95b2e!important}
+    .pmf-creator-index-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:8px;width:100%;align-items:stretch}
+    .pmf-creator-index-grid>*{min-width:0}
+    .pmf-creator-index-paginator{--pmf-status-summary-gap:7px;display:flex!important;flex-direction:column;align-items:center;gap:var(--pmf-status-summary-gap)!important;margin:8px auto!important}
+    .pmf-creator-index-paginator .pmf-quick-status-filters{display:flex;gap:6px}.pmf-creator-index-paginator .pmf-quick-status-filters button{position:relative;width:30px;height:28px;display:grid;place-items:center}
+    .pmf-creator-index-paginator .pmf-quick-status-main svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}.pmf-creator-index-paginator .pmf-quick-status-negate{display:none;position:absolute;right:1px;top:1px;width:10px;height:10px}.pmf-creator-index-paginator button.pmf-no-match .pmf-quick-status-negate{display:block}.pmf-creator-index-paginator button.pmf-match svg,.pmf-creator-index-paginator button.pmf-no-match .pmf-quick-status-main svg{fill:currentColor}
+    .pmf-creator-card-right-rail{position:absolute;z-index:6;right:7px;top:6px;bottom:6px;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:4px;pointer-events:none}
+    .pmf-creator-status-group{display:flex;justify-content:flex-end;gap:4px}.pmf-creator-status-middle{margin:auto 0}.pmf-creator-card-right-rail .pmf-creator-card-badges{position:static;transform:none}
+    .pmf-creator-status-badge{display:grid;place-items:center;border:1px solid currentColor;border-radius:3px;background:#111d;box-sizing:border-box}.pmf-creator-status-badge svg{width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:2}.pmf-creator-status-badge.pmf-creator-status-favorited{color:#ffd25b}.pmf-creator-status-badge.pmf-creator-status-liked{color:#ff5d9e}.pmf-creator-status-badge.pmf-creator-status-hidden{color:#d98989}.pmf-creator-status-badge.pmf-creator-status-scanned{color:#64d99a}.pmf-creator-status-size-small{width:18px;height:18px}.pmf-creator-status-size-medium{width:22px;height:22px}.pmf-creator-status-size-big{width:27px;height:27px}
+    .pmf-creator-card-has-rail [data-pmf-creator-content]{padding-right:var(--pmf-creator-rail-width,0)!important}
+    .pmf-hidden-creator-dimmed img,.pmf-hidden-creator-dimmed [style*="background"]{filter:saturate(var(--pmf-seen-saturate,.55)) brightness(var(--pmf-seen-brightness,.72));opacity:var(--pmf-seen-opacity,.72)}.pmf-hidden-creator-dim-low{--pmf-seen-saturate:.72;--pmf-seen-brightness:.86;--pmf-seen-opacity:.84}.pmf-hidden-creator-dim-medium{--pmf-seen-saturate:.52;--pmf-seen-brightness:.74;--pmf-seen-opacity:.74}.pmf-hidden-creator-dim-high{--pmf-seen-saturate:.25;--pmf-seen-brightness:.56;--pmf-seen-opacity:.58}
+    .pmf-field-availability{text-align:center}.pmf-field-availability .pmf-availability-row{display:block!important;margin:9px auto!important;text-align:center!important}.pmf-availability-note{display:block;color:var(--pmf-muted);text-align:center}
+    .pmf-creator-queue-panel{max-height:min(480px,calc(100vh - 220px));overscroll-behavior:contain}.pmf-queue-tabs{display:flex;justify-content:center;gap:8px;border-bottom:1px solid var(--pmf-border);margin-bottom:10px}.pmf-queue-tabs button{border:0;background:transparent;color:var(--pmf-muted);padding:7px 12px}.pmf-queue-tabs button.pmf-active{color:var(--pmf-accent);border-bottom:2px solid var(--pmf-accent)}.pmf-queue-progress{display:grid;gap:5px;text-align:center;padding:9px;border-left:3px solid var(--pmf-success);background:#18231e}.pmf-queue-progress progress{width:100%;accent-color:var(--pmf-success)}.pmf-queue-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--pmf-border)}.pmf-queue-row div{display:flex;flex-direction:column}.pmf-queue-row span{display:flex;gap:5px}.pmf-queue-row button{min-height:28px}
+    @media(max-width:760px){.pmf-creator-index-toolbar .pmf-controls{grid-template-columns:1fr 1fr 52px}.pmf-creator-index-toolbar .pmf-filter-button{grid-column:1/-1}.pmf-split-primary{grid-column:2}.pmf-creator-index-grid{grid-template-columns:1fr}}
+  `);
+
   const ArtistsPageController = {
-    page:null,found:null,cards:[],cardByElement:new Map(),metas:new Map(),metaErrors:new Set(),controller:null,observer:null,generation:0,refreshRevision:0,unsubscribeJob:null,unsubscribeSettings:null,renderingOwnedUi:false,backfillQueue:[],backfillKeys:new Set(),backfillActive:0,
+    page:null,found:null,cards:[],cardByElement:new Map(),metas:new Map(),states:new Map(),directory:new Map(),metaErrors:new Set(),controller:null,observer:null,generation:0,refreshRevision:0,unsubscribeJob:null,unsubscribeSettings:null,renderingOwnedUi:false,backfillQueue:[],backfillKeys:new Set(),backfillActive:0,
     isPmfNode(node){return Boolean(node?.nodeType===1&&(node.matches?.('[data-pmf-owned="true"]')||node.closest?.('[data-pmf-owned="true"]')));},
     isRelevantNativeMutation(mutation){if(ArtistsPageController.isPmfNode(mutation.target))return false;const changed=[...mutation.addedNodes,...mutation.removedNodes].filter((node)=>node.nodeType===1);return !changed.length||changed.some((node)=>!ArtistsPageController.isPmfNode(node));},
-    renderBadgesFromCurrentState(){if(!ArtistsPageController.mounted())return;ArtistsPageController.renderingOwnedUi=true;try{ArtistsPageController.cards.forEach((info)=>CreatorCardBadgeRenderer.render(info,ArtistsPageController.metas.get(info.context.creatorKey)));CreatorCardBadgeRenderer.refreshReservations(ArtistsPageController.found.grid,'settings-current-state');}finally{queueMicrotask(()=>{ArtistsPageController.renderingOwnedUi=false;});}},
+    renderBadgesFromCurrentState(){if(!ArtistsPageController.mounted())return;ArtistsPageController.renderingOwnedUi=true;try{CreatorIndexUI.render();}finally{queueMicrotask(()=>{ArtistsPageController.renderingOwnedUi=false;});}},
     mounted(){return Boolean(ArtistsPageController.controller&&!ArtistsPageController.controller.signal.aborted&&ArtistsPageController.found?.grid?.isConnected);},
     health(page=Route.parsePage(location.href)){return page.kind==='artists'&&ArtistsPageController.mounted()&&ArtistsPageController.page?.pageKey===page.pageKey;},
     async mount(page,{generation:routeGeneration=Lifecycle.routeGeneration,signal:routeSignal}={}) {
       const guard=()=>!routeSignal?.aborted&&routeGeneration===Lifecycle.routeGeneration&&Route.parsePage(location.href).kind==='artists'&&Route.parsePage(location.href).pageKey===page.pageKey;
       AttachmentBadgeSizing.applyAll({reason:'artists-mount'});await Cache.migrateCatalogueOnly();if(!guard())return false;if(ArtistsPageController.health(page)){await ArtistsPageController.refresh();return guard();}ArtistsPageController.cleanup();if(!guard())return false;const found=ArtistsDOM.find();if(!found)return false;
-      ArtistsPageController.page=page;ArtistsPageController.found=found;ArtistsPageController.controller=new AbortController();const signal=ArtistsPageController.controller.signal;const generation=++ArtistsPageController.generation;
+      ArtistsPageController.page=page;ArtistsPageController.found=found;ArtistsPageController.controller=new AbortController();const signal=ArtistsPageController.controller.signal;const generation=++ArtistsPageController.generation;CreatorIndexUI.mount(found);
       found.grid.addEventListener('contextmenu',(event)=>ArtistsPageController.handleContextMenu(event),{signal});found.grid.addEventListener('keydown',(event)=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){const card=event.target.closest?.('[data-pmf-creator-key]');if(card&&ArtistsPageController.cardByElement.has(card)){event.preventDefault();ArtistsPageController.openAction(ArtistsPageController.cardByElement.get(card));}}},{signal});
       const schedule=Util.debounce(()=>{if(generation===ArtistsPageController.generation)ArtistsPageController.refresh();},120);ArtistsPageController.observer=new MutationObserver((mutations)=>{if(ArtistsPageController.renderingOwnedUi)return;if(mutations.some(ArtistsPageController.isRelevantNativeMutation))schedule();});ArtistsPageController.observer.observe(found.grid,{childList:true,subtree:true});window.addEventListener('resize',()=>CreatorCardBadgeRenderer.refreshReservations(found.grid,'window-resize'),{signal});signal.addEventListener('abort',()=>schedule.cancel(),{once:true});
-      ArtistsPageController.unsubscribeJob=CatalogueJobManager.subscribe(()=>ArtistsPageController.renderJobs());ArtistsPageController.unsubscribeSettings=SettingsEvents.subscribe((event)=>{if(!ArtistsPageController.mounted())return;CatalogueJobManager.setConcurrency(event.current.catalogueConcurrentJobs);AttachmentBadgeSizing.applyAll({reason:'settings-event'});ArtistsPageController.renderBadgesFromCurrentState();Logger.info({operation:'creator-badge-settings-applied',enabled:event.current.creatorCardBadges.enabled,enabledTypes:CreatorCardBadgeRenderer.enabledTypes(event.current.creatorCardBadges),visibleCardCount:ArtistsPageController.cards.length,changed:event.changed});});await ArtistsPageController.refresh();if(!guard()){ArtistsPageController.cleanup();return false;}if(Logger.debug)Logger.info({operation:'artists-page-mounted',pageKey:page.pageKey,creatorCardCount:ArtistsPageController.cards.length});return true;
+      ArtistsPageController.unsubscribeJob=CatalogueJobManager.subscribe(()=>ArtistsPageController.renderJobs());ArtistsPageController.unsubscribeSettings=SettingsEvents.subscribe((event)=>{if(!ArtistsPageController.mounted())return;CatalogueJobManager.setConcurrency(event.current.catalogueConcurrentJobs);AttachmentBadgeSizing.applyAll({reason:'settings-event'});ArtistsPageController.renderBadgesFromCurrentState();Logger.info({operation:'creator-badge-settings-applied',enabled:event.current.creatorCardBadges.enabled,enabledTypes:CreatorCardBadgeRenderer.enabledTypes(event.current.creatorCardBadges),visibleCardCount:ArtistsPageController.cards.length,changed:event.changed});});try{await ArtistsPageController.refresh();}catch(error){ArtistsPageController.cleanup();found.grid.hidden=false;throw error;}if(!guard()){ArtistsPageController.cleanup();return false;}if(Logger.debug)Logger.info({operation:'artists-page-mounted',pageKey:page.pageKey,creatorCardCount:ArtistsPageController.cards.length});return true;
     },
     async refresh() {
       const generation=ArtistsPageController.generation;const revision=++ArtistsPageController.refreshRevision;if(!ArtistsPageController.mounted())return;const found=ArtistsDOM.find();if(!found?.grid)return;if(found.grid!==ArtistsPageController.found.grid){const page=ArtistsPageController.page;await ArtistsPageController.mount(page);return;}
-      const prior=new Set(ArtistsPageController.cards.map((item)=>item.card));const cards=ArtistsDOM.creatorCards(found);const current=new Set(cards.map((item)=>item.card));prior.forEach((card)=>{if(!current.has(card))CreatorCardBadgeRenderer.cleanup(card);});ArtistsPageController.cards=cards;ArtistsPageController.cardByElement=new Map(cards.map((item)=>[item.card,item]));cards.forEach(CreatorCardBadgeRenderer.decorateIdentity);
-      const keys=cards.map((item)=>item.context.creatorKey);let metas;try{metas=await Cache.getCreatorMetas(keys);ArtistsPageController.metaErrors.clear();}catch{metas=new Map();keys.forEach((key)=>ArtistsPageController.metaErrors.add(key));}if(generation!==ArtistsPageController.generation||revision!==ArtistsPageController.refreshRevision){Logger.info({operation:'artists-refresh-discarded',generation,revision});return;}ArtistsPageController.metas=metas;
-      cards.forEach((info)=>{const meta=metas.get(info.context.creatorKey);CreatorCardBadgeRenderer.render(info,meta);ArtistsPageController.scheduleBackfill(info,meta);});ArtistsPageController.renderJobs();
+      const cards=ArtistsDOM.creatorCards(found);const captured=cards.map((info)=>CreatorDirectory.fromCard(info));const priorDirectory=await Cache.getCreatorDirectory(captured.map((record)=>record.creatorKey));const merged=captured.map((record)=>CreatorDirectory.merge(priorDirectory.get(record.creatorKey)||{},record));await Cache.putCreatorDirectory(merged);const allMetas=await Cache.getCreatorMetas();const existingDirectory=await Cache.getCreatorDirectory();const discovered=[];for(const [key,meta] of allMetas){if(existingDirectory.has(key))continue;const [domain,service,creatorId]=String(key).split('|');discovered.push(CreatorDirectory.normalize({creatorKey:key,domain,service,creatorId,creatorName:meta.creatorName||meta.name||creatorId,creatorUrl:`https://${domain}/${service}/user/${creatorId}`,indexedAt:meta.createdAt||meta.scannedAt||Date.now(),updatedAt:meta.updatedAt||meta.catalogue?.lastUpdateCheckAt||Date.now()}));}if(discovered.length)await Cache.putCreatorDirectory(discovered);const directory=await Cache.getCreatorDirectory();const keys=[...directory.keys()];let metas;try{metas=await Cache.getCreatorMetas(keys);ArtistsPageController.metaErrors.clear();}catch{metas=new Map();keys.forEach((key)=>ArtistsPageController.metaErrors.add(key));}const states=await Cache.getCreatorStates(keys);if(generation!==ArtistsPageController.generation||revision!==ArtistsPageController.refreshRevision){Logger.info({operation:'artists-refresh-discarded',generation,revision});return;}ArtistsPageController.metas=metas;ArtistsPageController.states=states;ArtistsPageController.directory=directory;
+      const templates=new Map(cards.map((info)=>[info.context.creatorKey,info.card]));const fallback=cards[0]?.card;const records=keys.map((key)=>{const meta=metas.get(key);const normalized=CatalogueModel.normalize(meta||{},{restoreTransient:false});const catalogue=normalized.catalogue;const summary=catalogue.creatorCardSummary;const state=states.get(key)||CreatorState.empty(key);return{directory:directory.get(key),meta,state,summary:CreatorCatalogueSummary.valid(summary,catalogue)?summary:null,catalogueState:CatalogueModel.evaluateCoverage(catalogue).coverageComplete?'complete':Number(catalogue.storedPostCount)>0?'partial':'unscanned',scanned:Number(catalogue.storedPostCount)>0||Object.keys(catalogue.pageCoverage||{}).length>0,favorite:state.favoriteDirectValue,template:templates.get(key)||fallback};}).filter((record)=>record.template);
+      records.forEach((record)=>ArtistsPageController.scheduleBackfill({
+        context:{
+          creatorKey:record.directory.creatorKey,
+          domain:record.directory.domain,
+          service:record.directory.service,
+          creatorId:record.directory.creatorId,
+          creatorUrl:record.directory.creatorUrl,
+        },
+        creatorName:record.directory.creatorName,
+      },record.meta));
+      CreatorIndexUI.setRecords(records);ArtistsPageController.cards=[...CreatorIndexUI.grid.querySelectorAll('[data-pmf-creator-key]')].map((card)=>({card,context:Route.parseCreatorUrl(card.querySelector('a[href]')?.href||'')||{creatorKey:card.dataset.pmfCreatorKey}}));ArtistsPageController.cardByElement=new Map(ArtistsPageController.cards.map((info)=>[info.card,info]));ArtistsPageController.renderJobs();
     },
     scheduleBackfill(info,meta) {
       if(!meta||ArtistsPageController.backfillKeys.has(info.context.creatorKey))return;const normalized=CatalogueModel.normalize(meta,{restoreTransient:false});const evaluation=CatalogueModel.evaluateCoverage(normalized.catalogue);if(!evaluation.coverageComplete||CreatorCatalogueSummary.valid(normalized.catalogue.creatorCardSummary,normalized.catalogue))return;
@@ -3764,7 +4153,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       if(!ArtistsPageController.mounted())return;ArtistsPageController.renderingOwnedUi=true;ArtistsPageController.cards.forEach((info)=>{const job=CatalogueJobManager.jobForCreator(info.context.creatorKey);const old=info.card.querySelector('.pmf-creator-card-job-status');if(!job){old?.remove();info.card.classList.remove('pmf-creator-card-job-active');return;}const status=old||document.createElement('span');status.className='pmf-creator-card-job-status';status.dataset.pmfOwned='true';status.setAttribute('role','status');const p=job.progress||{};const position=CatalogueJobManager.queuePosition(info.context.creatorKey);status.textContent=job.status==='queued'?`Queued · Position ${position}`:p.message||(job.kind==='update'?'Checking for new posts…':job.kind==='metadata-retry'?'Retrying optional details…':`${job.kind==='resume'?'Resuming scan':'Scanning'}${p.totalPages?` · ${p.page} / ${p.totalPages} pages`:p.page?` · Page ${p.page}`:''}`);const action=job.kind==='update'?'update':job.kind==='metadata-retry'?'metadata retry':'scan';const activeVerb=job.kind==='update'?'Updating':job.kind==='metadata-retry'?'Retrying optional details for':job.kind==='resume'?'Resuming scan for':'Scanning';status.setAttribute('aria-label',job.status==='queued'?`Queued ${action} for ${job.creatorName}, position ${position}`:`${activeVerb}${activeVerb.endsWith('for')?' ':' '}${job.creatorName}${p.page?`, page ${p.page}${p.totalPages?` of ${p.totalPages}`:''}`:''}`);if(!old)info.card.append(status);info.card.classList.toggle('pmf-creator-card-job-active',job.status==='running');if(['complete','failed','stopped'].includes(job.status)&&!job.artistsRefreshed){job.artistsRefreshed=true;queueMicrotask(()=>ArtistsPageController.refresh());}});queueMicrotask(()=>{ArtistsPageController.renderingOwnedUi=false;});
     },
     cleanup() {
-      ArtistsPageController.generation+=1;ArtistsPageController.refreshRevision+=1;ArtistsPageController.controller?.abort();ArtistsPageController.controller=null;ArtistsPageController.observer?.disconnect();ArtistsPageController.observer=null;ArtistsPageController.unsubscribeJob?.();ArtistsPageController.unsubscribeJob=null;ArtistsPageController.unsubscribeSettings?.();ArtistsPageController.unsubscribeSettings=null;ArtistsPageController.cards.forEach((info)=>CreatorCardBadgeRenderer.cleanup(info.card));ArtistsPageController.cards=[];ArtistsPageController.cardByElement.clear();ArtistsPageController.metas.clear();ArtistsPageController.metaErrors.clear();ArtistsPageController.backfillQueue=[];ArtistsPageController.backfillKeys.clear();ArtistsPageController.page=null;ArtistsPageController.found=null;
+      ArtistsPageController.generation+=1;ArtistsPageController.refreshRevision+=1;ArtistsPageController.controller?.abort();ArtistsPageController.controller=null;ArtistsPageController.observer?.disconnect();ArtistsPageController.observer=null;ArtistsPageController.unsubscribeJob?.();ArtistsPageController.unsubscribeJob=null;ArtistsPageController.unsubscribeSettings?.();ArtistsPageController.unsubscribeSettings=null;ArtistsPageController.cards.forEach((info)=>CreatorCardRightRail.cleanup(info.card));CreatorIndexUI.cleanup();ArtistsPageController.cards=[];ArtistsPageController.cardByElement.clear();ArtistsPageController.metas.clear();ArtistsPageController.states.clear();ArtistsPageController.directory.clear();ArtistsPageController.metaErrors.clear();ArtistsPageController.backfillQueue=[];ArtistsPageController.backfillKeys.clear();ArtistsPageController.page=null;ArtistsPageController.found=null;
     },
   };
 
@@ -3803,6 +4192,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     },
     async loadCreator(context) {
       AttachmentBadgeSizing.applyAll({reason:'creator-load'});await Cache.migrateCatalogueOnly();
+      const knownDirectory=await Cache.getCreatorDirectory([context.creatorKey]);await Cache.putCreatorDirectory([CreatorDirectory.merge(knownDirectory.get(context.creatorKey)||{},CreatorDirectory.normalize({...context,creatorUrl:location.href,lastSeenInDirectoryAt:Date.now()}))]);
       const retained=CreatorSessionCache.get(context.creatorKey);if(retained){App.sessionToken+=1;App.activeToken=App.sessionToken;CreatorSessionCache.restoreToApp(retained);App.context={...retained.context,...context};OperationIssues.clear();return true;}
       App.context = context; App.sessionToken += 1; App.activeToken = App.sessionToken; App.catalog = new Map();OperationIssues.clear();
       const token = App.sessionToken; const meta = await Cache.getMeta(context.creatorKey); if (token !== App.sessionToken) return false;
@@ -3991,13 +4381,30 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     .pmf-settings-actions{display:flex;flex-wrap:wrap;gap:8px}.pmf-settings-child h2{margin:8px 0 16px;color:var(--pmf-accent)}.pmf-settings-back{margin-bottom:8px}
   `);
 
+  const NativeActionAlignment = {
+    clamp(value){return Util.clamp(Math.round(Number(value)||0),-6,6);},
+    center(node){const rect=node?.getBoundingClientRect?.();return rect&&rect.height?rect.top+rect.height/2:null;},
+    async align(reference,actions,{fallback=4,operation='native-action-alignment'}={}) {
+      const buttons=(actions||[]).filter(Boolean);if(!reference||!buttons.length)return 0;
+      try{await Promise.race([document.fonts?.ready||Promise.resolve(),Util.sleep(350)]);}catch{}
+      await new Promise((resolve)=>requestAnimationFrame(()=>resolve()));
+      if(!reference.isConnected||buttons.some((button)=>!button.isConnected))return 0;
+      const nativeCenter=NativeActionAlignment.center(reference);const firstCenter=NativeActionAlignment.center(buttons[0]);const measured=nativeCenter!=null&&firstCenter!=null?nativeCenter-firstCenter:fallback;const correction=NativeActionAlignment.clamp(measured);
+      buttons.forEach((button)=>button.style.setProperty('--pmf-native-action-shift-y',`${correction}px`));
+      await new Promise((resolve)=>requestAnimationFrame(()=>resolve()));
+      if(reference.isConnected&&buttons.every((button)=>button.isConnected)){const verifiedNative=NativeActionAlignment.center(reference);const verifiedPmf=NativeActionAlignment.center(buttons[0]);if(verifiedNative!=null&&verifiedPmf!=null){const residual=NativeActionAlignment.clamp(verifiedNative-verifiedPmf);if(Math.abs(residual)>=1)buttons.forEach((button)=>button.style.setProperty('--pmf-native-action-shift-y',`${NativeActionAlignment.clamp(correction+residual)}px`));}}
+      Logger.info({operation,nativeCenterY:nativeCenter,pmfCenterY:firstCenter,appliedTranslateY:correction});return correction;
+    },
+  };
+
   const PostPageController = {
     context:null,root:null,buttons:[],fallbackRoot:null,status:null,nativeFavorite:null,controller:null,observer:null,generation:0,favoriteTimer:null,
     actionText(node){return String(node?.value||node?.textContent||node?.getAttribute?.('aria-label')||node?.title||'').replace(/\s+/g,' ').trim();},
     candidates(pattern){return [...document.querySelectorAll('a,button,input[type="submit"]')].filter((node)=>node.isConnected&&!node.hidden&&!node.closest?.('[data-pmf-owned="true"],aside,nav,[class*="sidebar"],[class*="comment"]')&&pattern.test(PostPageController.actionText(node)));},
     actionGroup(){
       const flags=PostPageController.candidates(/\bflag\b/i);
-      for(const favorite of PostPageController.candidates(/\b(?:un)?favorite\b/i)){let host=favorite.parentElement;for(let depth=0;host&&depth<5;depth+=1,host=host.parentElement){if(flags.some((flag)=>host===flag.parentElement||host.contains?.(flag)))return{host,favorite};}}
+      const containsFlag=(candidate)=>flags.some((flag)=>candidate===flag.parentElement||candidate.contains?.(flag));
+      for(const favorite of PostPageController.candidates(/\b(?:un)?favorite\b/i)){let host=favorite.parentElement;for(let depth=0;host&&depth<5;depth+=1,host=host.parentElement){if(containsFlag(host))return{host,favorite};}}
       return null;
     },
     findNativeFavorite(){return PostPageController.actionGroup()?.favorite||null;},
@@ -4039,9 +4446,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       const template=PostPageController.sanitizeNativeTemplate(nativeFavorite?.cloneNode?.(true));const button=document.createElement('button');button.type='button';const safeClasses=[...template?.classList||[]].filter((name)=>/^[a-z0-9_-]+$/i.test(name)&&!/active|selected|favorite|unfavorite|disabled|turbo|stimulus|controller|action|^js-/i.test(name));button.className=[...safeClasses,'pmf-post-status-button',`pmf-post-status-${field}`].join(' ');button.dataset.pmfPostStatus=field;
       const templateIcon=template?.querySelector?.('svg,i,[class*="icon"]');const icon=document.createElement('span');icon.className='pmf-post-status-icon';icon.innerHTML=PostStatus.icon(field);if(templateIcon){const rect=templateIcon.getBoundingClientRect?.();if(rect?.width)icon.style.setProperty('--pmf-template-icon-width',`${rect.width}px`);}const label=document.createElement('span');label.className='pmf-post-status-label';label.textContent=PostStatus.label(field);button.append(icon,label);return button;
     },
-    alignToNative(reference,buttons,insertion){
-      requestAnimationFrame(()=>{if(!reference?.isConnected||buttons.some((button)=>!button.isConnected))return;const nativeRect=reference.getBoundingClientRect();const buttonRect=buttons[0].getBoundingClientRect();const delta=Util.clamp(Math.round((nativeRect.top+nativeRect.height/2)-(buttonRect.top+buttonRect.height/2)),-3,3);buttons.forEach((button)=>button.style.setProperty('--pmf-native-action-shift-y',`${delta}px`));Logger.info({operation:'post-action-geometry',postKey:PostPageController.context?.postKey,insertion,nativeCenterY:Math.round(nativeRect.top+nativeRect.height/2),pmfCenterY:Math.round(buttonRect.top+buttonRect.height/2),appliedTranslateY:delta,iconWidth:getComputedStyle(buttons[0]).getPropertyValue('--pmf-native-action-icon-width').trim(),iconHeight:getComputedStyle(buttons[0]).getPropertyValue('--pmf-native-action-icon-height').trim()});});
-    },
+    alignToNative(reference,buttons,insertion){return NativeActionAlignment.align(reference,buttons,{fallback:4,operation:`post-action-geometry:${insertion}`});},
     render(){
       if(!PostPageController.root||!PostPageController.status)return;const status=PostStatus.normalize(PostPageController.status);
       PostPageController.buttons.forEach((button)=>{const field=button.dataset.pmfPostStatus;const active=Boolean(status[field]);const label=field==='liked'?(active?'Unlike':'Like'):(active?'Unsee':'Seen');button.classList.toggle('pmf-active',active);button.setAttribute('aria-pressed',String(active));button.title=field==='liked'?(active?'Remove like from this post':'Like this post'):(active?'Mark this post as unseen':'Mark this post as seen');button.querySelector('.pmf-post-status-label').textContent=label;});
@@ -4067,6 +4472,32 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     cleanup(){PostPageController.controller?.abort();PostPageController.controller=null;PostPageController.observer?.disconnect();PostPageController.observer=null;clearTimeout(PostPageController.favoriteTimer);PostPageController.favoriteTimer=null;PostPageController.buttons.forEach((button)=>button.remove());PostPageController.buttons=[];PostPageController.fallbackRoot?.remove();PostPageController.fallbackRoot=null;PostPageController.root=null;PostPageController.nativeFavorite=null;PostPageController.status=null;PostPageController.context=null;},
   };
 
+  const CreatorActionController = {
+    context:null,reference:null,buttons:[],controller:null,observer:null,
+    findFavorite(){
+      return [...document.querySelectorAll('a,button,input[type="submit"]')].find((node)=>node.isConnected&&!node.closest?.('[data-pmf-owned="true"],aside,nav,[class*="sidebar"]')&&/\b(?:un)?favorite\b/i.test(PostPageController.actionText(node)))||null;
+    },
+    create(field,template) {
+      const button=document.createElement('button');button.type='button';button.className=`pmf-post-status-button pmf-creator-action pmf-creator-action-${field}`;button.dataset.pmfOwned='true';button.dataset.pmfCreatorAction=field;
+      const icon=document.createElement('span');icon.className='pmf-post-status-icon';icon.innerHTML=field==='liked'?Icons.heart:Icons.eye;const label=document.createElement('span');label.className='pmf-post-status-label';button.append(icon,label);
+      const style=globalThis.getComputedStyle?.(template);if(style){button.style.font=style.font;button.style.color=style.color;}return button;
+    },
+    nativeFavoriteValue(){const text=PostPageController.actionText(CreatorActionController.reference);if(/\bunfavorite\b/i.test(text))return true;if(/\bfavorite\b/i.test(text))return false;const pressed=CreatorActionController.reference?.getAttribute?.('aria-pressed');return pressed==='true'?true:pressed==='false'?false:null;},
+    render(state) {
+      CreatorActionController.buttons.forEach((button)=>{const field=button.dataset.pmfCreatorAction;const active=Boolean(state?.[field]);const label=field==='liked'?(active?'Unlike':'Like'):(active?'Unhide':'Hide');button.classList.toggle('pmf-active',active);button.setAttribute('aria-pressed',String(active));button.setAttribute('aria-label',`${label} this creator`);button.title=`${label} this creator`;button.querySelector('.pmf-post-status-label').textContent=label;});
+    },
+    async mount(context) {
+      CreatorActionController.cleanup();const favorite=CreatorActionController.findFavorite();if(!favorite?.parentElement)return false;const controller=new AbortController();CreatorActionController.controller=controller;CreatorActionController.context=context;CreatorActionController.reference=favorite;
+      const liked=CreatorActionController.create('liked',favorite);const hidden=CreatorActionController.create('hidden',favorite);PmfDomMutationGuard.run(()=>{favorite.insertAdjacentElement('afterend',hidden);favorite.insertAdjacentElement('afterend',liked);});CreatorActionController.buttons=[liked,hidden];
+      let state=await Cache.getCreatorState(context.creatorKey);const favoriteValue=CreatorActionController.nativeFavoriteValue();if(favoriteValue!=null&&favoriteValue!==state.favoriteDirectValue)state=await CreatorState.set(context.creatorKey,{favoriteDirectValue:favoriteValue},'native-creator-page');CreatorActionController.render(state);NativeActionAlignment.align(favorite,[liked,hidden],{fallback:4,operation:'creator-action-geometry'});
+      const click=async(event)=>{const button=event.currentTarget;button.disabled=true;try{state=await CreatorState.toggle(context.creatorKey,button.dataset.pmfCreatorAction);CreatorActionController.render(state);}catch(error){Logger.warn('Could not save creator state.',error);GlobalUI.flash('Could not save creator state.');}finally{button.disabled=false;}};
+      liked.addEventListener('click',click,{signal:controller.signal});hidden.addEventListener('click',click,{signal:controller.signal});
+      CreatorActionController.observer=new MutationObserver(async()=>{const value=CreatorActionController.nativeFavoriteValue();if(value!=null){state=await CreatorState.set(context.creatorKey,{favoriteDirectValue:value},'native-creator-observation');}});
+      CreatorActionController.observer.observe(favorite,{attributes:true,childList:true,subtree:true,characterData:true});return true;
+    },
+    cleanup(){CreatorActionController.controller?.abort();CreatorActionController.controller=null;CreatorActionController.observer?.disconnect();CreatorActionController.observer=null;CreatorActionController.buttons.forEach((button)=>button.remove());CreatorActionController.buttons=[];CreatorActionController.reference=null;CreatorActionController.context=null;},
+  };
+
   const CreatorPageController = {
     mounted(){return Boolean(App.context&&App.ui?.root?.isConnected);},
     health(context,dom=PawchiveDOM.find(context)){
@@ -4081,9 +4512,9 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     async mount(context,{generation,signal,priorGrid,priorSignatureKey}={}) {
       const guard=()=>!signal?.aborted&&generation===Lifecycle.routeGeneration&&Route.parsePage(location.href).kind==='creator'&&Route.parsePage(location.href).context.nativePageKey===context.nativePageKey;
       if(App.context&&App.context.creatorKey!==context.creatorKey)App.fullCleanup();if(!App.context){Lifecycle.restoreNativePage();Lifecycle.removeStaleRoots();const loaded=await App.loadCreator(context);if(!loaded||!guard())return false;}const found=await Lifecycle.waitForCreatorDOM(context,{generation,signal,priorGrid,priorSignatureKey});if(!found||!guard())return false;
-      const roots=[...document.querySelectorAll('#pmf-root')];const singletonHealthy=roots.length===1&&roots[0].dataset.pmfInstance===INSTANCE_ID;if(!singletonHealthy||App.requiresRebind(found.context,found.dom))await App.rebindNativePage(found.context,found.dom);else App.context=found.context;if(!guard())return false;const signature=PawchiveDOM.signature(found.dom);Logger.info({operation:'creator-dom-bound',creatorKey:context.creatorKey,nativePageKey:context.nativePageKey,gridChanged:Boolean(priorGrid&&priorGrid!==found.dom.grid),cardCount:signature.cardCount,firstCardId:signature.firstCardId,lastCardId:signature.lastCardId});return true;
+      const roots=[...document.querySelectorAll('#pmf-root')];const singletonHealthy=roots.length===1&&roots[0].dataset.pmfInstance===INSTANCE_ID;if(!singletonHealthy||App.requiresRebind(found.context,found.dom))await App.rebindNativePage(found.context,found.dom);else App.context=found.context;if(!guard())return false;await CreatorActionController.mount(found.context);const signature=PawchiveDOM.signature(found.dom);Logger.info({operation:'creator-dom-bound',creatorKey:context.creatorKey,nativePageKey:context.nativePageKey,gridChanged:Boolean(priorGrid&&priorGrid!==found.dom.grid),cardCount:signature.cardCount,firstCardId:signature.firstCardId,lastCardId:signature.lastCardId});return true;
     },
-    cleanup({retainSession=false}={}){if(retainSession&&App.context){App.persistUIState();App.detachPage();return;}if(App.context||App.ui)App.fullCleanup();},
+    cleanup({retainSession=false}={}){CreatorActionController.cleanup();if(retainSession&&App.context){App.persistUIState();App.detachPage();return;}if(App.context||App.ui)App.fullCleanup();},
   };
 
   const isPmfOwnedNode = (node) => {
@@ -4273,7 +4704,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       if (Lifecycle.stopped) return; Lifecycle.stopped = true; clearInterval(Lifecycle.timer);clearTimeout(Lifecycle.fallbackTimer);clearTimeout(Lifecycle.earlyShellTimer); Lifecycle.mountController?.abort(); Lifecycle.documentObserver?.disconnect(); Lifecycle.documentObserver = null; Lifecycle.mutationSchedule.cancel();NativeStylesheetHealth.stop(); Lifecycle.delayedChecks.forEach(clearTimeout); Lifecycle.delayedChecks.clear();CatalogueJobManager.shutdown();FavoriteSyncCoordinator.stop();PostStatusStateCoordinator.shutdown();PostPageController.cleanup();ArtistsPageController.cleanup(); App.fullCleanup();CreatorSessionCache.clear();Lifecycle.restoreNativePage(); Lifecycle.removeStaleRoots();AttachmentBadgeSizing.remove();document.querySelector('#pmf-global-host')?.remove(); Lifecycle.eventController?.abort();
     },
     start() {
-      Settings.load();PostStatusFilters.load();PostStatusStateCoordinator.start();NativeStylesheetHealth.start();CatalogueJobManager.setConcurrency(Settings.value.catalogueConcurrentJobs);AttachmentBadgeSizing.applyAll({reason:'startup'});Lifecycle.eventController = new AbortController(); const signal = Lifecycle.eventController.signal;
+      Settings.load();PostStatusFilters.load();PostStatusStateCoordinator.start();NativeStylesheetHealth.start();CatalogueJobManager.setConcurrency(Settings.value.catalogueConcurrentJobs);CatalogueJobManager.restoreSession();AttachmentBadgeSizing.applyAll({reason:'startup'});Lifecycle.eventController = new AbortController(); const signal = Lifecycle.eventController.signal;
       document.addEventListener('pmf:shutdown-instance', (event) => { if (event.detail?.instanceId !== INSTANCE_ID) Lifecycle.shutdown(); }, { signal });
       document.dispatchEvent(new CustomEvent('pmf:shutdown-instance', { detail: { instanceId: INSTANCE_ID } }));
       OverlayManager.install(signal); Lifecycle.removeStaleRoots();

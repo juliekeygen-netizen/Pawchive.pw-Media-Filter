@@ -2,11 +2,25 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.8.5**
+Current version: **0.10.0**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.0 unified creator index and queue
+
+`/artists` is now one PMF-owned creator index. Pawchive’s native creator cards are captured as templates and directory evidence, then reconstructed in a stable grid that combines current directory results, locally known creators, creator state, and Catalogue summaries. The native creator search field is reused; PMF does not add a duplicate search input.
+
+The creator index has independent creator filters, creator presets, sorting, and four global quick filters: Favorite, Like, Hidden, and Scanned. Scanned means any local Catalogue exists, including partial coverage. Known creator and Scanned creator are intentionally different concepts. Unknown native Favorite is excluded from both positive and negative Favorite filters.
+
+Creator filters support directory fields, complete/partial/unscanned Catalogue state, media post and attachment/link counts, optional editable Catalogue percentages, and post-status aggregates. Percentages always use `posts containing the type ÷ total Catalogue posts × 100`. Aggregate filters require complete Catalogues by default; partial Catalogues can be explicitly included as lower-bound results.
+
+Individual creator pages add local **Like/Unlike** and **Hide/Unhide** actions beside Pawchive’s real Favorite action. Like and Hidden are stored locally and never make a Pawchive request. Creator cards use one coordinated right rail for Favorite/Like, attachment totals, and Hidden/Scanned status. Hidden cards can use the shared Low/Medium/High dim treatment.
+
+The `/artists` toolbar exposes a split bulk action for Update, Scan, and Resume. Confirmed batches freeze creator order, deduplicate queued/active creators, respect whole-operation concurrency 1 or 2, and persist waiting descriptors in `sessionStorage`. The expandable Queue/Issues panel supports Stop, Move to top, Remove, Retry, Dismiss, Clear completed, and Cancel remaining batch. Interrupted active work is reported as interrupted after reload rather than completed.
+
+This release keeps post schema 2 and `pmf-settings-v5`, upgrades IndexedDB in place to version 5 with `creatorDirectory` and `creatorStates`, upgrades creator summaries to version 2 asynchronously, and upgrades Settings to schema 3 with a raw pre-migration backup. Clearing Catalogue data does not clear creator Like/Hidden state.
 
 ## v0.8.4 native stylesheet and settings patch
 

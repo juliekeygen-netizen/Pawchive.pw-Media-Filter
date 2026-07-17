@@ -9,9 +9,9 @@ const {
   PostStatusStateCoordinator, PostPageController, Lifecycle, SettingsUI,
 } = api;
 
-assert.equal(Config.version, '0.8.4');
+assert.equal(Config.version, '0.10.0');
 assert.equal(Config.schemaVersion, 2);
-assert.equal(Config.databaseVersion, 4);
+assert.equal(Config.databaseVersion, 5);
 
 stored.set(Config.settingsKey, { compactCardScale:'small', displayMode:'dim', rememberSearch:false });
 Settings.load();

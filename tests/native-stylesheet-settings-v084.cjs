@@ -9,9 +9,9 @@ const {
   SettingsUI, PostPageController, Lifecycle,
 } = api;
 
-assert.equal(Config.version, '0.8.4');
+assert.equal(Config.version, '0.10.0');
 assert.equal(Config.schemaVersion, 2);
-assert.equal(Config.databaseVersion, 4);
+assert.equal(Config.databaseVersion, 5);
 assert.equal(Config.settingsKey, 'pmf-settings-v5');
 
 stored.set(Config.settingsKey, {
@@ -71,7 +71,7 @@ assert.doesNotMatch(originalSource, /html\.pmf-badge-size-/);
 assert.match(PostPageController.nativeMetrics.toString(), /iconWidth/);
 assert.match(PostPageController.nativeMetrics.toString(), /iconHeight/);
 assert.doesNotMatch(PostPageController.nativeMetrics.toString(), /fontSize/);
-assert.match(PostPageController.alignToNative.toString(), /Util\.clamp/);
+assert.match(PostPageController.alignToNative.toString(), /NativeActionAlignment\.align/);
 assert.match(PostPageController.sanitizeNativeTemplate.toString(), /attribute\.name==='href'/);
 assert.match(originalSource, /--pmf-native-action-icon-width/);
 assert.match(originalSource, /--pmf-native-action-icon-height/);
