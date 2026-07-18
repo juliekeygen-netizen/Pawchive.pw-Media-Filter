@@ -4,9 +4,9 @@ const assert = require('node:assert/strict');
 const { loadUserscript } = require('./test-helper.cjs');
 
 const { api, context } = loadUserscript();
-const { Config, PostPageController } = api;
+const { Config, NativeActionAlignment, PostPageController } = api;
 
-assert.equal(Config.version, '0.10.2');
+assert.equal(Config.version, '0.10.3');
 
 function styleStore() {
   const values = new Map();
@@ -44,4 +44,19 @@ assert.equal(root.style.getPropertyValue('--pmf-native-action-icon-width'), '18p
 assert.equal(root.style.getPropertyValue('--pmf-native-action-icon-height'), '18px');
 assert.equal(root.style.getPropertyValue('--pmf-native-action-line-height'), '24px');
 
-console.log('Pawchive Media Filter v0.8.2 post action native metrics tests passed.');
+(async () => {
+  const trailingStyle = styleStore();
+  const previous = { getBoundingClientRect:() => ({ top:30, bottom:50, height:20 }) };
+  const trailing = {
+    style:trailingStyle,
+    getBoundingClientRect:() => ({ top:55, bottom:65, height:10 }),
+  };
+  const container = { getBoundingClientRect:() => ({ top:10, bottom:100, height:90 }) };
+  const shift = await NativeActionAlignment.balanceTrailing(previous, trailing, container, { maxShift:14 });
+  assert.equal(shift, 14);
+  assert.equal(trailingStyle.getPropertyValue('--pmf-native-action-shift-y'), '14px');
+  console.log('Pawchive Media Filter v0.8.2 post action native metrics tests passed.');
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

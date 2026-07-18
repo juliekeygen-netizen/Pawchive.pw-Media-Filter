@@ -1,4 +1,19 @@
-# Pawchive.pw Media Filter v0.10.2 testing
+# Pawchive.pw Media Filter v0.10.3 testing
+
+## v0.10.3 native UI, bulk, and Queue matrix
+
+Run `tests/native-ui-bulk-queue-v0103.cjs` and the complete suite. Then verify both modes on live `/artists`:
+
+1. Confirm the Native directory/Catalogue selector matches the Pawchive search width, has one shared border, and persists. Confirm Service and Sort are Pawchive-style buttons with anchored menus; the Sort arrow is integrated and reverses when the same sort is chosen again.
+2. Exercise first, previous, numbered, next, and last pagination. Confirm exactly one control per semantic role, the correct current page, centered status text, no duplicate page number, and no encoding-corrupted symbols.
+3. Confirm Native directory shows Queue at far left and Catalogue shows its expected local match summary. Queue empty/idle/recent/active states must be accurate.
+4. Open post-filter and Catalogue-sort popups at desktop and narrow widths. Their left edge and width must match the trigger. On a creator page, confirm Hide has visibly balanced space above and below.
+5. Confirm the primary action is Scan in Native directory and Update in Catalogue. The chevron menu must contain only Retry/resume incomplete.
+6. Preview Current visible result page and First matching creators at 1, 50, and 150. Confirm Scan includes unscanned and partial creators, Update includes complete creators only, Retry/resume includes partial creators only, and queued/active creators are skipped without consuming the First-N quota.
+7. Start two eligible creators with concurrency 2. Confirm two jobs become active, per-batch and overall finished counts remain monotonic and never exceed total, and completion survives the recent-job expiry window, navigation, and reload.
+8. With retained completed batches and no work, confirm Queue idle. Keep Details open, switch to Issues, scroll the panel, and allow live updates; the tab, disclosure, and scroll position must remain stable.
+9. Exercise Stop, Remove, Cancel remaining batch, Retry, Dismiss, and Clear completed. Confirm each terminal job is counted once and an interrupted restored job is never reported as completed.
+10. Search the rendered controls and source for broken glyphs. All close, arrow, status, and paging symbols must render correctly.
 
 ## v0.10.2 `/artists` mode matrix
 
@@ -8,7 +23,7 @@ In Tampermonkey, verify Native directory is the first-run default. Search for a 
 
 Switch to Catalogue and confirm only partial/complete local Catalogues appear, search is local, advanced filters and sorts work, quick filters are Favorite/Like/Hidden only, pages contain at most 50 creators, and the grid has the same measured column count/card height as Native mode. Inspect cloned cards for correct creator links, names, service, popularity, avatar/banner, and no stale IDs or framework/event attributes.
 
-Repeat Native â†” Catalogue switching, search submission, native pagination, browser Back/Forward, Turbo navigation, BFCache return, Settings changes, Queue operations, and cleanup. Force a Catalogue load failure and disable the userscript; native search, controls, count, paginator, cards, grid, placeholder, and card styling must be fully restored with no duplicate roots or listeners.
+Repeat Native ↔ Catalogue switching, search submission, native pagination, browser Back/Forward, Turbo navigation, BFCache return, Settings changes, Queue operations, and cleanup. Force a Catalogue load failure and disable the userscript; native search, controls, count, paginator, cards, grid, placeholder, and card styling must be fully restored with no duplicate roots or listeners.
 
 ## v0.10.1 corrective completion live matrix
 

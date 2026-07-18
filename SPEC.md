@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.2 specification
+# Pawchive.pw Media Filter v0.10.3 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.2`
+- Userscript and `Config.version`: `0.10.3`
 - Settings: `pmf-settings-v5`
 - Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -24,7 +24,17 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Creator presets: `pmf-creator-presets-v1`
 - Creator quick filters: `pmf-creator-status-filters-v1`
 - Creator directory mode: `pmf-creator-directory-mode-v1` (`native` or `catalogue`, default `native`)
-- Creator queue restoration: `pmf-creator-queue-session-v1`, payload version 2, in `sessionStorage`
+- Creator queue restoration: `pmf-creator-queue-session-v1`, payload version 3, in `sessionStorage`
+
+## v0.10.3 corrective behavior
+
+Native directory owns neither Pawchive's data nor card rendering. Its PMF controls are proxy buttons and anchored menus that activate Pawchive's real Service, Sort, direction, and paginator controls. A sort choice toggles direction when reselected and otherwise uses the native default direction for that field. Mirrored paginator items are deduplicated by first/previous/page/next/last role and activate the exact surviving native element.
+
+The mode selector is a two-segment control measured from Pawchive's search field. Native directory exposes **Scan**; Catalogue exposes **Update**. The split chevron exposes only **Retry/resume incomplete**. Bulk scope is either the currently visible records or the first 1–150 matching creators. Native First matching creators is resolved from `/api/v1/creators` using Pawchive's current service, query, sort, and direction state, then skips ineligible, active, and queued creators until the requested actionable count or result set is exhausted.
+
+Bulk Scan accepts unscanned creators and resumes partial catalogues. Bulk Update accepts complete catalogues only. Retry/resume accepts partial catalogues only. Confirmation freezes the previewed order and enqueues the action displayed for each row.
+
+Queue batches keep immutable totals and a terminal job-id ledger. Completed, failed, stopped/interrupted, and removed counts are recorded idempotently before recent entries can expire. Session restoration migrates older payloads and retains terminal accounting, batch order, waiting work, and interrupted active work. Overall progress aggregates fixed batches without double-counting live or recent jobs. A Queue with retained history but no active/waiting work is idle, not empty.
 
 ## Creator directory modes
 

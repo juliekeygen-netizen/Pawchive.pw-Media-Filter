@@ -2,11 +2,19 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.2**
+Current version: **0.10.3**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.3 native UI, bulk, and Queue corrective release
+
+Native directory mode now uses compact segmented mode controls and Pawchive-style anchored menus for Service and Sort. Sort direction is part of the Sort control, the mirrored paginator deduplicates controls by semantic role, its status line is centered, and the Queue state sits at the far left of the native status row. Creator-page post filters and sort menus use the exact width and left edge of their triggers, and the trailing Hide action receives balanced native-header spacing.
+
+The primary creator-directory action is mode-specific: **Scan** in Native directory and **Update** in Catalogue. Its split menu contains only **Retry/resume incomplete**. Bulk operations now offer Current visible result page or First matching creators (1–150), preview only actionable creators, skip active/queued work, and keep scanning the background native result order until the requested eligible count is reached.
+
+Queue session payloads are version 3. Batch terminal counts and job identities remain durable after recent-job expiry, reload, and navigation, so overall and per-batch progress no longer resets or exceeds its fixed total. Retained completed batches show **Queue idle** instead of **Queue empty**, while the Queue/Issues panel preserves its selected tab, open details, and scroll position during live updates.
 
 ## v0.10.2 Native directory and Catalogue modes
 

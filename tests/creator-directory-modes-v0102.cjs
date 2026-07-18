@@ -10,8 +10,8 @@ const {
   NativeArtistsProxy, CreatorCardReconstructor, CreatorIndexUI,
 } = api;
 
-assert.equal(Config.version, '0.10.2');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.2/);
+assert.equal(Config.version, '0.10.3');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.3/);
 assert.equal(CreatorDirectoryMode.load(), 'native');
 assert.equal(CreatorDirectoryMode.normalize('bad-value'), 'native');
 assert.equal(CreatorDirectoryMode.save('catalogue'), 'catalogue');
@@ -109,31 +109,60 @@ sort.options = [option('favorited', 'Popularity'), option('name', 'Alphabetical 
 sort.value = 'name';
 direction.value = 'asc';
 direction.getAttribute = (name) => name === 'aria-label' ? 'Toggle sort direction' : null;
-const proxyService = element('select');
-const proxySort = element('select');
-const proxyDirection = element('button');
+const proxyServiceLabel = element('span');
+const proxySortLabel = element('span');
+const proxySortDirection = element('span');
+const proxyService = element('button');
+proxyService.querySelector = () => proxyServiceLabel;
+const proxySort = element('button');
+proxySort.querySelector = (selector) => selector.includes('direction') ? proxySortDirection : proxySortLabel;
 const proxyHost = {
   querySelector(selector) {
-    return selector.includes('"service"') ? proxyService
-      : selector.includes('"sort"') ? proxySort
-        : selector.includes('"direction"') ? proxyDirection : null;
+    return selector.includes('native-service') ? proxyService
+      : selector.includes('native-sort') ? proxySort : null;
   },
 };
 assert.equal(NativeArtistsProxy.sync(found, proxyHost), true);
-assert.equal(proxyService.value, 'fanbox');
-assert.equal(proxyService.children[0].textContent, 'Any service');
-assert.equal(proxySort.value, 'name');
-assert.equal(proxyDirection.dataset.value, 'asc');
+assert.equal(proxyServiceLabel.textContent, 'Pixiv Fanbox');
+assert.equal(proxySortLabel.textContent, 'Sort: Alphabetical Order');
+assert.equal(proxySortDirection.textContent, '▲');
 assert.equal(NativeArtistsProxy.activate(found, 'service', 'fanbox'), true);
 assert.equal(service.dispatched, 2);
-assert.equal(NativeArtistsProxy.activate(found, 'direction'), true);
-assert.equal(direction.clicked, 1);
+assert.equal(NativeArtistsProxy.nextSort('name', 'asc', 'name').direction, 'desc');
+assert.equal(NativeArtistsProxy.nextSort('favorited', 'desc', 'name').direction, 'asc');
 
 const pageLink = element('a');
 pageLink.dataset.value = '50';
-paginator.querySelectorAll = (selector) => selector === 'a[data-value]' ? [pageLink] : [];
-assert.equal(NativeArtistsProxy.activatePage(found, 50), true);
+paginator.querySelectorAll = (selector) => selector === 'a[data-value],li' ? [pageLink] : [];
+assert.equal(NativeArtistsProxy.activatePage(found, 0), true);
 assert.equal(pageLink.clicked, 1);
+
+const paginatorItem = (tag, label, { current = false, disabled = false } = {}) => {
+  const item = element(tag);
+  item.textContent = label;
+  item.dataset.value = label;
+  item.matches = (selector) => (
+    (selector === 'a[data-value]' && tag === 'a')
+    || (selector.includes('pagination-button-current') && current)
+    || (selector.includes('pagination-button-disabled') && disabled)
+    || (selector === 'li,.pagination-button-disabled' && (tag === 'li' || disabled))
+  );
+  return item;
+};
+const duplicateOneWrapper = paginatorItem('li', '1');
+const duplicateOneAnchor = paginatorItem('a', '1');
+const nextWrapper = paginatorItem('li', '>');
+const nextAnchor = paginatorItem('a', '>');
+const lastWrapper = paginatorItem('li', '>>');
+const lastAnchor = paginatorItem('a', '>>');
+paginator.querySelector = () => null;
+paginator.querySelectorAll = (selector) => selector === 'a[data-value],li'
+  ? [duplicateOneWrapper, duplicateOneAnchor, nextWrapper, nextAnchor, lastWrapper, lastAnchor]
+  : [];
+const mirrorHost = element();
+assert.equal(NativeArtistsProxy.paginator(found, mirrorHost), true);
+assert.deepEqual(mirrorHost.children[0].children.map((button) => button.textContent), ['1', '>', '>>']);
+assert.deepEqual(mirrorHost.children[0].children.map((button) => button.dataset.nativePaginatorIndex), ['1', '3', '5']);
 
 const scanned = { directory:{ creatorKey:'a', creatorName:'A', service:'fanbox', creatorId:'1' }, scanned:true, state:{} };
 const unscanned = { directory:{ creatorKey:'b', creatorName:'B', service:'fanbox', creatorId:'2' }, scanned:false, state:{} };
@@ -194,4 +223,4 @@ assert.equal(paginator.hidden, false);
 assert.equal(mountSearch.placeholder, 'search for creators...');
 assert.doesNotMatch(originalSource, /pmf-native-creator-card-height,104px|\|\|104/);
 
-console.log('Pawchive Media Filter v0.10.2 creator directory mode behavior tests passed.');
+console.log('Pawchive Media Filter v0.10.3 creator directory mode behavior tests passed.');

@@ -10,8 +10,8 @@ const {
   ArtistsDOM, CreatorGridGeometry, CreatorBulkSelection, CatalogueJobManager, CatalogueModel,
 } = api;
 
-assert.equal(Config.version, '0.10.2');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.2/);
+assert.equal(Config.version, '0.10.3');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.3/);
 assert.equal(Config.databaseVersion, 5);
 assert.equal(Settings.schema.version, 4);
 const migrated = Settings.migrate({ settingsSchemaVersion:3 });
@@ -133,6 +133,6 @@ assert.match(originalSource, /NativeArtistsVisibility\.hide/);
 assert.match(originalSource, /--pmf-native-creator-card-width/);
 assert.match(originalSource, /creator-dynamic-aggregates-hydrated/);
 assert.match(originalSource, /requestRefresh\(reason='request'\)/);
-assert.match(originalSource, /version:2,waiting,active,recent,batches/);
+assert.match(originalSource, /version:3,waiting,active,recent,batches/);
 
 console.log('Pawchive Media Filter v0.10.1 creator-index corrective tests passed.');
