@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.0 specification
+# Pawchive.pw Media Filter v0.10.1 specification
 
 ## Scope
 
@@ -6,8 +6,9 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.0`
+- Userscript and `Config.version`: `0.10.1`
 - Settings: `pmf-settings-v5`
+- Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
 - Post schema: 2
 - IndexedDB: `pawchive-media-filter`, version 5
@@ -22,11 +23,13 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Creator filter state: `pmf-creator-filter-state-v1`
 - Creator presets: `pmf-creator-presets-v1`
 - Creator quick filters: `pmf-creator-status-filters-v1`
-- Creator queue restoration: `pmf-creator-queue-session-v1` in `sessionStorage`
+- Creator queue restoration: `pmf-creator-queue-session-v1`, payload version 2, in `sessionStorage`
 
 ## Unified creator index
 
-Every supported `/artists` route uses one PMF-owned toolbar, paginator, and reconstructed creator grid. Native cards remain available as the safe fallback and are hidden only after PMF has captured a healthy template and rendered results. Directory records are independent from Catalogue metadata, so a known creator is not necessarily Scanned. Scanned means a complete or partial local Catalogue exists.
+Every supported `/artists` route uses one PMF-owned toolbar, paginator, and reconstructed creator grid. Native creator links are discovery evidence only: PMF never clones a live native card into the owned grid. Reconstructed cards contain safe directory identity, avatar/banner URLs, service, name, popularity, state, and Catalogue-derived badges. Their grid width and gaps are measured from the native grid before it is hidden.
+
+The controller keeps one saved native-grid reference, observes only that native grid, coalesces refresh requests, and rejects PMF-owned links during discovery. Native search remains available. Duplicate native grid, selector, and paginator elements are reversibly hidden only while the healthy PMF root is mounted. Directory records are independent from Catalogue metadata, so a known creator is not necessarily Scanned. Scanned means a complete or partial local Catalogue exists.
 
 The existing Pawchive creator search field filters the unified index and remains available to Pawchive’s native discovery mechanism. Creator filter, preset, quick-status, sort, and pagination state are separate from post filtering and post presets.
 
@@ -34,7 +37,7 @@ Favorite is Pawchive-native tri-state evidence. Like and Hidden are local creato
 
 ## Creator aggregates and sorting
 
-`CreatorCatalogueSummary` version 2 stores source count, classification fingerprint, media post counts, attachment/link totals, earliest/latest publication dates, last update, metadata health, completeness, and Like/Seen/Favorite aggregates with known Favorite coverage. Old complete Catalogues receive bounded idle backfills without changing stored posts or forcing a scan.
+`CreatorCatalogueSummary` version 3 stores source count, the full classification fingerprint, media post counts, physical attachment/link totals, all known publication timestamps, last update, metadata health, completeness, authoritative Like/Seen/Favorite aggregates, and dynamic custom-extension/custom-rule aggregate caches. Project-file post counts include project evidence even when the physical attachment total is zero. Old complete Catalogues receive bounded idle backfills without changing stored posts or forcing a scan.
 
 Media percentage is `posts containing the media type / total Catalogue posts × 100`. Count and percentage rules support At least, At most, Exactly, and Between. Percentage values are 0–100 with one decimal place. Complete Catalogues are the default aggregate domain; partial results are explicit lower bounds.
 
@@ -44,11 +47,11 @@ Creator sorting keeps stable ties and always places unknown values after known v
 
 `CatalogueJobManager` remains the only scheduler. Jobs may carry `batchId`, `batchLabel`, `batchSequence`, `requestedAction`, and `creatorKey`. Confirmed batches freeze selected order, deduplicate creators, respect concurrency 1 or 2, and share the existing request spacing, retries, and 429 cooldown.
 
-Waiting descriptors persist for the tab session. A hard reload restores waiting work and records formerly active work as interrupted. Queue controls include Stop, Move to top, Remove, Retry, Dismiss, Clear completed, and Cancel remaining batch. Failed/stopped/interrupted issues remain until dismissed.
+Each confirmed batch receives an immutable identity and fixed original total. Per-batch waiting, active, complete, failed, stopped, and removed counters are derived without shrinking that total. Waiting descriptors, batches, queue order, and recent outcomes persist for the tab session. A hard reload restores waiting work and records formerly active work as interrupted. Queue controls include Stop, Move to top, Remove, Retry, Dismiss, Clear completed, and Cancel remaining batch. Failed/stopped/interrupted issues remain until dismissed.
 
-## Settings schema 3
+## Settings schema 4
 
-Schema 3 adds independent creator status-badge size/visibility and hidden-card dim settings. Existing false values and nested attachment-badge toggles are preserved. Visual settings preview without a write; Cancel, close, Escape, and outside dismissal restore the opening snapshot; Save performs the final write.
+Schema 4 preserves the stable Settings key, backs up raw pre-schema-4 data, and adds `creatorCardBadgeCountMode`. The default is `posts`; `attachments` selects physical attachment/link totals. Existing false values, empty arrays, nested attachment-badge toggles, creator status-badge size/visibility, and hidden-card dim settings are preserved. Visual settings preview without a write; Cancel, close, Escape, and outside dismissal restore the opening snapshot; Save performs the final write.
 
 ## v0.8.4 ownership contracts
 

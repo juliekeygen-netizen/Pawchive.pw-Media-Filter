@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, context } = loadUserscript();
 const { Config, PostPageController } = api;
 
-assert.equal(Config.version, '0.10.0');
+assert.equal(Config.version, '0.10.1');
 
 function styleStore() {
   const values = new Map();

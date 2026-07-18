@@ -1,4 +1,17 @@
-# Pawchive.pw Media Filter v0.10.0 testing
+# Pawchive.pw Media Filter v0.10.1 testing
+
+## v0.10.1 corrective completion live matrix
+
+1. Upgrade a profile with Settings schema 3. Confirm schema 4 is written once, `pmf-settings-backup-pre-schema-4` preserves the raw prior object, explicit false/empty/nested values survive, and creator badge Count method defaults to Matching posts.
+2. Exercise `/artists` search, Back/Forward, refresh, Turbo, BFCache, native grid replacement, and rapid native mutations. Confirm one PMF root, no flicker loop, no PMF-card rediscovery, native search remains, duplicate native selectors/paginators stay hidden, and native UI restores after cleanup or failed mount.
+3. Compare the reconstructed grid with native card geometry at desktop and narrow widths. Confirm PMF uses measured native card width/gaps, cards contain only safe stored identity, and no live native card subtree or handler leaks into PMF.
+4. Test empty directory, zero matches, loading, and forced IndexedDB failure. Confirm explicit states and no blank page.
+5. Test every creator filter/operator, all sort directions, custom extensions, multiple custom Catalogue rules, published-date boundaries, percentages, and partial lower-bound opt-in. Confirm invalid/blank/reversed values are rejected; custom aggregates are computed locally without requests; partial results are allowed only for At least count rules without percentages.
+6. Change a post’s Like, Seen, and native Favorite evidence, then return to `/artists`. Confirm version-3 summary/status counts refresh and unknown Favorite stays excluded from both active Favorite modes.
+7. Confirm project evidence can increment Project-file posts while physical project attachments remain zero. Toggle creator-card Count method between Matching posts and Attachments / links and verify badge values change accordingly.
+8. Exercise creator Favorite replacement, Like/Unlike, and Hide/Unhide across navigation and native rerenders. Confirm one control per action, local actions make no Pawchive request, and visual classes remain safe.
+9. Queue multiple manual and bulk batches at concurrency 1 and 2. Test Move to top, Remove, Stop, Cancel remaining, Retry, Dismiss, Clear completed, reload, and navigation. Confirm fixed batch totals, preserved order/session state, per-batch progress, and interrupted active jobs in Issues.
+10. Recheck centered Field Availability rows and the full v0.10.0 regression matrix below.
 
 ## v0.10.0 unified creator index live matrix
 

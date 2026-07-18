@@ -2,11 +2,23 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.0**
+Current version: **0.10.1**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.1 creator-index corrective completion
+
+v0.10.1 stabilizes the unified `/artists` experience around an explicit ownership boundary. Native creator links are used only for discovery, creator cards are reconstructed from safe stored identity data, native search remains available, and duplicate native grids, selectors, and paginators are reversibly hidden after PMF is ready. Refresh requests are coalesced against one saved native grid reference, while empty, loading, and error states remain visible.
+
+Creator summaries are now version 3 and are derived from authoritative local Catalogue posts and persistent post status. Project-file post counts include title/tag/content evidence even when no physical project attachment exists. Date filters use stored publication timestamps, custom-extension and custom-rule aggregates are hydrated from IndexedDB without network requests, and partial Catalogues are accepted only for safe non-percentage lower-bound conditions.
+
+The Settings schema is now 4. Migration keeps `pmf-settings-v5`, writes `pmf-settings-backup-pre-schema-4`, preserves explicit values, and adds a creator-card attachment **Count method** with **Matching posts** as the default. Creator-index Settings uses the same General, Default detection, Scanning, and Data & performance builders as creator pages.
+
+Bulk work now has durable fixed-total batches. Queue session version 2 preserves batch identity, order, waiting work, interrupted active work, recent results, and per-batch progress. The Queue/Issues panel exposes per-batch progress and cancellation without changing a batch’s original total.
+
+Post schema 2 and IndexedDB version 5 are unchanged.
 
 ## v0.10.0 unified creator index and queue
 

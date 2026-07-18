@@ -6,7 +6,7 @@ const { loadUserscript, makeClassList } = require('./test-helper.cjs');
 const { api } = loadUserscript();
 const { Config, Settings, SeenCardTreatment } = api;
 
-assert.equal(Config.version, '0.10.0');
+assert.equal(Config.version, '0.10.1');
 
 const classList = makeClassList();
 const card = { classList };

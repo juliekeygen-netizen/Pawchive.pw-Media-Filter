@@ -11,8 +11,8 @@ const {
   CatalogueJobManager, NativeActionAlignment,
 } = api;
 
-assert.equal(Config.version, '0.10.0');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.0/);
+assert.equal(Config.version, '0.10.1');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.1/);
 assert.equal(Config.databaseVersion, 5);
 assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
 assert.match(originalSource, /createObjectStore\('creatorStates'/);
@@ -21,7 +21,8 @@ const migrated = Settings.normalize(Settings.migrate({
   settingsSchemaVersion: 2,
   creatorCardBadges: { enabled: false, types: { videos: false } },
 }));
-assert.equal(migrated.settingsSchemaVersion, 3);
+assert.equal(migrated.settingsSchemaVersion, 4);
+assert.equal(migrated.creatorCardBadgeCountMode, 'posts');
 assert.equal(migrated.creatorStatusBadgeSize, 'small');
 assert.equal(migrated.creatorStatusBadges.enabled, true);
 assert.equal(migrated.hiddenCreatorTreatment.enabled, false);
@@ -90,6 +91,12 @@ assert.equal(CreatorFilterEngine.matches({
   ...filterRecord,
   catalogueState:'partial',
   summary:{ ...filterRecord.summary, completeness:'partial' },
+}, filter), false);
+filter.media.videos.percentageEnabled = false;
+assert.equal(CreatorFilterEngine.matches({
+  ...filterRecord,
+  catalogueState:'partial',
+  summary:{ ...filterRecord.summary, completeness:'partial' },
 }, filter), true);
 
 const sorted = CreatorSorter.sort([
@@ -113,7 +120,7 @@ const summary = CreatorCatalogueSummary.compute([
   { id:'a', scanSchemaVersion:2, cacheSources:{ catalogue:true }, videoCount:2, imageCount:0, archiveCount:0, projectFileCount:0, externalLinkCount:1, published:'2025-01-01' },
   { id:'b', scanSchemaVersion:2, cacheSources:{ catalogue:true }, videoCount:1, imageCount:3, archiveCount:0, projectFileCount:0, externalLinkCount:0, published:'2026-01-01' },
 ], catalogue, 123);
-assert.equal(summary.version, 2);
+assert.equal(summary.version, 3);
 assert.deepEqual(JSON.parse(JSON.stringify(summary.media.videos)), { posts:2, attachments:3 });
 assert.deepEqual(JSON.parse(JSON.stringify(summary.media.images)), { posts:1, attachments:3 });
 assert.equal(summary.earliestPublishedAt, Date.parse('2025-01-01'));
