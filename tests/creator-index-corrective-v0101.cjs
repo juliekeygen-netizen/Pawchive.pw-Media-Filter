@@ -10,8 +10,8 @@ const {
   ArtistsDOM, CreatorGridGeometry, CreatorBulkSelection, CatalogueJobManager, CatalogueModel,
 } = api;
 
-assert.equal(Config.version, '0.10.4');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.4/);
+assert.equal(Config.version, '0.10.5');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.5/);
 assert.equal(Config.databaseVersion, 5);
 assert.equal(Settings.schema.version, 4);
 const migrated = Settings.migrate({ settingsSchemaVersion:3 });
@@ -72,7 +72,7 @@ const summary = CreatorCatalogueSummary.compute(posts, catalogue, 100, {
     { postId:'b', creatorKey:'pawchive.pw|patreon|1', liked:false, seen:true },
   ],
 });
-assert.equal(summary.version, 3);
+assert.equal(summary.version, 4);
 assert.deepEqual(JSON.parse(JSON.stringify(summary.media.projectFiles)), { posts:1, attachments:0 });
 assert.equal(summary.statuses.liked, 1);
 assert.equal(summary.statuses.seen, 2);

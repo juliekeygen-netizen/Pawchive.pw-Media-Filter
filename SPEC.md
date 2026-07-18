@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.4 specification
+# Pawchive.pw Media Filter v0.10.5 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.4`
+- Userscript and `Config.version`: `0.10.5`
 - Settings: `pmf-settings-v5`
 - Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -25,6 +25,12 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Creator quick filters: `pmf-creator-status-filters-v1`
 - Creator directory mode: `pmf-creator-directory-mode-v1` (`native` or `catalogue`, default `native`)
 - Creator queue restoration: `pmf-creator-queue-session-v1`, payload version 3, in `sessionStorage`
+
+## v0.10.5 corrective behavior
+
+- Missing attachment metadata is three-state: unknown, checked-complete, or checked-missing. Only checked-missing posts are excluded when the preference is enabled.
+- `storedPostCount` and summary `sourcePostCount` remain all stored Catalogue posts. `aggregateEligiblePostCount` and `excludedMissingAttachmentPostCount` describe the separately filtered aggregate set.
+- Summary fingerprints include the exclusion preference and metadata parser version, so changing either invalidates old aggregate summaries without changing coverage.
 
 ## v0.10.4 corrective behavior
 

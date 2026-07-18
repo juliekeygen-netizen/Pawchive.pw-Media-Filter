@@ -1,4 +1,11 @@
-# Pawchive.pw Media Filter v0.10.4 testing
+# Pawchive.pw Media Filter v0.10.5 testing
+
+## v0.10.5 corrective follow-up matrix
+
+1. In Data & performance, run **Update missing-attachment metadata**, stop it, then resume. Confirm known results are retained and only remaining/old-parser posts are revisited.
+2. With the exclusion preference on, confirm Details still reports every stored post while creator attachment badges and filtered media counts omit only checked-missing posts.
+3. Exercise Local catalogue First/Previous/Next/Last with 1, 3, 5, 6, and many pages. The numbered window remains fixed at five where possible.
+4. Confirm successful queue rows persist until Clear completed; failed/stopped rows remain after clearing successes.
 
 ## v0.10.4 artists lifecycle, bulk metadata, and Queue matrix
 

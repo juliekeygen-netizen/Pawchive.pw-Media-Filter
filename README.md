@@ -2,11 +2,17 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.4**
+Current version: **0.10.5**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.5 corrective follow-up
+
+v0.10.5 keeps Local Catalogue storage and coverage based on every stored post while the optional missing-attachment exclusion affects only visible results and creator aggregates. The Data & performance action **Update missing-attachment metadata** checks unknown posts on demand, using Pawchive post pages with shared request spacing; normal scans do not blindly request every post HTML page.
+
+Queue completion history is retained until **Clear completed** or a new batch starts from an idle Queue. Bulk Scan remains bounded to 1–1000 matching actionable creators; Resume and Update also offer All creators within the active filtered result.
 
 ## v0.10.4 artists lifecycle, bulk metadata, and Queue corrective release
 

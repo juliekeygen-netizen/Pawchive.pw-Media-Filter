@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.10.4
+// @version      0.10.5
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.10.4',
+    version: '0.10.5',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -837,19 +837,22 @@
   // Pawchive does not consistently expose this on list responses.  Keep the
   // three-state distinction: unknown, checked/no missing attachments, checked/missing.
   const PostMissingStats = {
+    parserVersion:2,
+    complete(source='') {return{missingStatsKnown:true,hasMissingStats:false,missingStatsText:'',missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingArchiveCount:0,missingFileCount:0,missingUnknownCount:0,missingStatsSource:source,missingStatsObservedAt:Date.now(),missingStatsParserVersion:PostMissingStats.parserVersion};},
     parse(text='') {
       const raw=String(text||'').replace(/\s+/g,' ').trim();
-      if(!raw)return{missingStatsKnown:false,hasMissingStats:false,missingStatsText:'',missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingFileCount:0,missingUnknownCount:0};
-      const result={missingStatsKnown:true,hasMissingStats:true,missingStatsText:raw,missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingFileCount:0,missingUnknownCount:0};
-      let matched=false;for(const match of raw.matchAll(/(\d+)\s+(?:full[- ]res\s+)?(photos?|images?|videos?|audio|files?|attachments?)/gi)){const count=Number(match[1])||0,type=match[2].toLowerCase();matched=true;result.missingAttachmentCount+=count;if(/photo|image/.test(type))result.missingImageCount+=count;else if(/video/.test(type))result.missingVideoCount+=count;else if(/audio/.test(type))result.missingAudioCount+=count;else result.missingFileCount+=count;}
+      if(!raw)return{missingStatsKnown:false,hasMissingStats:false,missingStatsText:'',missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingArchiveCount:0,missingFileCount:0,missingUnknownCount:0,missingStatsSource:'',missingStatsObservedAt:0,missingStatsParserVersion:0};
+      const result={missingStatsKnown:true,hasMissingStats:true,missingStatsText:raw,missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingArchiveCount:0,missingFileCount:0,missingUnknownCount:0,missingStatsSource:'',missingStatsObservedAt:Date.now(),missingStatsParserVersion:PostMissingStats.parserVersion};
+      let matched=false;for(const match of raw.matchAll(/(\d+)\s+(?:full[- ]res\s+)?(photos?|images?|videos?|audio|archives?|files?|attachments?)/gi)){const count=Number(match[1])||0,type=match[2].toLowerCase();matched=true;result.missingAttachmentCount+=count;if(/photo|image/.test(type))result.missingImageCount+=count;else if(/video/.test(type))result.missingVideoCount+=count;else if(/audio/.test(type))result.missingAudioCount+=count;else if(/archive/.test(type))result.missingArchiveCount+=count;else result.missingFileCount+=count;}
       if(!matched)result.missingUnknownCount=1;return result;
     },
     fromRaw(raw={}) {
       const value=raw.missing_stats??raw.missingStats??raw.missing_attachments??raw.missingAttachments??raw.post_missing_stats;
-      if(value==null)return{missingStatsKnown:Boolean(raw.missingStatsKnown),hasMissingStats:Boolean(raw.hasMissingStats),missingStatsText:String(raw.missingStatsText||''),missingAttachmentCount:Number(raw.missingAttachmentCount)||0,missingImageCount:Number(raw.missingImageCount)||0,missingVideoCount:Number(raw.missingVideoCount)||0,missingAudioCount:Number(raw.missingAudioCount)||0,missingFileCount:Number(raw.missingFileCount)||0,missingUnknownCount:Number(raw.missingUnknownCount)||0};
-      if(value===false||value===0||String(value).trim()==='')return{missingStatsKnown:true,hasMissingStats:false,missingStatsText:'',missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingFileCount:0,missingUnknownCount:0};
-      return PostMissingStats.parse(typeof value==='string'?value:raw.missingStatsText||String(value));
+      if(value==null)return{missingStatsKnown:Boolean(raw.missingStatsKnown),hasMissingStats:Boolean(raw.hasMissingStats),missingStatsText:String(raw.missingStatsText||''),missingAttachmentCount:Number(raw.missingAttachmentCount)||0,missingImageCount:Number(raw.missingImageCount)||0,missingVideoCount:Number(raw.missingVideoCount)||0,missingAudioCount:Number(raw.missingAudioCount)||0,missingArchiveCount:Number(raw.missingArchiveCount)||0,missingFileCount:Number(raw.missingFileCount)||0,missingUnknownCount:Number(raw.missingUnknownCount)||0,missingStatsSource:String(raw.missingStatsSource||''),missingStatsObservedAt:Number(raw.missingStatsObservedAt)||0,missingStatsParserVersion:Number(raw.missingStatsParserVersion)||0};
+      if(value===false||value===0||String(value).trim()==='')return PostMissingStats.complete('api');
+      return{...PostMissingStats.parse(typeof value==='string'?value:raw.missingStatsText||String(value)),missingStatsSource:'api'};
     },
+    fromHtml(html) {const doc=new DOMParser().parseFromString(String(html||''),'text/html');const text=doc.querySelector('p.post__missing-stats')?.textContent||'';return text.trim()?{...PostMissingStats.parse(text),missingStatsSource:'post-html'}:PostMissingStats.complete('post-html');},
   };
 
   const PostNormalizer = {
@@ -946,8 +949,6 @@
         hasExternalLinks: links.externalLinks.length > 0,
         hasLikelyExternalMedia: links.likelyMediaLinks.length > 0,
         ...missing,
-        missingStatsObservedAt:missing.missingStatsKnown?Date.now():0,
-        missingStatsSource:missing.missingStatsKnown?'api':'' ,
         completeness,
         cacheSources: {
           scan: Boolean(raw.cacheSources?.scan),
@@ -978,8 +979,12 @@
         missingImageCount:post.missingImageCount,
         missingVideoCount:post.missingVideoCount,
         missingAudioCount:post.missingAudioCount,
+        missingArchiveCount:post.missingArchiveCount,
         missingFileCount:post.missingFileCount,
         missingUnknownCount:post.missingUnknownCount,
+        missingStatsSource:post.missingStatsSource,
+        missingStatsObservedAt:post.missingStatsObservedAt,
+        missingStatsParserVersion:post.missingStatsParserVersion,
         cacheSources: post.cacheSources,
       };
     },
@@ -2230,7 +2235,7 @@
   };
 
   const CreatorCatalogueSummary = {
-    version:3,
+    version:4,
     fingerprint(settings=Settings.value) {
       const normalized=(values)=>Util.normalizeExtensions(values||[]).values.sort();
       return JSON.stringify({
@@ -2244,16 +2249,20 @@
         projectEvidence:{...settings.projectEvidence},
         externalLinkScope:settings.externalLinkScope,
         knownHosts:Util.unique((settings.knownHosts||[]).map((value)=>String(value).trim().toLocaleLowerCase())).sort(),
+        excludePostsWithMissingAttachments:settings.excludePostsWithMissingAttachments===true,
+        missingStatsParserVersion:2,
         mediaLinkLogicVersion:2,
       });
     },
-    cataloguePosts(posts,{displayEligible=false}={}) {
-      return (posts||[]).filter((post)=>post?.cacheSources?.catalogue===true&&post.scanSchemaVersion===Config.schemaVersion&&(!displayEligible||!Settings.value.excludePostsWithMissingAttachments||!post.missingStatsKnown||!post.hasMissingStats));
+    cataloguePosts(posts) {
+      return (posts||[]).filter((post)=>post?.cacheSources?.catalogue===true&&post.scanSchemaVersion===Config.schemaVersion);
     },
+    isAggregateEligiblePost(post,settings=Settings.value){return Boolean(post)&&(!settings.excludePostsWithMissingAttachments||!post.missingStatsKnown||!post.hasMissingStats);},
+    aggregatePosts(posts,settings=Settings.value){return CreatorCatalogueSummary.cataloguePosts(posts).filter((post)=>CreatorCatalogueSummary.isAggregateEligiblePost(post,settings));},
     extensionFingerprint(values){return Util.normalizeExtensions(values||[]).values.sort().join('|');},
     customExtensionAggregate(posts,values) {
       const extensions=Util.normalizeExtensions(values||[]).values;const wanted=new Set(extensions);let matchingPosts=0,matchingFiles=0;
-      CreatorCatalogueSummary.cataloguePosts(posts).forEach((post)=>{const count=(post.fileExtensions||post.rawExtensions||[]).filter((extension)=>wanted.has(String(extension).toLocaleLowerCase())).length;if(count){matchingPosts+=1;matchingFiles+=count;}});
+      CreatorCatalogueSummary.aggregatePosts(posts).forEach((post)=>{const count=(post.fileExtensions||post.rawExtensions||[]).filter((extension)=>wanted.has(String(extension).toLocaleLowerCase())).length;if(count){matchingPosts+=1;matchingFiles+=count;}});
       return{fingerprint:CreatorCatalogueSummary.extensionFingerprint(extensions),extensions,posts:matchingPosts,files:matchingFiles};
     },
     ruleFingerprint(rule={}) {
@@ -2264,7 +2273,7 @@
       const fingerprint=CreatorCatalogueSummary.ruleFingerprint(rule);const value=String(rule.value||'').trim().toLocaleLowerCase();let matchingPosts=0;
       if(!value)return{fingerprint,posts:0};
       const match=(text)=>{const source=String(text||'').toLocaleLowerCase();return rule.match==='equals'?source===value:rule.match==='starts-with'?source.startsWith(value):rule.match==='ends-with'?source.endsWith(value):source.includes(value);};
-      CreatorCatalogueSummary.cataloguePosts(posts).forEach((post)=>{const fields={title:[post.title],attachmentFilename:post.attachmentFilenames||[],tags:post.tags||[],content:[post.contentText],service:[post.service],creator:[post.creatorId]};if((fields[rule.field]||fields.title).some(match))matchingPosts+=1;});
+      CreatorCatalogueSummary.aggregatePosts(posts).forEach((post)=>{const fields={title:[post.title],attachmentFilename:post.attachmentFilenames||[],tags:post.tags||[],content:[post.contentText],service:[post.service],creator:[post.creatorId]};if((fields[rule.field]||fields.title).some(match))matchingPosts+=1;});
       return{fingerprint,posts:matchingPosts};
     },
     publishedWithin(summary,from='',to='') {
@@ -2274,15 +2283,15 @@
     },
     statusTotals(posts,statusRecords=[],snapshotMeta=null,snapshotMembership=null) {
       const statuses=new Map((statusRecords||[]).map((status)=>{const normalized=PostStatus.normalize(status);return[String(normalized.postId||normalized.key?.split('|').at(-1)||''),normalized];}));
-      return CreatorCatalogueSummary.cataloguePosts(posts).reduce((total,post)=>{const status=statuses.get(String(post.id))||PostStatus.empty({creatorKey:post.creatorKey,postId:String(post.id),postKey:post.key});if(status.liked)total.liked+=1;if(status.seen)total.seen+=1;const favorite=FavoriteStateResolver.resolve({postKey:post.key,postStatus:status,snapshotMeta,snapshotMembership});if(typeof favorite==='boolean'){total.favoriteKnown+=1;if(favorite)total.favorited+=1;}return total;},{liked:0,seen:0,favorited:0,favoriteKnown:0});
+      return CreatorCatalogueSummary.aggregatePosts(posts).reduce((total,post)=>{const status=statuses.get(String(post.id))||PostStatus.empty({creatorKey:post.creatorKey,postId:String(post.id),postKey:post.key});if(status.liked)total.liked+=1;if(status.seen)total.seen+=1;const favorite=FavoriteStateResolver.resolve({postKey:post.key,postStatus:status,snapshotMeta,snapshotMembership});if(typeof favorite==='boolean'){total.favoriteKnown+=1;if(favorite)total.favorited+=1;}return total;},{liked:0,seen:0,favorited:0,favoriteKnown:0});
     },
     compute(posts,catalogueState={},now=Date.now(),options={}) {
-      const usable=CreatorCatalogueSummary.cataloguePosts(posts,{displayEligible:true});const safe=(value)=>Math.max(0,Number(value)||0);const media={videos:{posts:0,attachments:0},images:{posts:0,attachments:0},archives:{posts:0,attachments:0},projectFiles:{posts:0,attachments:0},externalLinks:{posts:0,links:0}};
+      const stored=CreatorCatalogueSummary.cataloguePosts(posts),usable=CreatorCatalogueSummary.aggregatePosts(stored);const excludedMissingAttachmentPostCount=stored.length-usable.length;const safe=(value)=>Math.max(0,Number(value)||0);const media={videos:{posts:0,attachments:0},images:{posts:0,attachments:0},archives:{posts:0,attachments:0},projectFiles:{posts:0,attachments:0},externalLinks:{posts:0,links:0}};
       let earliestPublishedAt=null,latestPublishedAt=null;const publishedTimestamps=[];usable.forEach((post)=>{[['videos','videoCount'],['images','imageCount'],['archives','archiveCount']].forEach(([type,key])=>{const count=safe(post[key]);media[type].attachments+=count;if(count>0)media[type].posts+=1;});const projectAttachments=safe(post.projectFileCount);media.projectFiles.attachments+=projectAttachments;if(projectAttachments>0||post.hasProjectFiles===true)media.projectFiles.posts+=1;const links=safe(post.externalLinkCount);media.externalLinks.links+=links;if(links>0)media.externalLinks.posts+=1;const stamp=Date.parse(post.published||post.publishedAt||'');if(Number.isFinite(stamp)){publishedTimestamps.push(stamp);earliestPublishedAt=earliestPublishedAt==null?stamp:Math.min(earliestPublishedAt,stamp);latestPublishedAt=latestPublishedAt==null?stamp:Math.max(latestPublishedAt,stamp);}});
       const evaluation=CatalogueModel.evaluateCoverage(catalogueState);const counts=Object.fromEntries(Object.entries(media).map(([key,value])=>[key,value.attachments??value.links??0]));
       const dynamic=CreatorFilterEngine.normalizeState(options.filterState||{});const customExtensionAggregates={};const extensionValues=dynamic.media.customExtensions?.extensions||[];if(extensionValues.length){const aggregate=CreatorCatalogueSummary.customExtensionAggregate(usable,extensionValues);customExtensionAggregates[aggregate.fingerprint]=aggregate;}
       const customRuleAggregates={};dynamic.customRules.filter((rule)=>rule.enabled).forEach((rule)=>{const aggregate=CreatorCatalogueSummary.customRuleAggregate(usable,rule);customRuleAggregates[aggregate.fingerprint]=aggregate;});
-      return {version:CreatorCatalogueSummary.version,computedAt:now,sourcePostCount:usable.length,classificationFingerprint:CreatorCatalogueSummary.fingerprint(),media,counts,earliestPublishedAt,latestPublishedAt,publishedTimestamps:publishedTimestamps.sort((a,b)=>a-b),lastCatalogueUpdateAt:Number(catalogueState.lastUpdateCheckAt||catalogueState.lastFullBuildAt||catalogueState.completedAt)||null,statuses:CreatorCatalogueSummary.statusTotals(usable,options.statuses,options.snapshotMeta,options.snapshotMembership),customExtensionAggregates,customRuleAggregates,retryableMetadataCount:Util.unique((catalogueState.retryableMetadataIds||[]).map(String)).length,malformedRecordCount:evaluation.malformedListRecordCount,completeness:evaluation.coverageComplete?'complete':usable.length?'partial':'unscanned'};
+      return {version:CreatorCatalogueSummary.version,computedAt:now,sourcePostCount:stored.length,aggregateEligiblePostCount:usable.length,excludedMissingAttachmentPostCount,classificationFingerprint:CreatorCatalogueSummary.fingerprint(),media,counts,earliestPublishedAt,latestPublishedAt,publishedTimestamps:publishedTimestamps.sort((a,b)=>a-b),lastCatalogueUpdateAt:Number(catalogueState.lastUpdateCheckAt||catalogueState.lastFullBuildAt||catalogueState.completedAt)||null,statuses:CreatorCatalogueSummary.statusTotals(usable,options.statuses,options.snapshotMeta,options.snapshotMembership),customExtensionAggregates,customRuleAggregates,retryableMetadataCount:Util.unique((catalogueState.retryableMetadataIds||[]).map(String)).length,malformedRecordCount:evaluation.malformedListRecordCount,completeness:evaluation.coverageComplete?'complete':stored.length?'partial':'unscanned'};
     },
     valid(summary,catalogueState,sourcePostCount=null) {
       const coverage=CatalogueModel.evaluateCoverage(catalogueState||{});const count=sourcePostCount==null?Math.max(0,Number(catalogueState?.storedPostCount)||0):Math.max(0,Number(sourcePostCount)||0);
@@ -2656,11 +2665,17 @@
   };
 
   const catalogueEnqueueBase=CatalogueJobManager.enqueue.bind(CatalogueJobManager);
+  class RetainedQueueHistory extends Map {constructor(entries){super(entries);this.retainSuccessful=true;}delete(key){const job=this.get(key);return this.retainSuccessful&&job?.status==='complete'?false:super.delete(key);}}
+  CatalogueJobManager.recentJobs=new RetainedQueueHistory(CatalogueJobManager.recentJobs);
   CatalogueJobManager.enqueue=function enqueueWithDirectorySnapshot(context,requestedAction,options={}){const snapshot=CreatorDirectory.normalize(options.directorySnapshot||{...context,creatorName:options.creatorName||context.creatorId,creatorUrl:context.creatorUrl});const result=catalogueEnqueueBase(context,requestedAction,options);if(result.job){result.job.directorySnapshot=snapshot;Cache.getCreatorDirectory([snapshot.creatorKey]).then((known)=>Cache.putCreatorDirectory([CreatorDirectory.merge(known.get(snapshot.creatorKey)||{},snapshot)])).catch((error)=>Logger.warn('Could not persist creator directory snapshot.',error));CatalogueJobManager.persistSession();}return result;};
   const cataloguePersistBase=CatalogueJobManager.persistSession.bind(CatalogueJobManager);
-  CatalogueJobManager.persistSession=function persistSessionWithDirectorySnapshot(){const saved=cataloguePersistBase();try{const storage=globalThis.sessionStorage,data=JSON.parse(storage?.getItem(Config.creatorQueueSessionKey)||'{}');const snapshots=new Map([...CatalogueJobManager.pendingJobs,...CatalogueJobManager.activeJobs.values(),...CatalogueJobManager.recentJobs.values()].map((job)=>[job.id,job.directorySnapshot]).filter(([,snapshot])=>snapshot));['waiting','active','recent'].forEach((key)=>{(data[key]||[]).forEach((job)=>{if(snapshots.has(job.id))job.directorySnapshot=snapshots.get(job.id);});});storage?.setItem(Config.creatorQueueSessionKey,JSON.stringify(data));}catch(error){Logger.warn('Could not add creator snapshots to queue session.',error);}return saved;};
+  CatalogueJobManager.persistSession=function persistSessionWithDirectorySnapshot(){const saved=cataloguePersistBase();try{const storage=globalThis.sessionStorage,data=JSON.parse(storage?.getItem(Config.creatorQueueSessionKey)||'{}');const snapshots=new Map([...CatalogueJobManager.pendingJobs,...CatalogueJobManager.activeJobs.values(),...CatalogueJobManager.recentJobs.values()].map((job)=>[job.id,job.directorySnapshot]).filter(([,snapshot])=>snapshot));['waiting','active','recent'].forEach((key)=>{(data[key]||[]).forEach((job)=>{if(snapshots.has(job.id))job.directorySnapshot=snapshots.get(job.id);});});data.version=4;storage?.setItem(Config.creatorQueueSessionKey,JSON.stringify(data));}catch(error){Logger.warn('Could not add creator snapshots to queue session.',error);}return saved;};
+  const catalogueRestoreSessionBase=CatalogueJobManager.restoreSession.bind(CatalogueJobManager);
+  CatalogueJobManager.restoreSession=function restoreSessionV4(){try{const storage=globalThis.sessionStorage,data=JSON.parse(storage?.getItem(Config.creatorQueueSessionKey)||'null');if(data?.version===4){data.version=3;storage.setItem(Config.creatorQueueSessionKey,JSON.stringify(data));}}catch{}return catalogueRestoreSessionBase();};
   const catalogueClearCompletedBase=CatalogueJobManager.clearCompleted.bind(CatalogueJobManager);
-  CatalogueJobManager.clearCompleted=function clearCompletedDurably(){catalogueClearCompletedBase();for(const [id,batch] of CatalogueJobManager.batches){const state=CatalogueJobManager.normalizeBatch(batch);if(!state.active&&!state.waiting&&!state.failed&&!state.stopped)CatalogueJobManager.batches.delete(id);}CatalogueJobManager.persistSession();CatalogueJobManager.notify();};
+  CatalogueJobManager.clearCompleted=function clearCompletedDurably(){const history=CatalogueJobManager.recentJobs;history.retainSuccessful=false;try{catalogueClearCompletedBase();}finally{history.retainSuccessful=true;}for(const [id,batch] of CatalogueJobManager.batches){const state=CatalogueJobManager.normalizeBatch(batch);if(!state.active&&!state.waiting&&!state.failed&&!state.stopped)CatalogueJobManager.batches.delete(id);}CatalogueJobManager.persistSession();CatalogueJobManager.notify();};
+  const catalogueCreateBatchBase=CatalogueJobManager.createBatch.bind(CatalogueJobManager);
+  CatalogueJobManager.createBatch=function createBatchWithIdleCleanup(options={}){if(!CatalogueJobManager.activeJobs.size&&!CatalogueJobManager.pendingJobs.length)CatalogueJobManager.clearCompleted();return catalogueCreateBatchBase(options);};
 
   const Presets = {
     record: null,
@@ -3601,6 +3616,18 @@ sync() {
     },
   };
 
+  const MissingAttachmentMaintenance = {
+    active:null,listeners:new Set(),
+    snapshot(){const state=MissingAttachmentMaintenance.active;return state?{running:true,total:state.total,completed:state.completed,checkedComplete:state.checkedComplete,checkedMissing:state.checkedMissing,failed:state.failed,remaining:Math.max(0,state.total-state.completed-state.failed),message:state.message}:{running:false};},
+    subscribe(listener){MissingAttachmentMaintenance.listeners.add(listener);listener(MissingAttachmentMaintenance.snapshot());return()=>MissingAttachmentMaintenance.listeners.delete(listener);},
+    notify(){const state=MissingAttachmentMaintenance.snapshot();MissingAttachmentMaintenance.listeners.forEach((listener)=>{try{listener(state);}catch(error){Logger.warn('Missing metadata listener failed.',error);}});},
+    needsCheck(post){return post?.cacheSources?.catalogue===true&&(!post.missingStatsKnown||(Number(post.missingStatsParserVersion)||0)<PostMissingStats.parserVersion);},
+    async plan(){const metas=await Cache.getCreatorMetas();const tasks=[];for(const [creatorKey] of metas){const posts=await Cache.getCreatorPosts(creatorKey);posts.filter(MissingAttachmentMaintenance.needsCheck).forEach((post)=>tasks.push({creatorKey,post}));}return tasks;},
+    async fetchHtml(post,signal){const url=new URL(post.postUrl||`/${post.service}/user/${post.creatorId}/post/${post.id}`,location.origin).href;await CatalogueRequestScheduler.waitTurn({signal,operation:'missing-attachment-maintenance',creatorKey:post.creatorKey,requestKind:'post-html'});const response=await fetch(url,{credentials:'same-origin',signal,headers:{Accept:'text/html'}});if(response.status===429){CatalogueRequestScheduler.applyRateLimit(Number(response.headers.get('Retry-After'))*1000||Config.defaultRateLimitDelayMs,{creatorKey:post.creatorKey,requestKind:'post-html'});throw new Error('Pawchive rate limited post metadata.');}if(!response.ok)throw new Error(`Post page returned HTTP ${response.status}.`);return PostMissingStats.fromHtml(await response.text());},
+    async run(){if(MissingAttachmentMaintenance.active)return MissingAttachmentMaintenance.active.promise;await CatalogueJobManager.acquireMaintenanceSlot();const controller=new AbortController(),tasks=await MissingAttachmentMaintenance.plan(),state={controller,total:tasks.length,completed:0,checkedComplete:0,checkedMissing:0,failed:0,message:'Checking missing-attachment metadata…',affected:new Set()};MissingAttachmentMaintenance.active=state;MissingAttachmentMaintenance.notify();state.promise=(async()=>{for(const task of tasks){if(controller.signal.aborted)throw new DOMException('Aborted','AbortError');try{const missing=await MissingAttachmentMaintenance.fetchHtml(task.post,controller.signal);const next={...task.post,...missing};await Cache.putPosts([next]);state.affected.add(task.creatorKey);state.completed+=1;if(missing.hasMissingStats)state.checkedMissing+=1;else state.checkedComplete+=1;}catch(error){if(error.name==='AbortError')throw error;state.failed+=1;Logger.warn(`Missing metadata check failed for post ${task.post.id}.`,error);}state.message=`Checked ${state.completed} of ${state.total}`;MissingAttachmentMaintenance.notify();}for(const creatorKey of state.affected){const [domain,service,creatorId]=String(creatorKey).split('|');await CreatorCatalogueSummary.recomputeAndPersist({creatorKey,domain,service,creatorId,creatorUrl:`https://${domain}/${service}/user/${creatorId}`});}if(App.context&&state.affected.has(App.context.creatorKey)){await App.loadCreator(App.context);App.render();}if(ArtistsPageController.mounted())ArtistsPageController.requestRefresh('missing-attachment-maintenance');return MissingAttachmentMaintenance.snapshot();})().finally(()=>{MissingAttachmentMaintenance.active=null;CatalogueJobManager.releaseMaintenanceSlot();MissingAttachmentMaintenance.notify();});return state.promise;},
+    stop(){MissingAttachmentMaintenance.active?.controller?.abort();},
+  };
+
   const Catalogue = {
     state() { return App.catalogueState.catalogue; },
     storedCount() { return App.cataloguePostCount(); },
@@ -4149,7 +4176,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       const panel=SettingsUI.panel('data','Data & performance');const requests=SettingsUI.section('Requests');
       requests.append(SettingsUI.row('Optional detail request concurrency',SettingsUI.select('concurrency',String(draft.concurrency),Array.from({length:10},(_,index)=>[String(index+1),String(index+1)]))),SettingsUI.toggle('retryFailed',draft.retryFailed,'Retry failed optional detail requests'));
       const favorites=SettingsUI.section('Native Favorites');const actions=SettingsUI.el('div','pmf-settings-actions');actions.append(SettingsUI.action('Synchronize native favorites now','sync-favorites'),SettingsUI.action('Stop synchronization','stop-favorites'));favorites.append(actions);
-      const stored=SettingsUI.section('Stored Catalogue');const clear=SettingsUI.el('div','pmf-settings-actions');clear.append(SettingsUI.action("Clear this creator's full catalogue scan",'clear-creator',{danger:true}),SettingsUI.action('Clear all full catalogue scans','clear-all',{danger:true}));stored.append(clear);
+      const stored=SettingsUI.section('Stored Catalogue');const clear=SettingsUI.el('div','pmf-settings-actions');clear.append(SettingsUI.action('Update missing-attachment metadata','update-missing-attachment-metadata'),SettingsUI.action("Clear this creator's full catalogue scan",'clear-creator',{danger:true}),SettingsUI.action('Clear all full catalogue scans','clear-all',{danger:true}));stored.append(clear);
       panel.append(requests,favorites,stored);return panel;
     },
     showChild(name){
@@ -4196,6 +4223,10 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     },
   };
 
+  UI.openSettings=SettingsUI.open;
+
+  const settingsOpenBase=SettingsUI.open.bind(SettingsUI);
+  SettingsUI.open=function openSettingsWithMissingMaintenance(){settingsOpenBase();const root=App.ui?.settings;if(!root||root.dataset.pmfMissingMaintenanceBound)return;root.dataset.pmfMissingMaintenanceBound='true';root.addEventListener('click',async(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;if(action==='update-missing-attachment-metadata'){const button=event.target.closest('button');button.disabled=true;button.textContent='Updating missing-attachment metadata…';try{await MissingAttachmentMaintenance.run();GlobalUI.flash('Missing-attachment metadata update finished.');}catch(error){if(error.name!=='AbortError')GlobalUI.flash(`Missing-attachment metadata update stopped: ${error.message}`);}finally{if(button.isConnected){button.disabled=false;button.textContent='Update missing-attachment metadata';}}}});};
   UI.openSettings=SettingsUI.open;
 
   const CreatorQueuePanel = {
@@ -4302,6 +4333,9 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-child-action]')?.dataset.childAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';draft[key].strength=dialog.querySelector('[name="strength"]').value;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';draft[sizeKey]=dialog.querySelector('[name="size"]').value;if(attachment)draft.creatorCardBadgeCountMode=dialog.querySelector('[name="countMethod"]').value;dialog.querySelectorAll('input[type="checkbox"]').forEach((input)=>{draft[key].types[input.name]=input.checked;});}CreatorSettingsUI.preview(draft);OverlayManager.close(overlay,'apply');}});
     },
   };
+
+  const creatorOpenChildBase=CreatorSettingsUI.openChild.bind(CreatorSettingsUI);
+  CreatorSettingsUI.openChild=function openCreatorSettingsChild(name,draft,opener){creatorOpenChildBase(name,draft,opener);if(name!=='creator-attachment-badges')return;const backdrop=[...CreatorIndexUI.root.querySelectorAll('.pmf-modal-backdrop')].at(-1),dialog=backdrop?.querySelector('.pmf-small-dialog'),appearance=dialog?.querySelector('.pmf-settings-section');if(!backdrop||!dialog||!appearance)return;appearance.insertAdjacentHTML('beforeend',`<label class="pmf-check"><input type="checkbox" name="excludePostsWithMissingAttachments" ${draft.excludePostsWithMissingAttachments?'checked':''}> Hide and don’t count posts with missing attachments</label>`);backdrop.addEventListener('click',(event)=>{if(event.target.closest('[data-child-action="apply"]'))draft.excludePostsWithMissingAttachments=dialog.querySelector('[name="excludePostsWithMissingAttachments"]')?.checked===true;},{capture:true});};
 
   const CreatorFilterUI = {
     open(opener) {

@@ -9,7 +9,7 @@ const {
   PostStatusStateCoordinator, PostPageController, Lifecycle, SettingsUI,
 } = api;
 
-assert.equal(Config.version, '0.10.4');
+assert.equal(Config.version, '0.10.5');
 assert.equal(Config.schemaVersion, 2);
 assert.equal(Config.databaseVersion, 5);
 
@@ -44,8 +44,9 @@ assert.doesNotMatch(PostPageController.mount.toString(),/pmf-post-status-control
 assert.equal(typeof SettingsUI.row,'function');
 assert.equal(typeof SettingsUI.toggle,'function');
 assert.equal(typeof SettingsUI.select,'function');
-assert.match(SettingsUI.open.toString(),/\['general','General'\].*\['default-detection','Default detection'\].*\['scanning','Scanning'\].*\['data','Data & performance'\]/s);
-assert.doesNotMatch(SettingsUI.open.toString(),/Display mode|Remember active preset/);
+assert.match(SettingsUI.buildGeneral.toString(),/Creator cards/);
+assert.match(SettingsUI.buildData.toString(),/Update missing-attachment metadata/);
+assert.match(SettingsUI.open.toString(),/MissingAttachmentMaintenance\.run/);
 
 assert.match(Lifecycle.ensureMounted.toString(),/mountingPageKey/);
 assert.match(Lifecycle.ensureMounted.toString(),/mountedPageKey/);
