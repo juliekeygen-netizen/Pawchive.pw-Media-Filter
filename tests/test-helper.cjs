@@ -46,7 +46,9 @@ function loadUserscript() {
       removeProperty(name) { const value = values.get(name)?.value || ''; values.delete(name); return value; },
     };
   };
+  const flattenChildren = (children) => children.flatMap((child) => child?.isDocumentFragment ? child.children : [child]);
   const makeElement = (tagName = 'div') => ({
+    nodeType: 1,
     tagName: String(tagName).toUpperCase(),
     className: '',
     dataset: {},
@@ -55,16 +57,32 @@ function loadUserscript() {
     children: [],
     hidden: false,
     isConnected: true,
+    isDocumentFragment: String(tagName).toLowerCase() === 'fragment',
     clientWidth: 0,
     scrollTop: 0,
     scrollHeight: 0,
     clientHeight: 0,
+    textContent: '',
+    innerHTML: '',
+    outerHTML: '',
+    value: '',
     setAttribute(name, value) { this[name] = String(value); },
     getAttribute(name) { return this[name] ?? null; },
     removeAttribute(name) { delete this[name]; },
-    append(...children) { this.children.push(...children); },
-    appendChild(child) { this.children.push(child); return child; },
-    replaceChildren(...children) { this.children = children; },
+    append(...children) {
+      const flattened = flattenChildren(children);
+      flattened.forEach((child) => { if (child && typeof child === 'object') child.parentElement = this; });
+      this.children.push(...flattened);
+    },
+    appendChild(child) {
+      this.append(child);
+      return child;
+    },
+    replaceChildren(...children) {
+      const flattened = flattenChildren(children);
+      flattened.forEach((child) => { if (child && typeof child === 'object') child.parentElement = this; });
+      this.children = flattened;
+    },
     insertAdjacentElement(position, child) { this.children.push(child); child.parentElement = this; return child; },
     insertAdjacentHTML() {},
     contains(child) { return this === child || this.children.includes(child); },
@@ -74,7 +92,9 @@ function loadUserscript() {
     querySelector() { return null; },
     querySelectorAll() { return []; },
     addEventListener() {},
-    remove() {},
+    removeEventListener() {},
+    focus() {},
+    remove() { this.isConnected = false; },
   });
   const context = {
     console, URL, Event, DOMException, AbortController, structuredClone, setTimeout, clearTimeout,
@@ -84,13 +104,14 @@ function loadUserscript() {
     document: {
       addEventListener() {}, dispatchEvent() {}, activeElement: null,
       createElement: makeElement,
+      createDocumentFragment() { return makeElement('fragment'); },
       querySelector() { return null; },
       querySelectorAll() { return []; },
       documentElement: { classList: makeClassList() },
       head: makeElement('head'),
       styleSheets: [],
       visibilityState: 'visible',
-      body: { classList: makeClassList() },
+      body: makeElement('body'),
     },
     window: { addEventListener() {}, scrollY: 0, scrollTo() {} },
     requestAnimationFrame: (callback) => { callback(); return 1; },
@@ -102,7 +123,7 @@ function loadUserscript() {
   };
   context.globalThis = context;
   vm.runInNewContext(source, context, { filename: userscriptPath });
-  return { api: context.__pmfTest, context, stored, originalSource, makeClassList };
+  return { api: context.__pmfTest, context, stored, originalSource, makeClassList, makeElement };
 }
 
 module.exports = { loadUserscript, makeClassList };

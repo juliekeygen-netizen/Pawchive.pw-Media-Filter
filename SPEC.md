@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.6 specification
+# Pawchive.pw Media Filter v0.10.7 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.6`
+- Userscript and `Config.version`: `0.10.7`
 - Settings: `pmf-settings-v5`
 - Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -18,9 +18,38 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Native Favorites sync state: `pmf-favorite-sync-v1`
 - Global quick-status filters: `pmf-post-status-filters-v1`
 - Queue session: authoritative schema 4 with explicit migration from schemas 1-3
-- Missing-attachment checkpoint: `pmf-missing-attachment-maintenance-v1`
-- Creator-profile repair checkpoint: `pmf-creator-profile-repair-v1`
+- Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 2
+- Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.10.7 contracts
+
+### Retained Local catalogue
+
+- `/artists` retains Local catalogue data and UI state in memory across creator navigation: records, data revision, cached filtered order, search, filters, sort, page, page size, Queue-panel state, scroll position, and last-ready state.
+- A Local return paints retained records before asynchronous storage validation. Background refresh uses a non-blocking `Refreshing local catalogue…` status and must not replace an available grid with a blank document.
+- A Local paginator click only changes the page, reuses the cached filtered/sorted array, slices at most 50 records, and reconstructs those cards through one `DocumentFragment`. It does not read all creator records, call the creator API, fetch profile HTML, or invoke full `/artists` refresh.
+- The filtered/sorted cache is invalidated only by record revisions, search, creator filters, quick-status filters, sorting, or aggregate-affecting settings.
+
+### Creator metadata repair
+
+- Essential identity weakness is separate from optional enrichment weakness. A valid creator name/ID/service/URL is not an urgent repair candidate merely because avatar, banner, service label, or favorite count is unavailable.
+- Normal Local rendering never starts profile repair. Manual repair persists planned, remaining, retryable-failed, completed, stopped, and timestamp state. Resume and Retry failed operate on the union of remaining and retryable failures.
+- Avatar and banner extraction use distinct selectors. `og:image` may be a banner fallback only when it differs from the selected avatar; it is never assigned to both fields automatically.
+- Repair results patch the retained creator record and visible card without a per-creator full `/artists` reload.
+
+### Settings
+
+- Both Settings contexts directly expose **Count method**, **Posts containing media**, **Total attachments/links from every post**, and **Hide and don’t count posts with missing attachments** in the main Creator cards section.
+- Data & performance exposes Update/Stop/Resume/Retry-failed controls for missing-attachment metadata and Repair/Stop/Resume/Retry-failed controls for creator profiles.
+
+### Missing-attachment maintenance
+
+- Supported scopes are Current creator, Current Local catalogue page, First N unknown posts (1–10000), and All unknown posts. All requires an exact count, duration warning, and confirmation.
+- Stored structured metadata is checked before the detail API; HTML is a separately limited fallback. Detail concurrency starts at up to three, decreases after rate limiting, and cautiously recovers after sustained success.
+- Post updates are written in batches. A task remains in `remainingIds` until its IndexedDB write commits. Retryable failures remain in both the retryable set and future work; HTTP 404/410 terminal records are reported separately.
+- Progress includes scope, completed/total, complete/missing results, retryable and terminal failures, remaining count, current creator, rate, and ETA. Closing Settings does not stop or duplicate a worker.
+- Creator summaries are recomputed once per affected creator after the operation rather than after every post.
 
 ## v0.10.6 contracts
 

@@ -8,7 +8,7 @@ const {
   CatalogueJobManager, Paginator, MissingAttachmentMaintenance,
 } = loaded.api;
 
-assert.equal(Config.version, '0.10.6');
+assert.equal(Config.version, '0.10.7');
 assert.equal((originalSource.match(/const CreatorBulkUI =/g) || []).length, 1);
 assert.equal((originalSource.match(/CreatorBulkUI\.open\s*=/g) || []).length, 0);
 assert.equal((originalSource.match(/SettingsUI\.open\s*=/g) || []).length, 0);
@@ -74,4 +74,4 @@ assert.match(MissingAttachmentMaintenance.fetchStructured.toString(), /PostMissi
 assert.match(MissingAttachmentMaintenance.run.toString(), /remainingIds|failedIds/);
 assert.equal(typeof MissingAttachmentMaintenance.resume, 'function');
 
-console.log('Pawchive Media Filter v0.10.6 authoritative runtime tests passed.');
+console.log('Pawchive Media Filter v0.10.7 authoritative runtime tests passed.');

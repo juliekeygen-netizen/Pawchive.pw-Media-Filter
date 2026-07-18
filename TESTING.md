@@ -1,4 +1,17 @@
-# Pawchive.pw Media Filter v0.10.6 testing
+# Pawchive.pw Media Filter v0.10.7 testing
+
+## v0.10.7 Local performance and maintenance matrix
+
+1. Run `node tests/v0107-local-performance-and-maintenance.cjs`, then the complete executable suite and `node --check pawchive-pw-media-filter.user.js`.
+2. Load Local catalogue with at least 100 creators. Click pages 1 → 2 → 3 → 2 → Last while watching DevTools Network. Page changes must be immediate after initial load and must not request `/api/v1/creators`, creator profile HTML, or reread the whole directory.
+3. Repeat Local catalogue → creator → Back → Forward → Back at least 20 times. Confirm the cached grid appears immediately, the previous search/filter/sort/page/Queue/scroll state returns, one PMF root exists, and no white page or blocking “Loading creators” view appears.
+4. While Local catalogue is visible, start creator-profile repair. Continue paging and confirm navigation remains responsive. Stop it, close/reopen Settings, Resume it, induce one retryable failure, and use Retry failed. A missing banner or favorite count alone must not trigger urgent automatic repair.
+5. Inspect repaired Patreon/Fanbox-style cards. Confirm avatar and backdrop remain distinct, known-good artwork is preserved, and a post preview or one `og:image` is not copied into both fields.
+6. Open Settings from a creator page and `/artists`. In both, confirm the main Creator cards section visibly contains **Count method**, **Posts containing media**, **Total attachments/links from every post**, and **Hide and don’t count posts with missing attachments**.
+7. Open **Update missing-attachment metadata** and test Current creator, Current Local catalogue page, First 100, and All. All must count first and warn before starting. Confirm structured requests precede HTML fallback, HTML concurrency is separately bounded, and rate/ETA/current creator update live.
+8. Stop maintenance with buffered work, reload, and Resume. Induce an API/write failure and confirm the task remains retryable. Retry failed must clear it only after a successful committed write. Confirm affected creator summaries refresh once per creator and Local paging stays responsive throughout.
+9. For a library near 100,000 posts, confirm the UI presents the exact planned count and a many-hours estimate rather than implying a quick operation. Monitor 429 handling: global cooldown and lower detail concurrency must occur without losing the task.
+10. Live authenticated Pawchive checks must be reported separately from automated tests; do not treat helper/source assertions as proof of browser performance.
 
 ## v0.10.6 corrective matrix
 

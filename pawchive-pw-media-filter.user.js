@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.10.6
+// @version      0.10.7
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.10.6',
+    version: '0.10.7',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -2081,56 +2081,120 @@
   };
 
   const CreatorDirectory = {
-    weakName(value,id=''){const name=String(value||'').trim();return !name||name===String(id||'').trim()||/^\d+$/.test(name)||/^(creator|unknown|untitled|n\/a)$/i.test(name);},
-    validUrl(value){try{const url=new URL(String(value||''),location.origin);return /^https?:$/.test(url.protocol)&&Boolean(url.hostname);}catch{return false;}},
-    isWeak(record={}){const value=CreatorDirectory.normalize(record);return CreatorDirectory.weakName(value.creatorName,value.creatorId)||!value.avatarUrl||!value.bannerUrl||value.publicFavoriteCount==null||!CreatorDirectory.validUrl(value.creatorUrl)||!value.serviceLabel||value.serviceLabel===value.service;},
-    normalize(record={}) {
-      const context=record.context||Route.parseCreatorUrl(record.creatorUrl||'')||{};
-      const creatorKey=String(record.creatorKey||context.creatorKey||'');
-      const [domain='',service='',creatorId='']=creatorKey.split('|');
-      const now=Date.now();const nullableNumber=(value)=>value==null||value===''?null:Number.isFinite(Number(value))?Number(value):null;
+    weakName(value, id = '') {
+      const name = String(value || '').trim();
+      return !name || name === String(id || '').trim() || /^\d+$/.test(name) || /^(creator|unknown|untitled|n\/a)$/i.test(name);
+    },
+    validUrl(value) {
+      try {
+        const url = new URL(String(value || ''), location.origin);
+        return /^https?:$/.test(url.protocol) && Boolean(url.hostname);
+      } catch {
+        return false;
+      }
+    },
+    identityWeak(record = {}) {
+      const value = CreatorDirectory.normalize(record);
+      return CreatorDirectory.weakName(value.creatorName, value.creatorId) || !CreatorDirectory.validUrl(value.creatorUrl) || !value.service || !value.creatorId;
+    },
+    enrichmentWeak(record = {}) {
+      const value = CreatorDirectory.normalize(record);
+      return !value.avatarUrl || !value.bannerUrl || value.publicFavoriteCount == null || !value.serviceLabel || value.serviceLabel === value.service;
+    },
+    isWeak(record = {}) {
+      // Kept as the essential-identity predicate for compatibility. Missing optional
+      // artwork or favorite counts must never make normal Local pagination start
+      // network repair work.
+      return CreatorDirectory.identityWeak(record);
+    },
+    needsRepair(record = {}, { includeEnrichment = false } = {}) {
+      return CreatorDirectory.identityWeak(record) || (includeEnrichment && CreatorDirectory.enrichmentWeak(record));
+    },
+    normalize(record = {}) {
+      const context = record.context || Route.parseCreatorUrl(record.creatorUrl || '') || {};
+      const creatorKey = String(record.creatorKey || context.creatorKey || '');
+      const [domain = '', service = '', creatorId = ''] = creatorKey.split('|');
+      const now = Date.now();
+      const nullableNumber = (value) => value == null || value === '' ? null : Number.isFinite(Number(value)) ? Number(value) : null;
       return {
         creatorKey,
-        domain:String(record.domain||context.domain||domain||location.hostname),
-        service:String(record.service||context.service||service),
-        serviceLabel:String(record.serviceLabel||CreatorDisplayName?.serviceLabel?.(record.service||context.service||service)||''),
-        creatorId:String(record.creatorId||context.creatorId||creatorId),
-        creatorName:String(record.creatorName||record.displayName||record.creatorId||context.creatorId||'Creator').trim(),
-        creatorUrl:String(record.creatorUrl||context.creatorUrl||''),
-        thumbnailUrl:String(record.thumbnailUrl||record.avatarUrl||''),
-        avatarUrl:String(record.avatarUrl||record.thumbnailUrl||''),
-        bannerUrl:String(record.bannerUrl||record.backdropUrl||''),
-        backdropUrl:String(record.backdropUrl||record.bannerUrl||''),
-        publicFavoriteCount:nullableNumber(record.publicFavoriteCount),
-        indexedAt:nullableNumber(record.indexedAt),
-        updatedAt:nullableNumber(record.updatedAt),
-        firstSeenAt:nullableNumber(record.firstSeenAt)??now,
-        lastSeenInDirectoryAt:nullableNumber(record.lastSeenInDirectoryAt)??now,
-        profileCheckedAt:nullableNumber(record.profileCheckedAt),
-        source:String(record.source||record.metadataSource||'local'),
-        quality:Math.max(0,Number(record.quality)||0),
+        domain: String(record.domain || context.domain || domain || location.hostname),
+        service: String(record.service || context.service || service),
+        serviceLabel: String(record.serviceLabel || CreatorDisplayName?.serviceLabel?.(record.service || context.service || service) || ''),
+        creatorId: String(record.creatorId || context.creatorId || creatorId),
+        creatorName: String(record.creatorName || record.displayName || record.creatorId || context.creatorId || 'Creator').trim(),
+        creatorUrl: String(record.creatorUrl || context.creatorUrl || ''),
+        thumbnailUrl: String(record.thumbnailUrl || record.avatarUrl || ''),
+        avatarUrl: String(record.avatarUrl || record.thumbnailUrl || ''),
+        bannerUrl: String(record.bannerUrl || record.backdropUrl || ''),
+        backdropUrl: String(record.backdropUrl || record.bannerUrl || ''),
+        publicFavoriteCount: nullableNumber(record.publicFavoriteCount),
+        indexedAt: nullableNumber(record.indexedAt),
+        updatedAt: nullableNumber(record.updatedAt),
+        firstSeenAt: nullableNumber(record.firstSeenAt) ?? now,
+        lastSeenInDirectoryAt: nullableNumber(record.lastSeenInDirectoryAt) ?? now,
+        profileCheckedAt: nullableNumber(record.profileCheckedAt),
+        profileRepairTerminalAt: nullableNumber(record.profileRepairTerminalAt),
+        avatarSource: String(record.avatarSource || ''),
+        bannerSource: String(record.bannerSource || ''),
+        source: String(record.source || record.metadataSource || 'local'),
+        quality: Math.max(0, Number(record.quality) || 0),
       };
     },
-    merge(prior={},incoming={}) {
-      const old=CreatorDirectory.normalize(prior);const next=CreatorDirectory.normalize({...old,...incoming});
-      const earliest=(a,b)=>a==null?b:b==null?a:Math.min(a,b);const latest=(a,b)=>a==null?b:b==null?a:Math.max(a,b);
-      next.indexedAt=earliest(old.indexedAt,next.indexedAt);next.updatedAt=latest(old.updatedAt,next.updatedAt);
-      next.firstSeenAt=earliest(old.firstSeenAt,next.firstSeenAt);next.lastSeenInDirectoryAt=latest(old.lastSeenInDirectoryAt,next.lastSeenInDirectoryAt);
-      if(CreatorDirectory.weakName(incoming.creatorName,next.creatorId)&&!CreatorDirectory.weakName(old.creatorName,old.creatorId))next.creatorName=old.creatorName;
-      if(incoming.publicFavoriteCount==null||!Number.isFinite(Number(incoming.publicFavoriteCount)))next.publicFavoriteCount=old.publicFavoriteCount;
-      if(!String(incoming.avatarUrl||incoming.thumbnailUrl||'').trim()){next.avatarUrl=old.avatarUrl;next.thumbnailUrl=old.thumbnailUrl;}
-      if(!String(incoming.bannerUrl||incoming.backdropUrl||'').trim()){next.bannerUrl=old.bannerUrl;next.backdropUrl=old.backdropUrl||old.bannerUrl;}else next.backdropUrl=next.bannerUrl;
-      if((!String(incoming.serviceLabel||'').trim()||incoming.serviceLabel===incoming.service)&&String(old.serviceLabel||'').trim()&&old.serviceLabel!==old.service)next.serviceLabel=old.serviceLabel;
-      if(!CreatorDirectory.validUrl(incoming.creatorUrl)&&CreatorDirectory.validUrl(old.creatorUrl))next.creatorUrl=old.creatorUrl;
-      next.profileCheckedAt=latest(old.profileCheckedAt,next.profileCheckedAt);next.quality=Math.max(old.quality||0,next.quality||0);
+    merge(prior = {}, incoming = {}) {
+      const old = CreatorDirectory.normalize(prior);
+      const next = CreatorDirectory.normalize({
+        ...old,
+        ...incoming
+      });
+      const earliest = (a, b) => a == null ? b : b == null ? a : Math.min(a, b);
+      const latest = (a, b) => a == null ? b : b == null ? a : Math.max(a, b);
+      next.indexedAt = earliest(old.indexedAt, next.indexedAt);
+      next.updatedAt = latest(old.updatedAt, next.updatedAt);
+      next.firstSeenAt = earliest(old.firstSeenAt, next.firstSeenAt);
+      next.lastSeenInDirectoryAt = latest(old.lastSeenInDirectoryAt, next.lastSeenInDirectoryAt);
+      if (CreatorDirectory.weakName(incoming.creatorName, next.creatorId) && !CreatorDirectory.weakName(old.creatorName, old.creatorId)) next.creatorName = old.creatorName;
+      if (incoming.publicFavoriteCount == null || !Number.isFinite(Number(incoming.publicFavoriteCount))) next.publicFavoriteCount = old.publicFavoriteCount;
+      if (!String(incoming.avatarUrl || incoming.thumbnailUrl || '').trim()) {
+        next.avatarUrl = old.avatarUrl;
+        next.thumbnailUrl = old.thumbnailUrl;
+      }
+      if (!String(incoming.bannerUrl || incoming.backdropUrl || '').trim()) {
+        next.bannerUrl = old.bannerUrl;
+        next.backdropUrl = old.backdropUrl || old.bannerUrl;
+      } else next.backdropUrl = next.bannerUrl;
+      if ((!String(incoming.serviceLabel || '').trim() || incoming.serviceLabel === incoming.service) && String(old.serviceLabel || '').trim() && old.serviceLabel !== old.service) next.serviceLabel = old.serviceLabel;
+      if (!CreatorDirectory.validUrl(incoming.creatorUrl) && CreatorDirectory.validUrl(old.creatorUrl)) next.creatorUrl = old.creatorUrl;
+      next.profileCheckedAt = latest(old.profileCheckedAt, next.profileCheckedAt);
+      next.profileRepairTerminalAt = latest(old.profileRepairTerminalAt, next.profileRepairTerminalAt);
+      if (!String(incoming.avatarSource || '').trim()) next.avatarSource = old.avatarSource;
+      if (!String(incoming.bannerSource || '').trim()) next.bannerSource = old.bannerSource;
+      // Never replace distinct known artwork with one ambiguous image reused for
+      // both avatar and banner.
+      if (next.avatarUrl && next.bannerUrl && next.avatarUrl === next.bannerUrl) {
+        if (old.bannerUrl && old.bannerUrl !== next.avatarUrl) next.bannerUrl = old.bannerUrl;
+        else if (old.avatarUrl && old.avatarUrl !== next.bannerUrl) next.avatarUrl = old.avatarUrl;
+      }
+      next.backdropUrl = next.bannerUrl || old.backdropUrl || '';
+      next.thumbnailUrl = next.avatarUrl || old.thumbnailUrl || '';
+      next.quality = Math.max(old.quality || 0, next.quality || 0);
       return next;
     },
     fromCard(info) {
-      const image=info.card?.querySelector?.('img');const favorites=String(info.card?.textContent||'').match(/([\d,]+)\s+favorites?/i);const background=[info.card,...info.card?.querySelectorAll?.('[style*="background"]')||[]].map((node)=>node?.style?.backgroundImage||globalThis.getComputedStyle?.(node)?.backgroundImage||'').find((value)=>value&&value!=='none')||'';const banner=background.match(/url\(["']?([^"')]+)["']?\)/)?.[1]||'';
+      const image = info.card?.querySelector?.('img');
+      const favorites = String(info.card?.textContent || '').match(/([\d,]+)\s+favorites?/i);
+      const background = [info.card, ...info.card?.querySelectorAll?.('[style*="background"]') || []].map((node) => node?.style?.backgroundImage || globalThis.getComputedStyle?.(node)?.backgroundImage || '').find((value) => value && value !== 'none') || '';
+      const banner = background.match(/url\(["']?([^"')]+)["']?\)/)?.[1] || '';
       return CreatorDirectory.normalize({
-        ...info.context,creatorName:info.creatorName,creatorUrl:info.link?.href||'',
-        serviceLabel:info.serviceLabel,thumbnailUrl:image?.currentSrc||image?.src||'',avatarUrl:image?.currentSrc||image?.src||'',bannerUrl:banner,
-        publicFavoriteCount:favorites?Number(String(favorites[1]).replace(/,/g,'')):null,lastSeenInDirectoryAt:Date.now(),
+        ...info.context,
+        creatorName: info.creatorName,
+        creatorUrl: info.link?.href || '',
+        serviceLabel: info.serviceLabel,
+        thumbnailUrl: image?.currentSrc || image?.src || '',
+        avatarUrl: image?.currentSrc || image?.src || '',
+        bannerUrl: banner,
+        publicFavoriteCount: favorites ? Number(String(favorites[1]).replace(/,/g, '')) : null,
+        lastSeenInDirectoryAt: Date.now(),
       });
     },
   };
@@ -3617,20 +3681,386 @@ sync() {
   };
 
   const MissingAttachmentMaintenance = {
-    active:null,listeners:new Set(),
-    checkpoint(){return GM_getValue(Config.missingAttachmentMaintenanceKey,null);},
-    snapshot(){const state=MissingAttachmentMaintenance.active||MissingAttachmentMaintenance.checkpoint();return state?{running:Boolean(MissingAttachmentMaintenance.active&&!state.stopped),stopped:Boolean(state.stopped),total:Number(state.total)||0,completed:Number(state.completed)||0,checkedComplete:Number(state.checkedComplete)||0,checkedMissing:Number(state.checkedMissing)||0,failed:Array.isArray(state.failedIds)?state.failedIds.length:Number(state.failed)||0,remaining:Array.isArray(state.remainingIds)?state.remainingIds.length:Math.max(0,(Number(state.total)||0)-(Number(state.completed)||0)),message:state.message||''}:{running:false,stopped:false,total:0,completed:0,checkedComplete:0,checkedMissing:0,failed:0,remaining:0,message:''};},
-    subscribe(listener){MissingAttachmentMaintenance.listeners.add(listener);listener(MissingAttachmentMaintenance.snapshot());return()=>MissingAttachmentMaintenance.listeners.delete(listener);},
-    notify(){const state=MissingAttachmentMaintenance.snapshot();MissingAttachmentMaintenance.listeners.forEach((listener)=>{try{listener(state);}catch(error){Logger.warn('Missing metadata listener failed.',error);}});},
-    needsCheck(post){return post?.cacheSources?.catalogue===true&&(!post.missingStatsKnown||(Number(post.missingStatsParserVersion)||0)<PostMissingStats.parserVersion);},
-    taskId(task){return`${task.creatorKey}::${task.post.id}`;},
-    async plan(ids=null){const wanted=ids?new Set(ids):null,metas=await Cache.getCreatorMetas(),tasks=[];for(const [creatorKey] of metas){const posts=await Cache.getCreatorPosts(creatorKey);posts.filter(MissingAttachmentMaintenance.needsCheck).forEach((post)=>{const task={creatorKey,post};if(!wanted||wanted.has(MissingAttachmentMaintenance.taskId(task)))tasks.push(task);});}return tasks;},
-    persist(state){const checkpoint={version:1,operation:'missing-attachment-metadata',plannedIds:state.plannedIds,remainingIds:state.remainingIds,completed:state.completed,checkedComplete:state.checkedComplete,checkedMissing:state.checkedMissing,failedIds:state.failedIds,affectedCreators:[...state.affected],total:state.total,startedAt:state.startedAt,updatedAt:Date.now(),stopped:state.stopped,message:state.message};GM_setValue(Config.missingAttachmentMaintenanceKey,checkpoint);return checkpoint;},
-    async fetchStructured(post,signal){const stored=PostMissingStats.fromRaw(post);if(stored.missingStatsKnown&&(Number(stored.missingStatsParserVersion)||0)>=PostMissingStats.parserVersion)return stored;const url=new URL(`/api/v1/${post.service}/user/${post.creatorId}/post/${post.id}`,location.origin).href;await CatalogueRequestScheduler.waitTurn({signal,operation:'missing-attachment-maintenance',creatorKey:post.creatorKey,requestKind:'post-detail-api'});const response=await fetch(url,{credentials:'same-origin',signal,headers:{Accept:'application/json'}});if(response.status===404||response.status===405)return null;if(response.status===429){CatalogueRequestScheduler.applyRateLimit(Number(response.headers.get('Retry-After'))*1000||Config.defaultRateLimitDelayMs,{creatorKey:post.creatorKey,requestKind:'post-detail-api'});throw new Error('Pawchive rate limited post metadata.');}if(!response.ok)return null;const raw=await response.json(),missing=PostMissingStats.fromRaw(raw?.post||raw);return missing.missingStatsKnown?missing:null;},
-    async fetchHtml(post,signal){const url=new URL(post.postUrl||`/${post.service}/user/${post.creatorId}/post/${post.id}`,location.origin).href;await CatalogueRequestScheduler.waitTurn({signal,operation:'missing-attachment-maintenance',creatorKey:post.creatorKey,requestKind:'post-html'});const response=await fetch(url,{credentials:'same-origin',signal,headers:{Accept:'text/html'}});if(response.status===429){CatalogueRequestScheduler.applyRateLimit(Number(response.headers.get('Retry-After'))*1000||Config.defaultRateLimitDelayMs,{creatorKey:post.creatorKey,requestKind:'post-html'});throw new Error('Pawchive rate limited post metadata.');}if(!response.ok)throw new Error(`Post page returned HTTP ${response.status}.`);return PostMissingStats.fromHtml(await response.text());},
-    async run({resume=false}={}){if(MissingAttachmentMaintenance.active)return MissingAttachmentMaintenance.active.promise;await CatalogueJobManager.acquireMaintenanceSlot();const saved=resume?MissingAttachmentMaintenance.checkpoint():null,tasks=await MissingAttachmentMaintenance.plan(saved?.remainingIds),controller=new AbortController(),plannedIds=saved?.plannedIds||tasks.map(MissingAttachmentMaintenance.taskId),state={controller,plannedIds,remainingIds:tasks.map(MissingAttachmentMaintenance.taskId),total:Number(saved?.total)||plannedIds.length,completed:Number(saved?.completed)||0,checkedComplete:Number(saved?.checkedComplete)||0,checkedMissing:Number(saved?.checkedMissing)||0,failedIds:Array.isArray(saved?.failedIds)?saved.failedIds:[],message:'Checking missing-attachment metadata…',affected:new Set(saved?.affectedCreators||[]),startedAt:Number(saved?.startedAt)||Date.now(),stopped:false};MissingAttachmentMaintenance.active=state;MissingAttachmentMaintenance.persist(state);MissingAttachmentMaintenance.notify();state.promise=(async()=>{for(const task of tasks){if(controller.signal.aborted){state.stopped=true;break;}const id=MissingAttachmentMaintenance.taskId(task);try{const missing=await MissingAttachmentMaintenance.fetchStructured(task.post,controller.signal)||await MissingAttachmentMaintenance.fetchHtml(task.post,controller.signal);await Cache.putPosts([{...task.post,...missing}]);state.affected.add(task.creatorKey);state.completed+=1;if(missing.hasMissingStats)state.checkedMissing+=1;else state.checkedComplete+=1;state.failedIds=state.failedIds.filter((value)=>value!==id);}catch(error){if(error.name==='AbortError'){state.stopped=true;break;}if(!state.failedIds.includes(id))state.failedIds.push(id);Logger.warn(`Missing metadata check failed for post ${task.post.id}.`,error);}state.remainingIds=state.remainingIds.filter((value)=>value!==id);state.message=`Checked ${state.completed} of ${state.total}`;MissingAttachmentMaintenance.persist(state);MissingAttachmentMaintenance.notify();}for(const creatorKey of state.affected){const [domain,service,creatorId]=String(creatorKey).split('|');await CreatorCatalogueSummary.recomputeAndPersist({creatorKey,domain,service,creatorId,creatorUrl:`https://${domain}/${service}/user/${creatorId}`});}if(App.context&&state.affected.has(App.context.creatorKey)){await App.loadCreator(App.context);App.render();}if(ArtistsPageController.mounted())ArtistsPageController.requestRefresh('missing-attachment-maintenance');state.message=state.stopped?'Missing-attachment metadata update stopped.':'Missing-attachment metadata update complete.';MissingAttachmentMaintenance.persist(state);return MissingAttachmentMaintenance.snapshot();})().finally(()=>{MissingAttachmentMaintenance.active=null;CatalogueJobManager.releaseMaintenanceSlot();MissingAttachmentMaintenance.notify();});return state.promise;},
-    stop(){const state=MissingAttachmentMaintenance.active;if(state){state.stopped=true;MissingAttachmentMaintenance.persist(state);state.controller.abort();MissingAttachmentMaintenance.notify();}},
-    resume(){return MissingAttachmentMaintenance.run({resume:true});},
+    active: null,
+    listeners: new Set(),
+    htmlActive: 0,
+    htmlWaiters: [],
+    checkpoint() {
+      return GM_getValue(Config.missingAttachmentMaintenanceKey, null);
+    },
+    snapshot() {
+      const state = MissingAttachmentMaintenance.active || MissingAttachmentMaintenance.checkpoint();
+      if (!state) return { running: false, stopped: false, total: 0, completed: 0, checkedComplete: 0, checkedMissing: 0, failed: 0, permanentFailed: 0, remaining: 0, rate: 0, etaMs: 0, scope: '', message: '' };
+      const failedIds = Array.isArray(state.failedIds) ? state.failedIds : [];
+      const permanentFailedIds = Array.isArray(state.permanentFailedIds) ? state.permanentFailedIds : [];
+      const remainingIds = Array.isArray(state.remainingIds) ? state.remainingIds : [];
+      const completed = Number(state.completed) || 0;
+      const startedAt = Number(state.startedAt) || 0;
+      const elapsedMs = startedAt ? Math.max(1, Date.now() - startedAt) : 0;
+      const rate = elapsedMs ? completed / (elapsedMs / 1000) : 0;
+      const remaining = new Set([...remainingIds, ...failedIds]).size;
+      return {
+        running: Boolean(MissingAttachmentMaintenance.active && !state.stopped),
+        stopped: Boolean(state.stopped),
+        total: Number(state.total) || 0,
+        completed,
+        checkedComplete: Number(state.checkedComplete) || 0,
+        checkedMissing: Number(state.checkedMissing) || 0,
+        failed: failedIds.length,
+        permanentFailed: permanentFailedIds.length,
+        remaining,
+        rate,
+        etaMs: rate > 0 ? Math.round(remaining / rate * 1000) : 0,
+        scope: state.scope || '',
+        currentCreator: state.currentCreator || '',
+        message: state.message || ''
+      };
+    },
+    subscribe(listener) {
+      MissingAttachmentMaintenance.listeners.add(listener);
+      listener(MissingAttachmentMaintenance.snapshot());
+      return () => MissingAttachmentMaintenance.listeners.delete(listener);
+    },
+    notify() {
+      const state = MissingAttachmentMaintenance.snapshot();
+      MissingAttachmentMaintenance.listeners.forEach((listener) => {
+        try { listener(state); }
+        catch (error) { Logger.warn('Missing metadata listener failed.', error); }
+      });
+    },
+    needsCheck(post) {
+      return post?.cacheSources?.catalogue === true && (!post.missingStatsKnown || (Number(post.missingStatsParserVersion) || 0) < PostMissingStats.parserVersion);
+    },
+    taskId(task) {
+      return `${task.creatorKey}::${task.post.id}`;
+    },
+    taskCreatorKey(id) {
+      return String(id || '').split('::')[0];
+    },
+    scopeCreatorKeys(scope) {
+      if (scope === 'current-creator') return App.context?.creatorKey ? [App.context.creatorKey] : [];
+      if (scope === 'current-page') return [...new Set(CreatorIndexUI.visibleRecords().map((record) => record.directory?.creatorKey).filter(Boolean))];
+      return [];
+    },
+    async plan({ ids = null, scope = 'all', limit = 0 } = {}) {
+      const wanted = ids ? new Set(ids) : null;
+      let creatorKeys = wanted ? [...new Set([...wanted].map(MissingAttachmentMaintenance.taskCreatorKey).filter(Boolean))] : MissingAttachmentMaintenance.scopeCreatorKeys(scope);
+      const metas = await Cache.getCreatorMetas(creatorKeys);
+      if (!creatorKeys.length) creatorKeys = [...metas.keys()];
+      const tasks = [];
+      const maximum = scope === 'first' ? Util.clamp(Number(limit) || 100, 1, 10000) : Number.MAX_SAFE_INTEGER;
+      for (const creatorKey of creatorKeys) {
+        const posts = await Cache.getCreatorPosts(creatorKey);
+        for (const post of posts) {
+          if (!MissingAttachmentMaintenance.needsCheck(post)) continue;
+          const task = { creatorKey, post };
+          const id = MissingAttachmentMaintenance.taskId(task);
+          if (wanted && !wanted.has(id)) continue;
+          tasks.push(task);
+          if (tasks.length >= maximum) return tasks;
+        }
+      }
+      return tasks;
+    },
+    persist(state) {
+      const checkpoint = {
+        version: 2,
+        operation: 'missing-attachment-metadata',
+        scope: state.scope || 'all',
+        limit: Number(state.limit) || 0,
+        plannedIds: [...new Set(state.plannedIds || [])],
+        remainingIds: [...new Set(state.remainingIds || [])],
+        failedIds: [...new Set(state.failedIds || [])],
+        permanentFailedIds: [...new Set(state.permanentFailedIds || [])],
+        completed: Number(state.completed) || 0,
+        attempted: Number(state.attempted) || 0,
+        checkedComplete: Number(state.checkedComplete) || 0,
+        checkedMissing: Number(state.checkedMissing) || 0,
+        affectedCreators: [...state.affected],
+        total: Number(state.total) || 0,
+        detailConcurrency: Number(state.detailConcurrency) || 1,
+        currentCreator: state.currentCreator || '',
+        startedAt: Number(state.startedAt) || Date.now(),
+        updatedAt: Date.now(),
+        stopped: Boolean(state.stopped),
+        message: state.message || ''
+      };
+      GM_setValue(Config.missingAttachmentMaintenanceKey, checkpoint);
+      return checkpoint;
+    },
+    async fetchStructured(post, signal) {
+      const stored = PostMissingStats.fromRaw(post);
+      if (stored.missingStatsKnown && (Number(stored.missingStatsParserVersion) || 0) >= PostMissingStats.parserVersion) return stored;
+      const url = new URL(`/api/v1/${post.service}/user/${post.creatorId}/post/${post.id}`, location.origin).href;
+      await CatalogueRequestScheduler.waitTurn({ signal, operation: 'missing-attachment-maintenance', creatorKey: post.creatorKey, requestKind: 'post-detail-api' });
+      const response = await fetch(url, { credentials: 'same-origin', signal, headers: { Accept: 'application/json' } });
+      if (response.status === 404 || response.status === 405) return null;
+      if (response.status === 429) {
+        CatalogueRequestScheduler.applyRateLimit(Number(response.headers.get('Retry-After')) * 1000 || Config.defaultRateLimitDelayMs, { creatorKey: post.creatorKey, requestKind: 'post-detail-api' });
+        const error = new Error('Pawchive rate limited post metadata.');
+        error.retryable = true;
+        error.rateLimited = true;
+        throw error;
+      }
+      if (!response.ok) {
+        if (response.status >= 500) {
+          const error = new Error(`Post metadata API returned HTTP ${response.status}.`);
+          error.retryable = true;
+          throw error;
+        }
+        return null;
+      }
+      const raw = await response.json();
+      const missing = PostMissingStats.fromRaw(raw?.post || raw);
+      return missing.missingStatsKnown ? missing : null;
+    },
+    async acquireHtmlSlot(signal) {
+      while (MissingAttachmentMaintenance.htmlActive >= 1) {
+        await new Promise((resolve, reject) => {
+          const waiter = { resolve, reject };
+          MissingAttachmentMaintenance.htmlWaiters.push(waiter);
+          const abort = () => {
+            MissingAttachmentMaintenance.htmlWaiters = MissingAttachmentMaintenance.htmlWaiters.filter((item) => item !== waiter);
+            reject(new DOMException('Aborted', 'AbortError'));
+          };
+          signal?.addEventListener('abort', abort, { once: true });
+          waiter.cleanup = () => signal?.removeEventListener('abort', abort);
+        });
+      }
+      MissingAttachmentMaintenance.htmlActive += 1;
+    },
+    releaseHtmlSlot() {
+      MissingAttachmentMaintenance.htmlActive = Math.max(0, MissingAttachmentMaintenance.htmlActive - 1);
+      const waiter = MissingAttachmentMaintenance.htmlWaiters.shift();
+      if (waiter) { waiter.cleanup?.(); waiter.resolve(); }
+    },
+    async fetchHtml(post, signal) {
+      await MissingAttachmentMaintenance.acquireHtmlSlot(signal);
+      try {
+        const url = new URL(post.postUrl || `/${post.service}/user/${post.creatorId}/post/${post.id}`, location.origin).href;
+        await CatalogueRequestScheduler.waitTurn({ signal, operation: 'missing-attachment-maintenance', creatorKey: post.creatorKey, requestKind: 'post-html' });
+        const response = await fetch(url, { credentials: 'same-origin', signal, headers: { Accept: 'text/html' } });
+        if (response.status === 429) {
+          CatalogueRequestScheduler.applyRateLimit(Number(response.headers.get('Retry-After')) * 1000 || Config.defaultRateLimitDelayMs, { creatorKey: post.creatorKey, requestKind: 'post-html' });
+          const error = new Error('Pawchive rate limited post metadata.');
+          error.retryable = true;
+          error.rateLimited = true;
+          throw error;
+        }
+        if (response.status === 404 || response.status === 410) {
+          const error = new Error(`Post page returned HTTP ${response.status}.`);
+          error.permanent = true;
+          throw error;
+        }
+        if (!response.ok) {
+          const error = new Error(`Post page returned HTTP ${response.status}.`);
+          error.retryable = response.status >= 500;
+          throw error;
+        }
+        return PostMissingStats.fromHtml(await response.text());
+      } finally {
+        MissingAttachmentMaintenance.releaseHtmlSlot();
+      }
+    },
+    async inspect(task, signal) {
+      return await MissingAttachmentMaintenance.fetchStructured(task.post, signal) || await MissingAttachmentMaintenance.fetchHtml(task.post, signal);
+    },
+    markWriteSuccess(state, entry) {
+      state.completed += 1;
+      if (entry.missing.hasMissingStats) state.checkedMissing += 1;
+      else state.checkedComplete += 1;
+      state.remainingIds = state.remainingIds.filter((value) => value !== entry.id);
+      state.failedIds = state.failedIds.filter((value) => value !== entry.id);
+    },
+    markWriteFailure(state, entry, error) {
+      if (!state.failedIds.includes(entry.id)) state.failedIds.push(entry.id);
+      if (!state.remainingIds.includes(entry.id)) state.remainingIds.push(entry.id);
+      Logger.warn(`Could not persist missing metadata for post ${entry.post.id}.`, error);
+    },
+    async flushWrites(state, creatorKey, force = false) {
+      const queued = state.pendingWrites.get(creatorKey) || [];
+      if (!queued.length || (!force && queued.length < 25)) return false;
+      state.pendingWrites.delete(creatorKey);
+      try {
+        await Cache.putPosts(queued.map((entry) => entry.post));
+        queued.forEach((entry) => MissingAttachmentMaintenance.markWriteSuccess(state, entry));
+        state.affected.add(creatorKey);
+        return true;
+      } catch (error) {
+        queued.forEach((entry) => MissingAttachmentMaintenance.markWriteFailure(state, entry, error));
+        return false;
+      }
+    },
+    async recomputeAffected(state) {
+      for (const creatorKey of state.affected) {
+        const [domain, service, creatorId] = String(creatorKey).split('|');
+        const summary = await CreatorCatalogueSummary.recomputeAndPersist({ creatorKey, domain, service, creatorId, creatorUrl: `https://${domain}/${service}/user/${creatorId}` });
+        CreatorIndexUI.patchRecord(creatorKey, { summary });
+      }
+    },
+    async run({ resume = false, retryFailed = false, scope = 'all', limit = 0 } = {}) {
+      if (MissingAttachmentMaintenance.active) return MissingAttachmentMaintenance.active.promise;
+      await CatalogueJobManager.acquireMaintenanceSlot();
+      const saved = resume || retryFailed ? MissingAttachmentMaintenance.checkpoint() : null;
+      const resumeIds = saved ? [...new Set([...(retryFailed ? saved.failedIds || [] : saved.remainingIds || []), ...(saved.failedIds || [])])] : null;
+      const effectiveScope = saved?.scope || scope;
+      const effectiveLimit = Number(saved?.limit) || Number(limit) || 0;
+      const tasks = await MissingAttachmentMaintenance.plan({ ids: resumeIds, scope: effectiveScope, limit: effectiveLimit });
+      const controller = new AbortController();
+      const plannedIds = saved?.plannedIds || tasks.map(MissingAttachmentMaintenance.taskId);
+      const taskIds = tasks.map(MissingAttachmentMaintenance.taskId);
+      const taskIdSet = new Set(taskIds);
+      const state = {
+        controller,
+        scope: effectiveScope,
+        limit: effectiveLimit,
+        plannedIds,
+        remainingIds: taskIds,
+        failedIds: [...new Set(saved?.failedIds || [])].filter((id) => taskIdSet.has(id)),
+        permanentFailedIds: [...new Set(saved?.permanentFailedIds || [])],
+        total: Number(saved?.total) || plannedIds.length,
+        completed: Number(saved?.completed) || 0,
+        attempted: Number(saved?.attempted) || 0,
+        checkedComplete: Number(saved?.checkedComplete) || 0,
+        checkedMissing: Number(saved?.checkedMissing) || 0,
+        message: 'Checking missing-attachment metadata…',
+        affected: new Set(saved?.affectedCreators || []),
+        pendingWrites: new Map(),
+        startedAt: Number(saved?.startedAt) || Date.now(),
+        stopped: false,
+        detailConcurrency: Util.clamp(Number(saved?.detailConcurrency) || Math.min(3, Number(Settings.value.concurrency) || 3), 1, Math.max(1, Number(Settings.value.concurrency) || 3)),
+        successfulSinceRateLimit: 0,
+        currentCreator: ''
+      };
+      MissingAttachmentMaintenance.active = state;
+      MissingAttachmentMaintenance.persist(state);
+      MissingAttachmentMaintenance.notify();
+      state.promise = (async () => {
+        let cursor = 0;
+        const worker = async (workerIndex) => {
+          while (true) {
+            if (controller.signal.aborted) { state.stopped = true; return; }
+            while (workerIndex >= state.detailConcurrency) {
+              if (cursor >= tasks.length) return;
+              await new Promise((resolve) => setTimeout(resolve, 150));
+              if (controller.signal.aborted) { state.stopped = true; return; }
+              if (cursor >= tasks.length) return;
+            }
+            const index = cursor++;
+            if (index >= tasks.length) return;
+            const task = tasks[index];
+            const id = MissingAttachmentMaintenance.taskId(task);
+            state.currentCreator = task.creatorKey;
+            state.attempted += 1;
+            try {
+              const missing = await MissingAttachmentMaintenance.inspect(task, controller.signal);
+              const updates = state.pendingWrites.get(task.creatorKey) || [];
+              updates.push({ id, post: { ...task.post, ...missing }, missing });
+              state.pendingWrites.set(task.creatorKey, updates);
+              await MissingAttachmentMaintenance.flushWrites(state, task.creatorKey, false);
+              // An item remains in remainingIds until its batched IndexedDB write
+              // commits successfully, so a crash cannot silently skip buffered work.
+              state.successfulSinceRateLimit += 1;
+              if (state.successfulSinceRateLimit >= 20 && state.detailConcurrency < Math.min(3, Number(Settings.value.concurrency) || 3)) {
+                state.detailConcurrency += 1;
+                state.successfulSinceRateLimit = 0;
+              }
+            } catch (error) {
+              if (error.name === 'AbortError') { state.stopped = true; return; }
+              if (error.permanent) {
+                state.remainingIds = state.remainingIds.filter((value) => value !== id);
+                state.failedIds = state.failedIds.filter((value) => value !== id);
+                if (!state.permanentFailedIds.includes(id)) state.permanentFailedIds.push(id);
+              } else {
+                if (!state.failedIds.includes(id)) state.failedIds.push(id);
+                if (!state.remainingIds.includes(id)) state.remainingIds.push(id);
+              }
+              if (error.rateLimited) {
+                state.detailConcurrency = Math.max(1, state.detailConcurrency - 1);
+                state.successfulSinceRateLimit = 0;
+              }
+              Logger.warn(`Missing metadata check failed for post ${task.post.id}.`, error);
+            }
+            const snapshot = MissingAttachmentMaintenance.snapshot();
+            state.message = `Checked ${state.completed} of ${state.total} · ${snapshot.rate.toFixed(2)}/s`;
+            MissingAttachmentMaintenance.persist(state);
+            MissingAttachmentMaintenance.notify();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(3, Math.max(1, tasks.length)) }, (_, index) => worker(index)));
+        for (const creatorKey of [...state.pendingWrites.keys()]) await MissingAttachmentMaintenance.flushWrites(state, creatorKey, true);
+        await MissingAttachmentMaintenance.recomputeAffected(state);
+        if (App.context && state.affected.has(App.context.creatorKey)) {
+          await App.loadCreator(App.context);
+          App.render();
+        }
+        state.currentCreator = '';
+        state.message = state.stopped ? 'Missing-attachment metadata update stopped.' : state.failedIds.length ? 'Missing-attachment metadata update finished with retryable failures.' : 'Missing-attachment metadata update complete.';
+        MissingAttachmentMaintenance.persist(state);
+        return MissingAttachmentMaintenance.snapshot();
+      })().finally(() => {
+        MissingAttachmentMaintenance.active = null;
+        CatalogueJobManager.releaseMaintenanceSlot();
+        MissingAttachmentMaintenance.notify();
+      });
+      return state.promise;
+    },
+    stop() {
+      const state = MissingAttachmentMaintenance.active;
+      if (!state) return;
+      state.stopped = true;
+      state.message = 'Stopping missing-attachment metadata update…';
+      MissingAttachmentMaintenance.persist(state);
+      state.controller.abort();
+      MissingAttachmentMaintenance.notify();
+    },
+    resume() { return MissingAttachmentMaintenance.run({ resume: true }); },
+    retryFailed() { return MissingAttachmentMaintenance.run({ retryFailed: true }); },
+    scopeLabel(scope) {
+      return ({ 'current-creator': 'Current creator', 'current-page': 'Current Local catalogue page', first: 'First N unknown posts', all: 'All unknown posts' })[scope] || 'All unknown posts';
+    },
+    openScopeDialog(opener) {
+      const backdrop = SettingsUI.el('div', 'pmf-modal-backdrop');
+      const dialog = SettingsUI.el('section', 'pmf-dialog pmf-small-dialog pmf-surface');
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.setAttribute('aria-label', 'Update missing-attachment metadata');
+      dialog.innerHTML = `<header><strong>Update missing-attachment metadata</strong><button class="pmf-icon-close" data-maintenance-scope-action="cancel">×</button></header><div class="pmf-editor-body"><section class="pmf-settings-section"><h3>Scope</h3><div class="pmf-settings-row"><span>Update</span>${SettingsUI.select('missingScope','current-creator',[['current-creator','Current creator'],['current-page','Current Local catalogue page'],['first','First N unknown posts'],['all','All unknown posts']]).outerHTML}</div><div class="pmf-settings-row" data-first-limit hidden><span>Maximum posts</span><input type="number" name="missingLimit" min="1" max="10000" value="100"></div><p class="pmf-help" data-scope-help>Structured post details are checked first. HTML is downloaded only when needed.</p></section></div><footer><span></span><button data-maintenance-scope-action="cancel">Cancel</button><button class="pmf-primary" data-maintenance-scope-action="start">Start update</button></footer>`;
+      backdrop.append(dialog);
+      (CreatorIndexUI.root || App.ui?.settings || document.body).append(backdrop);
+      const overlay = OverlayManager.open({ node: dialog, root: backdrop, opener, modal: true });
+      const select = dialog.querySelector('[name="missingScope"]');
+      const limitRow = dialog.querySelector('[data-first-limit]');
+      const help = dialog.querySelector('[data-scope-help]');
+      const sync = () => {
+        const scope = select.value;
+        limitRow.hidden = scope !== 'first';
+        help.textContent = scope === 'all' ? 'All unknown posts may take many hours for a very large library. You will be asked to confirm before it starts.' : 'Structured post details are checked first. HTML is downloaded only when needed.';
+      };
+      select.addEventListener('change', sync);
+      sync();
+      backdrop.addEventListener('click', async (event) => {
+        const action = event.target.closest('[data-maintenance-scope-action]')?.dataset.maintenanceScopeAction;
+        if (action === 'cancel') OverlayManager.close(overlay, 'cancel');
+        if (action !== 'start') return;
+        const scope = select.value;
+        const limit = Util.clamp(Number(dialog.querySelector('[name="missingLimit"]')?.value) || 100, 1, 10000);
+        if (scope === 'current-creator' && !App.context?.creatorKey) { GlobalUI.flash('Open a creator page before using Current creator.'); return; }
+        if (scope === 'current-page' && CreatorIndexUI.mode !== 'catalogue') { GlobalUI.flash('Switch to the Local catalogue before using Current Local catalogue page.'); return; }
+        if (scope === 'all') {
+          const startButton = event.target.closest('[data-maintenance-scope-action="start"]');
+          if (startButton) { startButton.disabled = true; startButton.textContent = 'Counting unknown posts…'; }
+          const planned = await MissingAttachmentMaintenance.plan({ scope, limit });
+          if (startButton) { startButton.disabled = false; startButton.textContent = 'Start update'; }
+          const estimateSeconds = planned.length;
+          const estimate = SettingsUI.formatDuration(estimateSeconds * 1000);
+          if (!globalThis.confirm?.(`Update metadata for all ${planned.length} unknown posts? At roughly one request per second this may take about ${estimate}, and HTML fallbacks can take longer.`)) return;
+        }
+        OverlayManager.close(overlay, 'start');
+        MissingAttachmentMaintenance.run({ scope, limit });
+      });
+    },
   };
 
   const Catalogue = {
@@ -4137,98 +4567,520 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
   };
 
   const SettingsUI = {
-    el(tag,className='',text=''){const node=document.createElement(tag);if(className)node.className=className;if(text)node.textContent=text;return node;},
-    section(title){const node=SettingsUI.el('section','pmf-settings-section');const heading=SettingsUI.el('h3','',title);node.append(heading);return node;},
-    row(label,control,{chevron='',name=''}={}){const row=SettingsUI.el('div','pmf-settings-row');const text=SettingsUI.el('span','',label);row.append(text,control);if(chevron){const button=SettingsUI.el('button','pmf-settings-chevron','›');button.type='button';button.dataset.settingsChild=chevron;button.setAttribute('aria-label',`Configure ${label}`);row.append(button);}if(name)row.dataset.setting=name;return row;},
-    select(name,value,options){const shell=SettingsUI.el('span','pmf-select-shell');const select=SettingsUI.el('select');select.name=name;options.forEach(([key,label])=>{const option=SettingsUI.el('option','',label);option.value=key;option.selected=key===value;select.append(option);});const arrow=SettingsUI.el('span','pmf-select-arrow','▾');arrow.setAttribute('aria-hidden','true');shell.append(select,arrow);return shell;},
-    toggle(name,value,label,{child=''}={}){const input=document.createElement('input');input.type='checkbox';input.name=name;input.checked=Boolean(value);const wrap=SettingsUI.el('label','pmf-settings-toggle');wrap.append(input,SettingsUI.el('span','',label));return SettingsUI.row('',wrap,{chevron:child,name});},
-    action(label,action,{danger=false}={}){const button=SettingsUI.el('button',danger?'pmf-danger':'',label);button.type='button';button.dataset.settingsAction=action;return button;},
-    bindMaintenance(root){const update=()=>{const missing=MissingAttachmentMaintenance.snapshot(),repair=CreatorProfileRepairManager.snapshot(),status=root.querySelector('[data-maintenance-status]');root.querySelectorAll('[data-settings-action="update-missing-attachment-metadata"]').forEach((button)=>button.hidden=missing.running);root.querySelectorAll('[data-settings-action="stop-missing-attachment-metadata"]').forEach((button)=>button.hidden=!missing.running);root.querySelectorAll('[data-settings-action="resume-missing-attachment-metadata"]').forEach((button)=>button.hidden=missing.running||!missing.stopped||!missing.remaining);root.querySelectorAll('[data-settings-action="repair-creator-profile-metadata"]').forEach((button)=>button.hidden=repair.running);root.querySelectorAll('[data-settings-action="stop-creator-profile-repair"]').forEach((button)=>button.hidden=!repair.running);if(status)status.textContent=[missing.total?`Missing attachments: ${missing.completed}/${missing.total} checked · ${missing.checkedComplete} complete · ${missing.checkedMissing} missing · ${missing.failed} failed · ${missing.remaining} remaining`:null,repair.total?`Creator profiles: ${repair.completed}/${repair.total} repaired · ${repair.failed} failed · ${repair.remaining} remaining`:null].filter(Boolean).join(' | ');};const unsubs=[MissingAttachmentMaintenance.subscribe(update),CreatorProfileRepairManager.subscribe(update)];update();return()=>unsubs.forEach((unsubscribe)=>unsubscribe());},
-    field(name,value,{textarea=false}={}){const input=SettingsUI.el(textarea?'textarea':'input');input.name=name;input.value=Array.isArray(value)?value.join(', '):value||'';return input;},
-    panel(name,title=''){const panel=SettingsUI.el('div','pmf-settings-panel');panel.dataset.pmfSettingsPanel=name;if(title)panel.append(SettingsUI.el('h2','pmf-settings-tab-title',title));return panel;},
-    buildGeneral(draft){
-      const panel=SettingsUI.panel('general','General');const cards=SettingsUI.section('Post cards');
-      cards.append(
-        SettingsUI.row('Post thumbnail size',SettingsUI.select('compactCardScale',draft.compactCardScale,[['small','Small'],['medium','Medium'],['big','Big']])),
-        SettingsUI.row('Post thumbnail aspect ratio',SettingsUI.select('compactThumbnailAspectRatio',draft.compactThumbnailAspectRatio,[['16-9','16:9'],['4-3','4:3'],['1-1','1:1 (original)']])),
-        SettingsUI.toggle('catalogueBadgesAlways',draft.catalogueBadges.alwaysShow,'Show attachment badges on post cards',{child:'post-attachment-badges'}),
-        SettingsUI.toggle('postStatusBadgesEnabled',draft.postStatusBadges.enabled,'Show status badges on post cards',{child:'post-status-badges'}),
-        SettingsUI.toggle('seenCardTreatmentEnabled',draft.seenCardTreatment.enabled,'Dim seen post cards',{child:'seen-dim'})
-      );
-      const creators=SettingsUI.section('Creator cards');creators.append(
-        SettingsUI.toggle('creatorCardBadgesEnabled',draft.creatorCardBadges.enabled,'Show attachment badges on creator cards',{child:'creator-attachment-badges'}),
-        SettingsUI.toggle('creatorStatusBadgesEnabled',draft.creatorStatusBadges.enabled,'Show status badges on creator cards',{child:'creator-status-badges'}),
-        SettingsUI.toggle('hiddenCreatorTreatmentEnabled',draft.hiddenCreatorTreatment.enabled,'Dim hidden creator cards',{child:'hidden-creator-dim'})
-      );
-      panel.append(cards,creators);return panel;
+    el(tag, className = '', text = '') {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text) node.textContent = text;
+      return node;
     },
-    buildDetection(draft){
-      const panel=SettingsUI.panel('default-detection','Default detection');
-      const files=SettingsUI.section('Default file types');
-      [['videoExtensions','Videos'],['imageExtensions','Images'],['archiveExtensions','Archives'],['projectExtensions','Project files']].forEach(([name,label])=>files.append(SettingsUI.row(label,SettingsUI.field(name,draft[name],{textarea:true}))));
-      const evidence=SettingsUI.section('Project-file evidence');
-      [['attachmentFilenames','Attachment filenames'],['title','Post title'],['tags','Tags'],['content','Description']].forEach(([key,label])=>evidence.append(SettingsUI.toggle(`project-${key}`,draft.projectEvidence[key],label)));
-      evidence.append(SettingsUI.row('Project file search keywords',SettingsUI.field('projectKeywords',draft.projectKeywords,{textarea:true})));
-      const links=SettingsUI.section('External-link scope');links.append(SettingsUI.row('Match links',SettingsUI.select('externalLinkScope',draft.externalLinkScope,[['media-download','Media and download links'],['any','Any external link']])),SettingsUI.row('Known media and download hosts',SettingsUI.field('knownHosts',draft.knownHosts,{textarea:true})));
-      panel.append(files,evidence,links);return panel;
+    section(title) {
+      const node = SettingsUI.el('section', 'pmf-settings-section');
+      const heading = SettingsUI.el('h3', '', title);
+      node.append(heading);
+      return node;
     },
-    buildScanning(draft){
-      const panel=SettingsUI.panel('scanning','Scanning');const behavior=SettingsUI.section('Scan behavior');
-      behavior.append(SettingsUI.toggle('confirmCreatorCardScan',draft.confirmCreatorCardScan,'Confirm creator card scans'),SettingsUI.toggle('synchronizeNativeFavorites',draft.synchronizeNativeFavorites,'Synchronize native favorites during Scan and Update'));
-      const queue=SettingsUI.section('Queue and concurrency');queue.append(SettingsUI.row('Concurrent creator scans',SettingsUI.select('catalogueConcurrentJobs',String(draft.catalogueConcurrentJobs),[['1','1'],['2','2']])));
-      panel.append(behavior,queue);return panel;
-    },
-    buildData(draft){
-      const panel=SettingsUI.panel('data','Data & performance');const requests=SettingsUI.section('Requests');
-      requests.append(SettingsUI.row('Optional detail request concurrency',SettingsUI.select('concurrency',String(draft.concurrency),Array.from({length:10},(_,index)=>[String(index+1),String(index+1)]))),SettingsUI.toggle('retryFailed',draft.retryFailed,'Retry failed optional detail requests'));
-      const favorites=SettingsUI.section('Native Favorites');const actions=SettingsUI.el('div','pmf-settings-actions');actions.append(SettingsUI.action('Synchronize native favorites now','sync-favorites'),SettingsUI.action('Stop synchronization','stop-favorites'));favorites.append(actions);
-      const stored=SettingsUI.section('Stored Catalogue');const clear=SettingsUI.el('div','pmf-settings-actions');clear.append(SettingsUI.action('Update missing-attachment metadata','update-missing-attachment-metadata'),SettingsUI.action('Stop','stop-missing-attachment-metadata'),SettingsUI.action('Resume','resume-missing-attachment-metadata'),SettingsUI.action('Repair creator profile metadata','repair-creator-profile-metadata'),SettingsUI.action('Stop creator repair','stop-creator-profile-repair'),SettingsUI.action("Clear this creator's full catalogue scan",'clear-creator',{danger:true}),SettingsUI.action('Clear all full catalogue scans','clear-all',{danger:true}));const status=SettingsUI.el('p','pmf-maintenance-status');status.dataset.maintenanceStatus='true';stored.append(clear,status);
-      panel.append(requests,favorites,stored);return panel;
-    },
-    showChild(name){
-      const dialog=App.ui?.settings?.querySelector?.('.pmf-settings-dialog');if(!dialog)return;const draft=App.ui.settingsDraft;const content=dialog.querySelector('.pmf-settings-content');App.ui.settingsParentScroll=content.scrollTop;content.replaceChildren();
-      const child=SettingsUI.el('div','pmf-settings-child');const back=SettingsUI.action('‹ Back to settings','child-back');back.classList.add('pmf-settings-back');const childTitle=name==='seen-dim'?'Dim seen post cards':name==='hidden-creator-dim'?'Hidden creator-card appearance':name==='creator-status-badges'?'Creator-card status badges':name==='post-status-badges'?'Post status badges':name==='creator-attachment-badges'?'Creator card attachment badges':'Post card attachment badges';child.append(back,SettingsUI.el('h2','',childTitle));
-      if(name==='seen-dim'||name==='hidden-creator-dim'){
-        const creator=name==='hidden-creator-dim';const setting=creator?draft.hiddenCreatorTreatment:draft.seenCardTreatment;const appearance=SettingsUI.section('Appearance');const strength=SettingsUI.select(creator?'hiddenCreatorTreatmentStrength':'seenCardTreatmentStrength',setting.strength,[['low','Low'],['medium','Medium'],['high','High']]);strength.querySelector('select').disabled=!setting.enabled;appearance.append(SettingsUI.row('Dim strength',strength));child.append(appearance);
-      }else{
-        const status=name==='post-status-badges';const creatorStatus=name==='creator-status-badges';const creator=name==='creator-attachment-badges';const key=status?'postStatusBadges':creatorStatus?'creatorStatusBadges':creator?'creatorCardBadges':'catalogueBadges';const choices=status?[['favorited','Favorited'],['liked','Liked'],['seen','Seen']]:creatorStatus?[['favorited','Favorited'],['liked','Liked'],['hidden','Hidden']]:[['videos','Videos'],['images','Images'],['archives','Archives'],['projectFiles','Project files'],['externalLinks','External links']];
-        const sizeName=status?'postStatusBadgeSize':creatorStatus?'creatorStatusBadgeSize':creator?'creatorAttachmentBadgeSize':'postAttachmentBadgeSize';const appearance=SettingsUI.section('Appearance');appearance.append(SettingsUI.row(status?'Post status badge size':creatorStatus?'Badge size':'Attachment badge size',SettingsUI.select(sizeName,draft[sizeName],[['small','Small'],['medium','Medium'],['big','Big']])));if(creator){appearance.append(SettingsUI.row('Count method',SettingsUI.select('creatorCardBadgeCountMode',draft.creatorCardBadgeCountMode,[['posts','Matching posts'],['attachments','Attachments / links']])));appearance.append(SettingsUI.toggle('excludePostsWithMissingAttachments',draft.excludePostsWithMissingAttachments,'Hide and don’t count posts with missing attachments'));}const visible=SettingsUI.section(status?'Visible statuses':creatorStatus?'Visible badges':'Visible badge types');choices.forEach(([field,label])=>visible.append(SettingsUI.toggle(`child-${key}-${field}`,draft[key].types[field],label)));child.append(appearance,visible);
+    row(label, control, {
+      chevron = '',
+      name = ''
+    } = {}) {
+      const row = SettingsUI.el('div', 'pmf-settings-row');
+      const text = SettingsUI.el('span', '', label);
+      row.append(text, control);
+      if (chevron) {
+        const button = SettingsUI.el('button', 'pmf-settings-chevron', '›');
+        button.type = 'button';
+        button.dataset.settingsChild = chevron;
+        button.setAttribute('aria-label', `Configure ${label}`);
+        row.append(button);
       }
-      content.append(child);App.ui.settingsChild=name;
+      if (name) row.dataset.setting = name;
+      return row;
     },
-    collect(dialog,draft){
-      const get=(name)=>dialog.querySelector(`[name="${name}"]`);const readExtensions=(name)=>Util.normalizeExtensions(String(get(name)?.value||draft[name].join(',')).split(/[\s,]+/)).values;
-      return Settings.normalize({...draft,compactCardScale:get('compactCardScale')?.value||draft.compactCardScale,compactThumbnailAspectRatio:get('compactThumbnailAspectRatio')?.value||draft.compactThumbnailAspectRatio,
-        postAttachmentBadgeSize:get('postAttachmentBadgeSize')?.value||draft.postAttachmentBadgeSize,creatorAttachmentBadgeSize:get('creatorAttachmentBadgeSize')?.value||draft.creatorAttachmentBadgeSize,postStatusBadgeSize:get('postStatusBadgeSize')?.value||draft.postStatusBadgeSize,creatorStatusBadgeSize:get('creatorStatusBadgeSize')?.value||draft.creatorStatusBadgeSize,creatorCardBadgeCountMode:get('creatorCardBadgeCountMode')?.value||draft.creatorCardBadgeCountMode,excludePostsWithMissingAttachments:get('excludePostsWithMissingAttachments')?.checked??draft.excludePostsWithMissingAttachments,
-        confirmCreatorCardScan:get('confirmCreatorCardScan')?.checked??draft.confirmCreatorCardScan,synchronizeNativeFavorites:get('synchronizeNativeFavorites')?.checked??draft.synchronizeNativeFavorites,
-        catalogueConcurrentJobs:Number(get('catalogueConcurrentJobs')?.value||draft.catalogueConcurrentJobs),concurrency:Number(get('concurrency')?.value||draft.concurrency),retryFailed:get('retryFailed')?.checked??draft.retryFailed,
-        externalLinkScope:get('externalLinkScope')?.value||draft.externalLinkScope,videoExtensions:readExtensions('videoExtensions'),imageExtensions:readExtensions('imageExtensions'),archiveExtensions:readExtensions('archiveExtensions'),projectExtensions:readExtensions('projectExtensions'),
-        projectKeywords:String(get('projectKeywords')?.value||draft.projectKeywords.join('\n')).split(/\n+/).map((value)=>value.trim()).filter(Boolean),knownHosts:String(get('knownHosts')?.value||draft.knownHosts.join('\n')).split(/[\s,]+/).filter(Boolean),
-        projectEvidence:Object.fromEntries(Object.keys(draft.projectEvidence).map((key)=>[key,get(`project-${key}`)?.checked??draft.projectEvidence[key]])),
-        catalogueBadges:{...draft.catalogueBadges,alwaysShow:get('catalogueBadgesAlways')?.checked??draft.catalogueBadges.alwaysShow},creatorCardBadges:{...draft.creatorCardBadges,enabled:get('creatorCardBadgesEnabled')?.checked??draft.creatorCardBadges.enabled},
-        postStatusBadges:{...draft.postStatusBadges,enabled:get('postStatusBadgesEnabled')?.checked??draft.postStatusBadges.enabled},creatorStatusBadges:{...draft.creatorStatusBadges,enabled:get('creatorStatusBadgesEnabled')?.checked??draft.creatorStatusBadges.enabled},seenCardTreatment:{...draft.seenCardTreatment,enabled:get('seenCardTreatmentEnabled')?.checked??draft.seenCardTreatment.enabled,strength:get('seenCardTreatmentStrength')?.value||draft.seenCardTreatment.strength},hiddenCreatorTreatment:{...draft.hiddenCreatorTreatment,enabled:get('hiddenCreatorTreatmentEnabled')?.checked??draft.hiddenCreatorTreatment.enabled,strength:get('hiddenCreatorTreatmentStrength')?.value||draft.hiddenCreatorTreatment.strength}});
+    select(name, value, options) {
+      const shell = SettingsUI.el('span', 'pmf-select-shell');
+      const select = SettingsUI.el('select');
+      select.name = name;
+      options.forEach(([key, label]) => {
+        const option = SettingsUI.el('option', '', label);
+        option.value = key;
+        option.selected = key === value;
+        select.append(option);
+      });
+      const arrow = SettingsUI.el('span', 'pmf-select-arrow', '▾');
+      arrow.setAttribute('aria-hidden', 'true');
+      shell.append(select, arrow);
+      return shell;
     },
-    renderParent(active='general'){
-      const dialog=App.ui.settings.querySelector('.pmf-settings-dialog');const content=dialog.querySelector('.pmf-settings-content');const draft=App.ui.settingsDraft;content.replaceChildren(SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft));dialog.querySelectorAll('[data-pmf-settings-tab]').forEach((button)=>button.classList.toggle('pmf-active',button.dataset.pmfSettingsTab===active));content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel)=>panel.hidden=panel.dataset.pmfSettingsPanel!==active);content.scrollTop=App.ui.settingsParentScroll||0;App.ui.settingsChild='';
+    toggle(name, value, label, {
+      child = ''
+    } = {}) {
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.name = name;
+      input.checked = Boolean(value);
+      const wrap = SettingsUI.el('label', 'pmf-settings-toggle');
+      wrap.append(input, SettingsUI.el('span', '', label));
+      return SettingsUI.row('', wrap, {
+        chevron: child,
+        name
+      });
     },
-    preview(dialog){
-      const draft=SettingsUI.collect(dialog,App.ui.settingsDraft);App.ui.settingsDraft=draft;App.ui.previewStatusBadgeSize=draft.postStatusBadgeSize;
-      const priorSize=App.filteredPageSize();const matches=App.matchingPosts();App.filteredFirstResultIndex=Math.max(0,(App.filteredPage-1)*priorSize);App.filteredAnchorId=matches[App.filteredFirstResultIndex]?.id||App.filteredAnchorId;CompactLayoutEngine.preview({scale:draft.compactCardScale,ratio:draft.compactThumbnailAspectRatio});AttachmentBadgeSizing.preview('post',draft.postAttachmentBadgeSize);AttachmentBadgeSizing.preview('creator',draft.creatorAttachmentBadgeSize);const nextSize=App.filteredPageSize();if(nextSize!==priorSize){App.restoreFirstResultPage(matches.length);App.render();}
-      App.ui?.grid?.querySelectorAll?.('article.post-card[data-id]').forEach((card)=>{const post=App.catalog.get(String(card.dataset.id));PostStatusBadgeRenderer.apply(card,post);SeenCardTreatment.apply(card,post);});
+    action(label, action, {
+      danger = false
+    } = {}) {
+      const button = SettingsUI.el('button', danger ? 'pmf-danger' : '', label);
+      button.type = 'button';
+      button.dataset.settingsAction = action;
+      return button;
     },
-    open(){
-      UI.closeSettings('reopen');const draft=Util.clone(Settings.value);const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-settings-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');
-      const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Media Filter settings'));const close=SettingsUI.action('×','cancel');close.classList.add('pmf-icon-close');header.append(close);
-      const layout=SettingsUI.el('div','pmf-settings-layout');const nav=SettingsUI.el('nav');[['general','General'],['default-detection','Default detection'],['scanning','Scanning'],['data','Data & performance']].forEach(([key,label])=>{const button=SettingsUI.action(label,'tab');button.dataset.pmfSettingsTab=key;nav.append(button);});const content=SettingsUI.el('div','pmf-settings-content');layout.append(nav,content);
-      const footer=SettingsUI.el('footer');footer.append(SettingsUI.action('Reset all settings','reset'),SettingsUI.el('span'),SettingsUI.action('Cancel','cancel'));const save=SettingsUI.action('Save & apply','save');save.classList.add('pmf-primary');footer.append(save);dialog.append(header,layout,footer);backdrop.append(dialog);App.ui.root.append(backdrop);
-      App.ui.settings=backdrop;App.ui.settingsDraft=draft;App.ui.settingsOpeningSnapshot=Util.clone(Settings.value);App.ui.settingsPreview={compactCardScale:Settings.value.compactCardScale,compactThumbnailAspectRatio:Settings.value.compactThumbnailAspectRatio,postAttachmentBadgeSize:Settings.value.postAttachmentBadgeSize,creatorAttachmentBadgeSize:Settings.value.creatorAttachmentBadgeSize,committed:false};
-      App.ui.settingsOverlayId=OverlayManager.open({node:dialog,root:backdrop,modal:true,onClose:(reason)=>{App.ui?.settingsMaintenanceUnsubscribe?.();const preview=App.ui?.settingsPreview;if(preview&&!preview.committed){CompactLayoutEngine.restorePreview({apply:true});AttachmentBadgeSizing.restorePreview();App.render();}if(App.ui){App.ui.previewStatusBadgeSize=null;App.ui.settings=null;App.ui.settingsDraft=null;App.ui.settingsOverlayId=null;App.ui.settingsMaintenanceUnsubscribe=null;}Logger.info({operation:'settings-close',reason});}});
+    formatDuration(ms) {
+      const seconds = Math.max(0, Math.round(Number(ms) / 1000));
+      if (!seconds) return 'estimating…';
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      if (hours) return `${hours}h ${minutes}m`;
+      if (minutes) return `${minutes}m ${seconds % 60}s`;
+      return `${seconds}s`;
+    },
+    bindMaintenance(root) {
+      const update = () => {
+        const missing = MissingAttachmentMaintenance.snapshot();
+        const repair = CreatorProfileRepairManager.snapshot();
+        const status = root.querySelector('[data-maintenance-status]');
+        root.querySelectorAll('[data-settings-action="update-missing-attachment-metadata"]').forEach((button) => button.hidden = missing.running);
+        root.querySelectorAll('[data-settings-action="stop-missing-attachment-metadata"]').forEach((button) => button.hidden = !missing.running);
+        root.querySelectorAll('[data-settings-action="resume-missing-attachment-metadata"]').forEach((button) => button.hidden = missing.running || !missing.stopped || !missing.remaining);
+        root.querySelectorAll('[data-settings-action="retry-failed-missing-attachment-metadata"]').forEach((button) => button.hidden = missing.running || !missing.failed);
+        root.querySelectorAll('[data-settings-action="repair-creator-profile-metadata"]').forEach((button) => button.hidden = repair.running);
+        root.querySelectorAll('[data-settings-action="stop-creator-profile-repair"]').forEach((button) => button.hidden = !repair.running);
+        root.querySelectorAll('[data-settings-action="resume-creator-profile-repair"]').forEach((button) => button.hidden = repair.running || !repair.stopped || !repair.remaining);
+        root.querySelectorAll('[data-settings-action="retry-failed-creator-profile-repair"]').forEach((button) => button.hidden = repair.running || !repair.failed);
+        if (status) {
+          const missingRate = missing.rate ? `${missing.rate.toFixed(2)}/s` : 'estimating rate';
+          const missingEta = missing.remaining ? ` · ETA ${SettingsUI.formatDuration(missing.etaMs)}` : '';
+          status.textContent = [
+            missing.total ? `Missing attachments (${MissingAttachmentMaintenance.scopeLabel(missing.scope)}): ${missing.completed}/${missing.total} checked · ${missing.checkedComplete} complete · ${missing.checkedMissing} missing · ${missing.failed} retryable · ${missing.permanentFailed} terminal · ${missing.remaining} remaining · ${missingRate}${missingEta}` : null,
+            repair.total ? `Creator profiles: ${repair.completed}/${repair.total} repaired · ${repair.failed} retryable · ${repair.remaining} remaining${repair.rate?` · ${repair.rate.toFixed(2)}/s`:''}` : null
+          ].filter(Boolean).join(' | ');
+        }
+      };
+      const unsubs = [MissingAttachmentMaintenance.subscribe(update), CreatorProfileRepairManager.subscribe(update)];
+      update();
+      return () => unsubs.forEach((unsubscribe) => unsubscribe());
+    },
+    field(name, value, {
+      textarea = false
+    } = {}) {
+      const input = SettingsUI.el(textarea ? 'textarea' : 'input');
+      input.name = name;
+      input.value = Array.isArray(value) ? value.join(', ') : value || '';
+      return input;
+    },
+    panel(name, title = '') {
+      const panel = SettingsUI.el('div', 'pmf-settings-panel');
+      panel.dataset.pmfSettingsPanel = name;
+      if (title) panel.append(SettingsUI.el('h2', 'pmf-settings-tab-title', title));
+      return panel;
+    },
+    buildGeneral(draft) {
+      const panel = SettingsUI.panel('general', 'General');
+      const cards = SettingsUI.section('Post cards');
+      cards.append(
+        SettingsUI.row('Post thumbnail size', SettingsUI.select('compactCardScale', draft.compactCardScale, [
+          ['small', 'Small'],
+          ['medium', 'Medium'],
+          ['big', 'Big']
+        ])),
+        SettingsUI.row('Post thumbnail aspect ratio', SettingsUI.select('compactThumbnailAspectRatio', draft.compactThumbnailAspectRatio, [
+          ['16-9', '16:9'],
+          ['4-3', '4:3'],
+          ['1-1', '1:1 (original)']
+        ])),
+        SettingsUI.toggle('catalogueBadgesAlways', draft.catalogueBadges.alwaysShow, 'Show attachment badges on post cards', {
+          child: 'post-attachment-badges'
+        }),
+        SettingsUI.toggle('postStatusBadgesEnabled', draft.postStatusBadges.enabled, 'Show status badges on post cards', {
+          child: 'post-status-badges'
+        }),
+        SettingsUI.toggle('seenCardTreatmentEnabled', draft.seenCardTreatment.enabled, 'Dim seen post cards', {
+          child: 'seen-dim'
+        })
+      );
+      const creators = SettingsUI.section('Creator cards');
+      creators.append(
+        SettingsUI.toggle('creatorCardBadgesEnabled', draft.creatorCardBadges.enabled, 'Show attachment badges on creator cards', {
+          child: 'creator-attachment-badges'
+        }),
+        SettingsUI.row('Count method', SettingsUI.select('creatorCardBadgeCountMode', draft.creatorCardBadgeCountMode, [
+          ['posts', 'Posts containing media'],
+          ['attachments', 'Total attachments/links from every post']
+        ])),
+        SettingsUI.toggle('excludePostsWithMissingAttachments', draft.excludePostsWithMissingAttachments, 'Hide and don’t count posts with missing attachments'),
+        SettingsUI.toggle('creatorStatusBadgesEnabled', draft.creatorStatusBadges.enabled, 'Show status badges on creator cards', {
+          child: 'creator-status-badges'
+        }),
+        SettingsUI.toggle('hiddenCreatorTreatmentEnabled', draft.hiddenCreatorTreatment.enabled, 'Dim hidden creator cards', {
+          child: 'hidden-creator-dim'
+        })
+      );
+      panel.append(cards, creators);
+      return panel;
+    },
+    buildDetection(draft) {
+      const panel = SettingsUI.panel('default-detection', 'Default detection');
+      const files = SettingsUI.section('Default file types');
+      [
+        ['videoExtensions', 'Videos'],
+        ['imageExtensions', 'Images'],
+        ['archiveExtensions', 'Archives'],
+        ['projectExtensions', 'Project files']
+      ].forEach(([name, label]) => files.append(SettingsUI.row(label, SettingsUI.field(name, draft[name], {
+        textarea: true
+      }))));
+      const evidence = SettingsUI.section('Project-file evidence');
+      [
+        ['attachmentFilenames', 'Attachment filenames'],
+        ['title', 'Post title'],
+        ['tags', 'Tags'],
+        ['content', 'Description']
+      ].forEach(([key, label]) => evidence.append(SettingsUI.toggle(`project-${key}`, draft.projectEvidence[key], label)));
+      evidence.append(SettingsUI.row('Project file search keywords', SettingsUI.field('projectKeywords', draft.projectKeywords, {
+        textarea: true
+      })));
+      const links = SettingsUI.section('External-link scope');
+      links.append(SettingsUI.row('Match links', SettingsUI.select('externalLinkScope', draft.externalLinkScope, [
+        ['media-download', 'Media and download links'],
+        ['any', 'Any external link']
+      ])), SettingsUI.row('Known media and download hosts', SettingsUI.field('knownHosts', draft.knownHosts, {
+        textarea: true
+      })));
+      panel.append(files, evidence, links);
+      return panel;
+    },
+    buildScanning(draft) {
+      const panel = SettingsUI.panel('scanning', 'Scanning');
+      const behavior = SettingsUI.section('Scan behavior');
+      behavior.append(SettingsUI.toggle('confirmCreatorCardScan', draft.confirmCreatorCardScan, 'Confirm creator card scans'), SettingsUI.toggle('synchronizeNativeFavorites', draft.synchronizeNativeFavorites, 'Synchronize native favorites during Scan and Update'));
+      const queue = SettingsUI.section('Queue and concurrency');
+      queue.append(SettingsUI.row('Concurrent creator scans', SettingsUI.select('catalogueConcurrentJobs', String(draft.catalogueConcurrentJobs), [
+        ['1', '1'],
+        ['2', '2']
+      ])));
+      panel.append(behavior, queue);
+      return panel;
+    },
+    buildData(draft) {
+      const panel = SettingsUI.panel('data', 'Data & performance');
+      const requests = SettingsUI.section('Requests');
+      requests.append(SettingsUI.row('Optional detail request concurrency', SettingsUI.select('concurrency', String(draft.concurrency), Array.from({
+        length: 10
+      }, (_, index) => [String(index + 1), String(index + 1)]))), SettingsUI.toggle('retryFailed', draft.retryFailed, 'Retry failed optional detail requests'));
+      const favorites = SettingsUI.section('Native Favorites');
+      const actions = SettingsUI.el('div', 'pmf-settings-actions');
+      actions.append(SettingsUI.action('Synchronize native favorites now', 'sync-favorites'), SettingsUI.action('Stop synchronization', 'stop-favorites'));
+      favorites.append(actions);
+      const stored = SettingsUI.section('Stored Catalogue');
+      const clear = SettingsUI.el('div', 'pmf-settings-actions');
+      clear.append(SettingsUI.action('Update missing-attachment metadata', 'update-missing-attachment-metadata'), SettingsUI.action('Stop metadata update', 'stop-missing-attachment-metadata'), SettingsUI.action('Resume metadata update', 'resume-missing-attachment-metadata'), SettingsUI.action('Retry failed metadata', 'retry-failed-missing-attachment-metadata'), SettingsUI.action('Repair creator profile metadata', 'repair-creator-profile-metadata'), SettingsUI.action('Stop creator repair', 'stop-creator-profile-repair'), SettingsUI.action('Resume creator repair', 'resume-creator-profile-repair'), SettingsUI.action('Retry failed creator repair', 'retry-failed-creator-profile-repair'), SettingsUI.action("Clear this creator's full catalogue scan", 'clear-creator', {
+        danger: true
+      }), SettingsUI.action('Clear all full catalogue scans', 'clear-all', {
+        danger: true
+      }));
+      const status = SettingsUI.el('p', 'pmf-maintenance-status');
+      status.dataset.maintenanceStatus = 'true';
+      stored.append(clear, status);
+      panel.append(requests, favorites, stored);
+      return panel;
+    },
+    showChild(name) {
+      const dialog = App.ui?.settings?.querySelector?.('.pmf-settings-dialog');
+      if (!dialog) return;
+      const draft = App.ui.settingsDraft;
+      const content = dialog.querySelector('.pmf-settings-content');
+      App.ui.settingsParentScroll = content.scrollTop;
+      content.replaceChildren();
+      const child = SettingsUI.el('div', 'pmf-settings-child');
+      const back = SettingsUI.action('‹ Back to settings', 'child-back');
+      back.classList.add('pmf-settings-back');
+      const childTitle = name === 'seen-dim' ? 'Dim seen post cards' : name === 'hidden-creator-dim' ? 'Hidden creator-card appearance' : name === 'creator-status-badges' ? 'Creator-card status badges' : name === 'post-status-badges' ? 'Post status badges' : name === 'creator-attachment-badges' ? 'Creator card attachment badges' : 'Post card attachment badges';
+      child.append(back, SettingsUI.el('h2', '', childTitle));
+      if (name === 'seen-dim' || name === 'hidden-creator-dim') {
+        const creator = name === 'hidden-creator-dim';
+        const setting = creator ? draft.hiddenCreatorTreatment : draft.seenCardTreatment;
+        const appearance = SettingsUI.section('Appearance');
+        const strength = SettingsUI.select(creator ? 'hiddenCreatorTreatmentStrength' : 'seenCardTreatmentStrength', setting.strength, [
+          ['low', 'Low'],
+          ['medium', 'Medium'],
+          ['high', 'High']
+        ]);
+        strength.querySelector('select').disabled = !setting.enabled;
+        appearance.append(SettingsUI.row('Dim strength', strength));
+        child.append(appearance);
+      } else {
+        const status = name === 'post-status-badges';
+        const creatorStatus = name === 'creator-status-badges';
+        const creator = name === 'creator-attachment-badges';
+        const key = status ? 'postStatusBadges' : creatorStatus ? 'creatorStatusBadges' : creator ? 'creatorCardBadges' : 'catalogueBadges';
+        const choices = status ? [
+          ['favorited', 'Favorited'],
+          ['liked', 'Liked'],
+          ['seen', 'Seen']
+        ] : creatorStatus ? [
+          ['favorited', 'Favorited'],
+          ['liked', 'Liked'],
+          ['hidden', 'Hidden']
+        ] : [
+          ['videos', 'Videos'],
+          ['images', 'Images'],
+          ['archives', 'Archives'],
+          ['projectFiles', 'Project files'],
+          ['externalLinks', 'External links']
+        ];
+        const sizeName = status ? 'postStatusBadgeSize' : creatorStatus ? 'creatorStatusBadgeSize' : creator ? 'creatorAttachmentBadgeSize' : 'postAttachmentBadgeSize';
+        const appearance = SettingsUI.section('Appearance');
+        appearance.append(SettingsUI.row(status ? 'Post status badge size' : creatorStatus ? 'Badge size' : 'Attachment badge size', SettingsUI.select(sizeName, draft[sizeName], [
+          ['small', 'Small'],
+          ['medium', 'Medium'],
+          ['big', 'Big']
+        ])));
+        if (creator) {
+          appearance.append(SettingsUI.row('Count method', SettingsUI.select('creatorCardBadgeCountMode', draft.creatorCardBadgeCountMode, [
+            ['posts', 'Posts containing media'],
+            ['attachments', 'Total attachments/links from every post']
+          ])));
+          appearance.append(SettingsUI.toggle('excludePostsWithMissingAttachments', draft.excludePostsWithMissingAttachments, 'Hide and don’t count posts with missing attachments'));
+        }
+        const visible = SettingsUI.section(status ? 'Visible statuses' : creatorStatus ? 'Visible badges' : 'Visible badge types');
+        choices.forEach(([field, label]) => visible.append(SettingsUI.toggle(`child-${key}-${field}`, draft[key].types[field], label)));
+        child.append(appearance, visible);
+      }
+      content.append(child);
+      App.ui.settingsChild = name;
+    },
+    collect(dialog, draft) {
+      const get = (name) => dialog.querySelector(`[name="${name}"]`);
+      const readExtensions = (name) => Util.normalizeExtensions(String(get(name)?.value || draft[name].join(',')).split(/[\s,]+/)).values;
+      return Settings.normalize({
+        ...draft,
+        compactCardScale: get('compactCardScale')?.value || draft.compactCardScale,
+        compactThumbnailAspectRatio: get('compactThumbnailAspectRatio')?.value || draft.compactThumbnailAspectRatio,
+        postAttachmentBadgeSize: get('postAttachmentBadgeSize')?.value || draft.postAttachmentBadgeSize,
+        creatorAttachmentBadgeSize: get('creatorAttachmentBadgeSize')?.value || draft.creatorAttachmentBadgeSize,
+        postStatusBadgeSize: get('postStatusBadgeSize')?.value || draft.postStatusBadgeSize,
+        creatorStatusBadgeSize: get('creatorStatusBadgeSize')?.value || draft.creatorStatusBadgeSize,
+        creatorCardBadgeCountMode: get('creatorCardBadgeCountMode')?.value || draft.creatorCardBadgeCountMode,
+        excludePostsWithMissingAttachments: get('excludePostsWithMissingAttachments')?.checked ?? draft.excludePostsWithMissingAttachments,
+        confirmCreatorCardScan: get('confirmCreatorCardScan')?.checked ?? draft.confirmCreatorCardScan,
+        synchronizeNativeFavorites: get('synchronizeNativeFavorites')?.checked ?? draft.synchronizeNativeFavorites,
+        catalogueConcurrentJobs: Number(get('catalogueConcurrentJobs')?.value || draft.catalogueConcurrentJobs),
+        concurrency: Number(get('concurrency')?.value || draft.concurrency),
+        retryFailed: get('retryFailed')?.checked ?? draft.retryFailed,
+        externalLinkScope: get('externalLinkScope')?.value || draft.externalLinkScope,
+        videoExtensions: readExtensions('videoExtensions'),
+        imageExtensions: readExtensions('imageExtensions'),
+        archiveExtensions: readExtensions('archiveExtensions'),
+        projectExtensions: readExtensions('projectExtensions'),
+        projectKeywords: String(get('projectKeywords')?.value || draft.projectKeywords.join('\n')).split(/\n+/).map((value) => value.trim()).filter(Boolean),
+        knownHosts: String(get('knownHosts')?.value || draft.knownHosts.join('\n')).split(/[\s,]+/).filter(Boolean),
+        projectEvidence: Object.fromEntries(Object.keys(draft.projectEvidence).map((key) => [key, get(`project-${key}`)?.checked ?? draft.projectEvidence[key]])),
+        catalogueBadges: {
+          ...draft.catalogueBadges,
+          alwaysShow: get('catalogueBadgesAlways')?.checked ?? draft.catalogueBadges.alwaysShow
+        },
+        creatorCardBadges: {
+          ...draft.creatorCardBadges,
+          enabled: get('creatorCardBadgesEnabled')?.checked ?? draft.creatorCardBadges.enabled
+        },
+        postStatusBadges: {
+          ...draft.postStatusBadges,
+          enabled: get('postStatusBadgesEnabled')?.checked ?? draft.postStatusBadges.enabled
+        },
+        creatorStatusBadges: {
+          ...draft.creatorStatusBadges,
+          enabled: get('creatorStatusBadgesEnabled')?.checked ?? draft.creatorStatusBadges.enabled
+        },
+        seenCardTreatment: {
+          ...draft.seenCardTreatment,
+          enabled: get('seenCardTreatmentEnabled')?.checked ?? draft.seenCardTreatment.enabled,
+          strength: get('seenCardTreatmentStrength')?.value || draft.seenCardTreatment.strength
+        },
+        hiddenCreatorTreatment: {
+          ...draft.hiddenCreatorTreatment,
+          enabled: get('hiddenCreatorTreatmentEnabled')?.checked ?? draft.hiddenCreatorTreatment.enabled,
+          strength: get('hiddenCreatorTreatmentStrength')?.value || draft.hiddenCreatorTreatment.strength
+        }
+      });
+    },
+    renderParent(active = 'general') {
+      const dialog = App.ui.settings.querySelector('.pmf-settings-dialog');
+      const content = dialog.querySelector('.pmf-settings-content');
+      const draft = App.ui.settingsDraft;
+      content.replaceChildren(SettingsUI.buildGeneral(draft), SettingsUI.buildDetection(draft), SettingsUI.buildScanning(draft), SettingsUI.buildData(draft));
+      dialog.querySelectorAll('[data-pmf-settings-tab]').forEach((button) => button.classList.toggle('pmf-active', button.dataset.pmfSettingsTab === active));
+      content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel) => panel.hidden = panel.dataset.pmfSettingsPanel !== active);
+      content.scrollTop = App.ui.settingsParentScroll || 0;
+      App.ui.settingsChild = '';
+    },
+    preview(dialog) {
+      const draft = SettingsUI.collect(dialog, App.ui.settingsDraft);
+      App.ui.settingsDraft = draft;
+      App.ui.previewStatusBadgeSize = draft.postStatusBadgeSize;
+      const priorSize = App.filteredPageSize();
+      const matches = App.matchingPosts();
+      App.filteredFirstResultIndex = Math.max(0, (App.filteredPage - 1) * priorSize);
+      App.filteredAnchorId = matches[App.filteredFirstResultIndex]?.id || App.filteredAnchorId;
+      CompactLayoutEngine.preview({
+        scale: draft.compactCardScale,
+        ratio: draft.compactThumbnailAspectRatio
+      });
+      AttachmentBadgeSizing.preview('post', draft.postAttachmentBadgeSize);
+      AttachmentBadgeSizing.preview('creator', draft.creatorAttachmentBadgeSize);
+      const nextSize = App.filteredPageSize();
+      if (nextSize !== priorSize) {
+        App.restoreFirstResultPage(matches.length);
+        App.render();
+      }
+      App.ui?.grid?.querySelectorAll?.('article.post-card[data-id]').forEach((card) => {
+        const post = App.catalog.get(String(card.dataset.id));
+        PostStatusBadgeRenderer.apply(card, post);
+        SeenCardTreatment.apply(card, post);
+      });
+    },
+    open() {
+      UI.closeSettings('reopen');
+      const draft = Util.clone(Settings.value);
+      const backdrop = SettingsUI.el('div', 'pmf-modal-backdrop');
+      const dialog = SettingsUI.el('section', 'pmf-dialog pmf-settings-dialog pmf-surface');
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      const header = SettingsUI.el('header');
+      header.append(SettingsUI.el('strong', '', 'Media Filter settings'));
+      const close = SettingsUI.action('×', 'cancel');
+      close.classList.add('pmf-icon-close');
+      header.append(close);
+      const layout = SettingsUI.el('div', 'pmf-settings-layout');
+      const nav = SettingsUI.el('nav');
+      [
+        ['general', 'General'],
+        ['default-detection', 'Default detection'],
+        ['scanning', 'Scanning'],
+        ['data', 'Data & performance']
+      ].forEach(([key, label]) => {
+        const button = SettingsUI.action(label, 'tab');
+        button.dataset.pmfSettingsTab = key;
+        nav.append(button);
+      });
+      const content = SettingsUI.el('div', 'pmf-settings-content');
+      layout.append(nav, content);
+      const footer = SettingsUI.el('footer');
+      footer.append(SettingsUI.action('Reset all settings', 'reset'), SettingsUI.el('span'), SettingsUI.action('Cancel', 'cancel'));
+      const save = SettingsUI.action('Save & apply', 'save');
+      save.classList.add('pmf-primary');
+      footer.append(save);
+      dialog.append(header, layout, footer);
+      backdrop.append(dialog);
+      App.ui.root.append(backdrop);
+      App.ui.settings = backdrop;
+      App.ui.settingsDraft = draft;
+      App.ui.settingsOpeningSnapshot = Util.clone(Settings.value);
+      App.ui.settingsPreview = {
+        compactCardScale: Settings.value.compactCardScale,
+        compactThumbnailAspectRatio: Settings.value.compactThumbnailAspectRatio,
+        postAttachmentBadgeSize: Settings.value.postAttachmentBadgeSize,
+        creatorAttachmentBadgeSize: Settings.value.creatorAttachmentBadgeSize,
+        committed: false
+      };
+      App.ui.settingsOverlayId = OverlayManager.open({
+        node: dialog,
+        root: backdrop,
+        modal: true,
+        onClose: (reason) => {
+          App.ui?.settingsMaintenanceUnsubscribe?.();
+          const preview = App.ui?.settingsPreview;
+          if (preview && !preview.committed) {
+            CompactLayoutEngine.restorePreview({
+              apply: true
+            });
+            AttachmentBadgeSizing.restorePreview();
+            App.render();
+          }
+          if (App.ui) {
+            App.ui.previewStatusBadgeSize = null;
+            App.ui.settings = null;
+            App.ui.settingsDraft = null;
+            App.ui.settingsOverlayId = null;
+            App.ui.settingsMaintenanceUnsubscribe = null;
+          }
+          Logger.info({
+            operation: 'settings-close',
+            reason
+          });
+        }
+      });
       SettingsUI.renderParent();
-      App.ui.settingsMaintenanceUnsubscribe=SettingsUI.bindMaintenance(backdrop);
-      backdrop.addEventListener('click',async(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-pmf-settings-tab]')?.dataset.pmfSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)SettingsUI.renderParent(tab);if(child){App.ui.settingsDraft=SettingsUI.collect(dialog,App.ui.settingsDraft);SettingsUI.showChild(child);}if(action==='child-back')SettingsUI.renderParent('general');if(action==='cancel')UI.closeSettings('cancel');if(action==='save'){App.ui.settingsDraft=SettingsUI.collect(dialog,App.ui.settingsDraft);Settings.save(App.ui.settingsDraft);App.ui.settingsPreview.committed=true;CompactLayoutEngine.restorePreview({apply:false});AttachmentBadgeSizing.commit();CatalogueJobManager.setConcurrency(Settings.value.catalogueConcurrentJobs);UI.closeSettings('save');App.render();App.persistUIState();}if(action==='reset'){App.ui.settingsDraft=Util.clone(DefaultSettings);SettingsUI.renderParent('general');SettingsUI.preview(dialog);}if(action==='sync-favorites')await FavoriteSyncCoordinator.run({manual:true});if(action==='stop-favorites')FavoriteSyncCoordinator.stop();if(action==='update-missing-attachment-metadata')MissingAttachmentMaintenance.run();if(action==='stop-missing-attachment-metadata')MissingAttachmentMaintenance.stop();if(action==='resume-missing-attachment-metadata')MissingAttachmentMaintenance.resume();if(action==='repair-creator-profile-metadata')CreatorProfileRepairManager.run();if(action==='stop-creator-profile-repair')CreatorProfileRepairManager.stop();if(action==='clear-creator')UI.confirmClear('catalogue-creator');if(action==='clear-all')UI.confirmClear('catalogue-all');});
-      backdrop.addEventListener('change',(event)=>{if(App.ui.settingsChild){const current=App.ui.settingsDraft;const name=event.target.name;if(name==='seenCardTreatmentStrength')current.seenCardTreatment.strength=event.target.value;else if(name==='hiddenCreatorTreatmentStrength')current.hiddenCreatorTreatment.strength=event.target.value;else if(['postAttachmentBadgeSize','creatorAttachmentBadgeSize','postStatusBadgeSize','creatorStatusBadgeSize','creatorCardBadgeCountMode'].includes(name))current[name]=event.target.value;else if(name?.startsWith('child-')){const [,key,...fieldParts]=name.split('-');current[key].types[fieldParts.join('-')]=event.target.checked;}SettingsUI.preview(dialog);}else SettingsUI.preview(dialog);});
+      App.ui.settingsMaintenanceUnsubscribe = SettingsUI.bindMaintenance(backdrop);
+      backdrop.addEventListener('click', async (event) => {
+        const action = event.target.closest('[data-settings-action]')?.dataset.settingsAction;
+        const tab = event.target.closest('[data-pmf-settings-tab]')?.dataset.pmfSettingsTab;
+        const child = event.target.closest('[data-settings-child]')?.dataset.settingsChild;
+        if (tab) SettingsUI.renderParent(tab);
+        if (child) {
+          App.ui.settingsDraft = SettingsUI.collect(dialog, App.ui.settingsDraft);
+          SettingsUI.showChild(child);
+        }
+        if (action === 'child-back') SettingsUI.renderParent('general');
+        if (action === 'cancel') UI.closeSettings('cancel');
+        if (action === 'save') {
+          App.ui.settingsDraft = SettingsUI.collect(dialog, App.ui.settingsDraft);
+          Settings.save(App.ui.settingsDraft);
+          App.ui.settingsPreview.committed = true;
+          CompactLayoutEngine.restorePreview({
+            apply: false
+          });
+          AttachmentBadgeSizing.commit();
+          CatalogueJobManager.setConcurrency(Settings.value.catalogueConcurrentJobs);
+          UI.closeSettings('save');
+          App.render();
+          App.persistUIState();
+        }
+        if (action === 'reset') {
+          App.ui.settingsDraft = Util.clone(DefaultSettings);
+          SettingsUI.renderParent('general');
+          SettingsUI.preview(dialog);
+        }
+        if (action === 'sync-favorites') await FavoriteSyncCoordinator.run({
+          manual: true
+        });
+        if (action === 'stop-favorites') FavoriteSyncCoordinator.stop();
+        if (action === 'update-missing-attachment-metadata') MissingAttachmentMaintenance.openScopeDialog(event.target);
+        if (action === 'stop-missing-attachment-metadata') MissingAttachmentMaintenance.stop();
+        if (action === 'resume-missing-attachment-metadata') MissingAttachmentMaintenance.resume();
+        if (action === 'retry-failed-missing-attachment-metadata') MissingAttachmentMaintenance.retryFailed();
+        if (action === 'repair-creator-profile-metadata') CreatorProfileRepairManager.run();
+        if (action === 'stop-creator-profile-repair') CreatorProfileRepairManager.stop();
+        if (action === 'resume-creator-profile-repair') CreatorProfileRepairManager.resume();
+        if (action === 'retry-failed-creator-profile-repair') CreatorProfileRepairManager.retryFailed();
+        if (action === 'clear-creator') UI.confirmClear('catalogue-creator');
+        if (action === 'clear-all') UI.confirmClear('catalogue-all');
+      });
+      backdrop.addEventListener('change', (event) => {
+        if (App.ui.settingsChild) {
+          const current = App.ui.settingsDraft;
+          const name = event.target.name;
+          if (name === 'seenCardTreatmentStrength') current.seenCardTreatment.strength = event.target.value;
+          else if (name === 'hiddenCreatorTreatmentStrength') current.hiddenCreatorTreatment.strength = event.target.value;
+          else if (['postAttachmentBadgeSize', 'creatorAttachmentBadgeSize', 'postStatusBadgeSize', 'creatorStatusBadgeSize', 'creatorCardBadgeCountMode'].includes(name)) current[name] = event.target.value;
+          else if (name?.startsWith('child-')) {
+            const [, key, ...fieldParts] = name.split('-');
+            current[key].types[fieldParts.join('-')] = event.target.checked;
+          }
+          SettingsUI.preview(dialog);
+        } else SettingsUI.preview(dialog);
+      });
     },
   };
+
+
 
   UI.openSettings=SettingsUI.open;
 
@@ -4277,46 +5129,564 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
   };
 
   const CreatorIndexUI = {
-    root:null,modeSelector:null,toolbar:null,grid:null,stateNode:null,paginator:null,queuePanel:null,queueButton:null,found:null,nativeGrid:null,nativeSnapshot:null,nativeGeometry:null,searchInput:null,searchController:null,records:[],nativeRecords:[],page:1,pageSize:50,query:'',mode:CreatorDirectoryMode.load(),nativeScannedFilter:'off',sort:{mode:'popularity',direction:'desc'},filterState:CreatorFilterEngine.normalizeState(GM_getValue(Config.creatorFilterStateKey,{})),statusFilters:CreatorStatusFilters.load(),unsubscribe:null,
+    root: null,
+    modeSelector: null,
+    toolbar: null,
+    grid: null,
+    stateNode: null,
+    paginator: null,
+    queuePanel: null,
+    queueButton: null,
+    found: null,
+    nativeGrid: null,
+    nativeSnapshot: null,
+    nativeGeometry: null,
+    searchInput: null,
+    searchController: null,
+    records: [],
+    nativeRecords: [],
+    page: 1,
+    pageSize: 50,
+    query: '',
+    mode: CreatorDirectoryMode.load(),
+    nativeScannedFilter: 'off',
+    sort: {
+      mode: 'popularity',
+      direction: 'desc'
+    },
+    filterState: CreatorFilterEngine.normalizeState(GM_getValue(Config.creatorFilterStateKey, {})),
+    statusFilters: CreatorStatusFilters.load(),
+    unsubscribe: null,
+    recordsRevision: 0,
+    filteredCache: null,
+    renderedPageKey: '',
+    retainedSession: null,
+    loading: false,
+    refreshing: false,
     mount(found) {
-      CreatorIndexUI.cleanup({restoreNative:false});Object.assign(CreatorIndexUI,{found,nativeGrid:found.grid,nativeGeometry:CreatorGridGeometry.measure(found.grid),searchInput:found.searchInput,nativeSnapshot:NativeArtistsVisibility.capture(found)});CreatorCardReconstructor.capture(ArtistsDOM.creatorCards(found,{nativeOnly:true})[0]);
-      const modeSelector=document.createElement('div');modeSelector.id='pmf-creator-mode-selector';modeSelector.dataset.pmfOwned='true';modeSelector.setAttribute('role','group');modeSelector.setAttribute('aria-label','Creator directory mode');modeSelector.innerHTML='<span>Directory mode</span><div class="pmf-mode-segments"><button type="button" data-creator-mode="native">Native directory</button><button type="button" data-creator-mode="catalogue">Catalogue</button></div>';if(found.searchForm)found.searchForm.append(modeSelector);else found.searchInput?.insertAdjacentElement('afterend',modeSelector);const searchWidth=Math.round(found.searchInput?.getBoundingClientRect?.().width||0);if(searchWidth)modeSelector.style.setProperty('--pmf-search-control-width',`${searchWidth}px`);
-      const root=document.createElement('section');root.id='pmf-artists-root';root.dataset.pmfOwned='true';root.dataset.pmfInstance=INSTANCE_ID;const toolbar=document.createElement('section');toolbar.className='pmf-toolbar pmf-creator-index-toolbar';const paginator=document.createElement('div');paginator.className='pmf-filtered-paginator pmf-creator-index-paginator';const state=document.createElement('div');state.className='pmf-creator-index-state';state.dataset.pmfOwned='true';state.setAttribute('role','status');const grid=document.createElement('div');grid.className='pmf-creator-index-grid';grid.dataset.pmfOwned='true';root.append(toolbar,paginator,state,grid);found.grid.insertAdjacentElement('beforebegin',root);CreatorGridGeometry.apply(grid,CreatorIndexUI.nativeGeometry);Object.assign(CreatorIndexUI,{root,modeSelector,toolbar,paginator,stateNode:state,grid});
-      modeSelector.addEventListener('click',(event)=>{const mode=event.target.closest('[data-creator-mode]')?.dataset.creatorMode;if(mode)CreatorIndexUI.setMode(mode);});root.addEventListener('click',(event)=>{if(event.target.closest('[data-queue-action],[data-queue-tab]'))CreatorQueuePanel.handle(event);else CreatorIndexUI.handle(event);});root.addEventListener('change',(event)=>CreatorIndexUI.handleChange(event));CreatorIndexUI.unsubscribe=CatalogueJobManager.subscribe((snapshot)=>CreatorQueuePanel.render(snapshot));CreatorIndexUI.applyMode({refresh:false});return root;
+      CreatorIndexUI.cleanup({
+        restoreNative: false
+      });
+      Object.assign(CreatorIndexUI, {
+        found,
+        nativeGrid: found.grid,
+        nativeGeometry: CreatorGridGeometry.measure(found.grid),
+        searchInput: found.searchInput,
+        nativeSnapshot: NativeArtistsVisibility.capture(found)
+      });
+      CreatorIndexUI.restoreRetainedSession();
+      CreatorCardReconstructor.capture(ArtistsDOM.creatorCards(found, {
+        nativeOnly: true
+      })[0]);
+      const modeSelector = document.createElement('div');
+      modeSelector.id = 'pmf-creator-mode-selector';
+      modeSelector.dataset.pmfOwned = 'true';
+      modeSelector.setAttribute('role', 'group');
+      modeSelector.setAttribute('aria-label', 'Creator directory mode');
+      modeSelector.innerHTML = '<span>Directory mode</span><div class="pmf-mode-segments"><button type="button" data-creator-mode="native">Native directory</button><button type="button" data-creator-mode="catalogue">Catalogue</button></div>';
+      if (found.searchForm) found.searchForm.append(modeSelector);
+      else found.searchInput?.insertAdjacentElement('afterend', modeSelector);
+      const searchWidth = Math.round(found.searchInput?.getBoundingClientRect?.().width || 0);
+      if (searchWidth) modeSelector.style.setProperty('--pmf-search-control-width', `${searchWidth}px`);
+      const root = document.createElement('section');
+      root.id = 'pmf-artists-root';
+      root.dataset.pmfOwned = 'true';
+      root.dataset.pmfInstance = INSTANCE_ID;
+      const toolbar = document.createElement('section');
+      toolbar.className = 'pmf-toolbar pmf-creator-index-toolbar';
+      const paginator = document.createElement('div');
+      paginator.className = 'pmf-filtered-paginator pmf-creator-index-paginator';
+      const state = document.createElement('div');
+      state.className = 'pmf-creator-index-state';
+      state.dataset.pmfOwned = 'true';
+      state.setAttribute('role', 'status');
+      const grid = document.createElement('div');
+      grid.className = 'pmf-creator-index-grid';
+      grid.dataset.pmfOwned = 'true';
+      root.append(toolbar, paginator, state, grid);
+      found.grid.insertAdjacentElement('beforebegin', root);
+      CreatorGridGeometry.apply(grid, CreatorIndexUI.nativeGeometry);
+      Object.assign(CreatorIndexUI, {
+        root,
+        modeSelector,
+        toolbar,
+        paginator,
+        stateNode: state,
+        grid
+      });
+      modeSelector.addEventListener('click', (event) => {
+        const mode = event.target.closest('[data-creator-mode]')?.dataset.creatorMode;
+        if (mode) CreatorIndexUI.setMode(mode);
+      });
+      root.addEventListener('click', (event) => {
+        if (event.target.closest('[data-queue-action],[data-queue-tab]')) CreatorQueuePanel.handle(event);
+        else CreatorIndexUI.handle(event);
+      });
+      root.addEventListener('change', (event) => CreatorIndexUI.handleChange(event));
+      CreatorIndexUI.unsubscribe = CatalogueJobManager.subscribe((snapshot) => CreatorQueuePanel.render(snapshot));
+      CreatorIndexUI.applyMode({
+        refresh: false
+      });
+      // Paint retained Local data (or the contained loading shell) immediately.
+      // The IndexedDB refresh below must never be the first visible render.
+      CreatorIndexUI.render();
+      const retainedScrollY = Number(CreatorIndexUI.retainedSession?.scrollY) || 0;
+      if (CreatorIndexUI.mode === 'catalogue' && retainedScrollY > 0) {
+        requestAnimationFrame(() => {
+          if (CreatorIndexUI.root?.isConnected && CreatorIndexUI.mode === 'catalogue') {
+            window.scrollTo?.({ top: retainedScrollY, behavior: 'auto' });
+          }
+        });
+      }
+      return root;
     },
-    sortLabel(){const item=CreatorSortUI.modes.find(([mode])=>mode===CreatorIndexUI.sort.mode);return`${item?.[1]||'Popularity'} ${CreatorIndexUI.sort.direction==='asc'?'▲':'▼'}`;},
-    chrome(){
-      const native=CreatorIndexUI.mode==='native';CreatorIndexUI.toolbar.innerHTML=native?`<div class="pmf-controls pmf-native-proxy-controls"><button class="pmf-filter-button pmf-menu-trigger" data-creator-index-action="native-service" aria-haspopup="menu"><span data-proxy-label>Any service</span><span aria-hidden="true">▾</span></button><button class="pmf-sort-button pmf-menu-trigger" data-creator-index-action="native-sort" aria-haspopup="menu"><span data-proxy-label>Sort</span><span data-proxy-direction aria-hidden="true">▼</span></button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-primary">Scan</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More scan actions" aria-haspopup="menu">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div>`:`<div class="pmf-controls"><button class="pmf-filter-button" data-creator-index-action="filter">All Catalogue creators</button><button class="pmf-sort-button" data-creator-index-action="sort" aria-haspopup="menu">Sort: ${CreatorIndexUI.sortLabel()}</button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-primary">Update</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More update actions" aria-haspopup="menu">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div>`;
-      CreatorIndexUI.toolbar.insertAdjacentHTML('beforeend',`<div class="pmf-status ${native?'pmf-native-status':''}"><div class="pmf-status-actions"><button class="pmf-details-link" data-creator-index-action="queue">Queue empty</button></div>${native?'':'<div class="pmf-status-left"><strong data-creator-matches>0 matches</strong></div>'}<div class="pmf-status-right" data-creator-summary></div></div><section class="pmf-catalogue-details pmf-creator-queue-panel" hidden></section>`);CreatorIndexUI.queuePanel=CreatorIndexUI.toolbar.querySelector('.pmf-creator-queue-panel');CreatorIndexUI.queueButton=CreatorIndexUI.toolbar.querySelector('[data-creator-index-action="queue"]');CreatorQueuePanel.render();return !native||NativeArtistsProxy.sync(CreatorIndexUI.found,CreatorIndexUI.toolbar);
+    sortLabel() {
+      const item = CreatorSortUI.modes.find(([mode]) => mode === CreatorIndexUI.sort.mode);
+      return `${item?.[1]||'Popularity'} ${CreatorIndexUI.sort.direction==='asc'?'▲':'▼'}`;
     },
-    quickButton(field,icon,label){const button=document.createElement('button');button.type='button';button.dataset.creatorStatusFilter=field;button.innerHTML=`<span class="pmf-quick-status-main">${icon}</span><span class="pmf-quick-status-negate">${Icons.x}</span>`;button.setAttribute('aria-label',label);return button;},
-    buildPaginator(){
-      CreatorIndexUI.paginator.replaceChildren();const quick=document.createElement('div');quick.className='pmf-quick-status-filters';quick.setAttribute('aria-label','Creator status filters');if(CreatorIndexUI.mode==='native')quick.append(CreatorIndexUI.quickButton('native-scanned',Icons.check,'Hide scanned creators on this Pawchive page'));else[['favorite',Icons.star,'Favorite creator filter'],['liked',Icons.heart,'Like creator filter'],['hidden',Icons.eye,'Hidden creator filter']].forEach(([field,icon,label])=>quick.append(CreatorIndexUI.quickButton(field,icon,label)));CreatorIndexUI.paginator.append(quick);if(CreatorIndexUI.mode==='native'){const mirror=document.createElement('div');mirror.className='pmf-native-paginator-mirror';CreatorIndexUI.paginator.append(mirror);NativeArtistsProxy.paginator(CreatorIndexUI.found,mirror);}else CreatorIndexUI.paginator.insertAdjacentHTML('beforeend','<small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>');CreatorIndexUI.updateQuickFilters();
+    chrome() {
+      const native = CreatorIndexUI.mode === 'native';
+      CreatorIndexUI.toolbar.innerHTML = native ? `<div class="pmf-controls pmf-native-proxy-controls"><button class="pmf-filter-button pmf-menu-trigger" data-creator-index-action="native-service" aria-haspopup="menu"><span data-proxy-label>Any service</span><span aria-hidden="true">▾</span></button><button class="pmf-sort-button pmf-menu-trigger" data-creator-index-action="native-sort" aria-haspopup="menu"><span data-proxy-label>Sort</span><span data-proxy-direction aria-hidden="true">▼</span></button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-primary">Scan</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More scan actions" aria-haspopup="menu">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div>` : `<div class="pmf-controls"><button class="pmf-filter-button" data-creator-index-action="filter">All Catalogue creators</button><button class="pmf-sort-button" data-creator-index-action="sort" aria-haspopup="menu">Sort: ${CreatorIndexUI.sortLabel()}</button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-primary">Update</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More update actions" aria-haspopup="menu">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div>`;
+      CreatorIndexUI.toolbar.insertAdjacentHTML('beforeend', `<div class="pmf-status ${native?'pmf-native-status':''}"><div class="pmf-status-actions"><button class="pmf-details-link" data-creator-index-action="queue">Queue empty</button></div>${native?'':'<div class="pmf-status-left"><strong data-creator-matches>0 matches</strong></div>'}<div class="pmf-status-right" data-creator-summary></div></div><section class="pmf-catalogue-details pmf-creator-queue-panel" hidden></section>`);
+      CreatorIndexUI.queuePanel = CreatorIndexUI.toolbar.querySelector('.pmf-creator-queue-panel');
+      CreatorIndexUI.queueButton = CreatorIndexUI.toolbar.querySelector('[data-creator-index-action="queue"]');
+      CreatorQueuePanel.render();
+      return !native || NativeArtistsProxy.sync(CreatorIndexUI.found, CreatorIndexUI.toolbar);
     },
-    bindSearch(){
-      CreatorIndexUI.searchController?.abort();CreatorIndexUI.searchController=null;const input=CreatorIndexUI.searchInput;if(!input)return;if(CreatorIndexUI.mode==='native'){input.placeholder=CreatorIndexUI.nativeSnapshot.searchPlaceholder;return;}const controller=new AbortController();CreatorIndexUI.searchController=controller;const update=Util.debounce(()=>{CreatorIndexUI.query=input.value.trim().toLocaleLowerCase();CreatorIndexUI.page=1;CreatorIndexUI.render();},180);input.placeholder='Search Catalogue creators…';input.addEventListener('input',update,{signal:controller.signal});input.form?.addEventListener('submit',(event)=>{event.preventDefault();CreatorIndexUI.query=input.value.trim().toLocaleLowerCase();CreatorIndexUI.page=1;CreatorIndexUI.render();},{signal:controller.signal});controller.signal.addEventListener('abort',()=>update.cancel(),{once:true});
+    quickButton(field, icon, label) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.creatorStatusFilter = field;
+      button.innerHTML = `<span class="pmf-quick-status-main">${icon}</span><span class="pmf-quick-status-negate">${Icons.x}</span>`;
+      button.setAttribute('aria-label', label);
+      return button;
     },
-    setMode(value){const mode=CreatorDirectoryMode.save(value);if(mode===CreatorIndexUI.mode)return;OverlayManager.closeAll('creator-mode-switch');CreatorIndexUI.mode=mode;CreatorIndexUI.page=1;CreatorIndexUI.query='';CreatorIndexUI.applyMode();ArtistsPageController.requestRefresh('mode-switch');},
-    applyMode({refresh=true}={}){if(!CreatorIndexUI.root)return;CreatorIndexUI.modeSelector.querySelectorAll('[data-creator-mode]').forEach((button)=>{const active=button.dataset.creatorMode===CreatorIndexUI.mode;button.classList.toggle('pmf-active',active);button.setAttribute('aria-pressed',String(active));});const ready=CreatorIndexUI.chrome();CreatorIndexUI.buildPaginator();CreatorIndexUI.bindSearch();NativeArtistsVisibility.apply(CreatorIndexUI.nativeSnapshot,CreatorIndexUI.mode,{proxiesReady:ready});CreatorIndexUI.grid.hidden=CreatorIndexUI.mode==='native';CreatorIndexUI.stateNode.hidden=true;if(refresh)CreatorIndexUI.render();},
-    setState(kind,message){if(!CreatorIndexUI.stateNode)return;CreatorIndexUI.stateNode.dataset.state=kind;CreatorIndexUI.stateNode.textContent=message||'';CreatorIndexUI.stateNode.hidden=!message;},
-    setRecords(records,nativeRecords=[]){CreatorIndexUI.records=records.filter((record)=>record.scanned);CreatorIndexUI.nativeRecords=nativeRecords;CreatorIndexUI.render();},
-    filteredRecords(){if(CreatorIndexUI.mode==='native')return CreatorIndexUI.nativeRecords.filter((record)=>CreatorIndexUI.nativeScannedFilter!=='no-match'||!record.scanned);const query=CreatorIndexUI.query;return CreatorSorter.sort(CreatorIndexUI.records.filter((record)=>{const text=`${record.directory.creatorName} ${record.directory.service} ${record.directory.creatorId}`.toLocaleLowerCase();return(!query||text.includes(query))&&CreatorStatusFilters.matches(record,CreatorIndexUI.statusFilters)&&CreatorFilterEngine.matches(record,CreatorIndexUI.filterState);}),CreatorIndexUI.sort);},
-    visibleRecords(){const records=CreatorIndexUI.filteredRecords();if(CreatorIndexUI.mode==='native')return records.filter((record)=>record.nativeInfo?.card?.isConnected&&!record.nativeInfo.card.hidden);const start=(CreatorIndexUI.page-1)*CreatorIndexUI.pageSize;return records.slice(start,start+CreatorIndexUI.pageSize);},
-    context(record){return{creatorKey:record.directory.creatorKey,domain:record.directory.domain,service:record.directory.service,creatorId:record.directory.creatorId,creatorUrl:record.directory.creatorUrl};},
-    decorateNative(){
-      const visible=CreatorIndexUI.filteredRecords();const included=new Set(visible.map((record)=>record.directory.creatorKey));CreatorIndexUI.nativeRecords.forEach((record)=>{const info=record.nativeInfo;if(!info)return;info.card.hidden=!included.has(record.directory.creatorKey);info.card.dataset.pmfCreatorKey=record.directory.creatorKey;CreatorCardRightRail.render(info,record.meta,record.state);});ArtistsPageController.cards=visible.map((record)=>record.nativeInfo).filter(Boolean);ArtistsPageController.cardByElement=new Map(ArtistsPageController.cards.map((info)=>[info.card,info]));const summary=CreatorIndexUI.toolbar.querySelector('[data-creator-summary]');if(summary)summary.textContent='Native directory · Pawchive controls';CreatorIndexUI.setState('ready','');NativeArtistsProxy.sync(CreatorIndexUI.found,CreatorIndexUI.toolbar);const mirror=CreatorIndexUI.paginator.querySelector('.pmf-native-paginator-mirror');if(mirror)NativeArtistsProxy.paginator(CreatorIndexUI.found,mirror);CreatorIndexUI.updateQuickFilters();
+    buildPaginator() {
+      CreatorIndexUI.paginator.replaceChildren();
+      const quick = document.createElement('div');
+      quick.className = 'pmf-quick-status-filters';
+      quick.setAttribute('aria-label', 'Creator status filters');
+      if (CreatorIndexUI.mode === 'native') quick.append(CreatorIndexUI.quickButton('native-scanned', Icons.check, 'Hide scanned creators on this Pawchive page'));
+      else [
+        ['favorite', Icons.star, 'Favorite creator filter'],
+        ['liked', Icons.heart, 'Like creator filter'],
+        ['hidden', Icons.eye, 'Hidden creator filter']
+      ].forEach(([field, icon, label]) => quick.append(CreatorIndexUI.quickButton(field, icon, label)));
+      CreatorIndexUI.paginator.append(quick);
+      if (CreatorIndexUI.mode === 'native') {
+        const mirror = document.createElement('div');
+        mirror.className = 'pmf-native-paginator-mirror';
+        CreatorIndexUI.paginator.append(mirror);
+        NativeArtistsProxy.paginator(CreatorIndexUI.found, mirror);
+      } else CreatorIndexUI.paginator.insertAdjacentHTML('beforeend', '<small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>');
+      CreatorIndexUI.updateQuickFilters();
     },
-    renderCatalogue(){
-      const records=CreatorIndexUI.filteredRecords(),totalPages=Math.max(1,Math.ceil(records.length/CreatorIndexUI.pageSize));CreatorIndexUI.page=Util.clamp(CreatorIndexUI.page,1,totalPages);const start=(CreatorIndexUI.page-1)*CreatorIndexUI.pageSize,visible=records.slice(start,start+CreatorIndexUI.pageSize);CreatorIndexUI.grid.replaceChildren();visible.forEach((record)=>{const built=CreatorCardReconstructor.build(record);const info={...built,context:CreatorIndexUI.context(record),creatorName:record.directory.creatorName,displayName:record.directory.creatorName,serviceLabel:CreatorDisplayName.serviceLabel(record.directory.service)};built.card.dataset.pmfCreatorKey=record.directory.creatorKey;CreatorIndexUI.grid.append(built.card);CreatorCardRightRail.render(info,record.meta,record.state);record.renderedInfo=info;});ArtistsPageController.cards=visible.map((record)=>record.renderedInfo);ArtistsPageController.cardByElement=new Map(ArtistsPageController.cards.map((info)=>[info.card,info]));CreatorIndexUI.setState(records.length?'ready':'empty',records.length?'':'No local Catalogue creators match the current search and filters.');const matches=CreatorIndexUI.toolbar.querySelector('[data-creator-matches]'),summary=CreatorIndexUI.toolbar.querySelector('[data-creator-summary]'),count=CreatorIndexUI.paginator.querySelector('.pmf-filtered-count'),controls=CreatorIndexUI.paginator.querySelector('.pmf-page-controls');if(matches)matches.textContent=`✓ ${records.length} Catalogue creators`;if(summary)summary.textContent=`Catalogue · ${CreatorIndexUI.records.length} stored`;if(count)count.textContent=records.length?`Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}`:'Showing 0 of 0';if(controls){controls.replaceChildren();const add=(label,page,disabled,action)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.dataset.creatorPage=String(page);button.dataset.creatorPageAction=action;if(action==='page'&&page===CreatorIndexUI.page)button.setAttribute('aria-current','page');controls.append(button);};add('«',1,CreatorIndexUI.page===1,'first');add('‹',CreatorIndexUI.page-1,CreatorIndexUI.page===1,'previous');for(const page of Paginator.pageButtons(CreatorIndexUI.page,totalPages,Paginator.windowSize(Number(CreatorIndexUI.paginator?.clientWidth)||800)))add(String(page),page,page===CreatorIndexUI.page,'page');add('›',CreatorIndexUI.page+1,CreatorIndexUI.page===totalPages,'next');add('»',totalPages,CreatorIndexUI.page===totalPages,'last');}CreatorIndexUI.updateQuickFilters();
+    bindSearch() {
+      CreatorIndexUI.searchController?.abort();
+      CreatorIndexUI.searchController = null;
+      const input = CreatorIndexUI.searchInput;
+      if (!input) return;
+      if (CreatorIndexUI.mode === 'native') {
+        input.placeholder = CreatorIndexUI.nativeSnapshot.searchPlaceholder;
+        return;
+      }
+      const controller = new AbortController();
+      CreatorIndexUI.searchController = controller;
+      input.value = CreatorIndexUI.query;
+      const update = Util.debounce(() => {
+        const nextQuery = input.value.trim().toLocaleLowerCase();
+        if (nextQuery === CreatorIndexUI.query) return;
+        CreatorIndexUI.query = nextQuery;
+        CreatorIndexUI.page = 1;
+        CreatorIndexUI.invalidateFilteredCache('search');
+        CreatorIndexUI.render();
+      }, 180);
+      input.placeholder = 'Search Catalogue creators…';
+      input.addEventListener('input', update, {
+        signal: controller.signal
+      });
+      input.form?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const nextQuery = input.value.trim().toLocaleLowerCase();
+        if (nextQuery !== CreatorIndexUI.query) {
+          CreatorIndexUI.query = nextQuery;
+          CreatorIndexUI.page = 1;
+          CreatorIndexUI.invalidateFilteredCache('search-submit');
+        }
+        CreatorIndexUI.render();
+      }, {
+        signal: controller.signal
+      });
+      controller.signal.addEventListener('abort', () => update.cancel(), {
+        once: true
+      });
     },
-    render(){if(!CreatorIndexUI.root)return;NativeArtistsVisibility.apply(CreatorIndexUI.nativeSnapshot,CreatorIndexUI.mode,{proxiesReady:true});if(CreatorIndexUI.mode==='native')CreatorIndexUI.decorateNative();else{CreatorIndexUI.renderCatalogue();queueMicrotask(()=>CreatorProfileRepairManager.repairVisible(CreatorIndexUI.visibleRecords(),ArtistsPageController.generation));}CreatorIndexUI.updateQueueLabel();},
-    updateQuickFilters(){CreatorIndexUI.paginator?.querySelectorAll('[data-creator-status-filter]').forEach((button)=>{const field=button.dataset.creatorStatusFilter;const mode=field==='native-scanned'?CreatorIndexUI.nativeScannedFilter:CreatorIndexUI.statusFilters[field];button.classList.toggle('pmf-match',mode==='match');button.classList.toggle('pmf-no-match',mode==='no-match');button.setAttribute('aria-pressed',mode==='off'?'false':mode==='match'?'true':'mixed');button.title=field==='native-scanned'?'Hide scanned creators on this Pawchive page':`${field} filter: ${mode}`;});},
-    updateQueueLabel(snapshot=CatalogueJobManager.snapshot()){if(!CreatorIndexUI.queueButton)return;const issues=(snapshot.issues||[]).length,active=(snapshot.active||[]).length,waiting=(snapshot.pending||[]).length,history=(snapshot.batches||[]).length+(snapshot.recent||[]).length;CreatorIndexUI.queueButton.textContent=active||waiting?`Queue · ${active} active · ${waiting} waiting${issues?` · ${issues} issue${issues===1?'':'s'}`:''}`:issues?`Queue · ${issues} issue${issues===1?'':'s'}`:(snapshot.recent||[]).some((job)=>job.status==='complete')?'Queue · recently completed':history?'Queue idle':'Queue empty';},
-    handleChange(event){const proxy=event.target.dataset.nativeProxy;if(proxy==='service'||proxy==='sort')NativeArtistsProxy.activate(CreatorIndexUI.found,proxy,event.target.value);},
-    handle(event){
-      const status=event.target.closest('[data-creator-status-filter]')?.dataset.creatorStatusFilter;if(status){if(status==='native-scanned')CreatorIndexUI.nativeScannedFilter=CreatorIndexUI.nativeScannedFilter==='no-match'?'off':'no-match';else{CreatorIndexUI.statusFilters[status]=CreatorStatusFilters.cycle(CreatorIndexUI.statusFilters[status]);CreatorStatusFilters.save(CreatorIndexUI.statusFilters);}CreatorIndexUI.page=1;CreatorIndexUI.render();return;}const paginatorIndex=event.target.closest('[data-native-paginator-index]')?.dataset.nativePaginatorIndex;if(paginatorIndex!==undefined){NativeArtistsProxy.activatePage(CreatorIndexUI.found,paginatorIndex);return;}const page=event.target.closest('[data-creator-page]')?.dataset.creatorPage;if(page){CreatorIndexUI.page=Number(page);CreatorIndexUI.render();return;}const action=event.target.closest('[data-creator-index-action]')?.dataset.creatorIndexAction;if(action==='native-service'||action==='native-sort'){NativeControlMenu.open(action,event.target.closest('button'));return;}if(action==='queue'){CreatorIndexUI.queuePanel.hidden=!CreatorIndexUI.queuePanel.hidden;return;}if(action==='settings'){CreatorSettingsUI.open(event.target);return;}if(action==='filter'&&CreatorIndexUI.mode==='catalogue'){CreatorFilterUI.open(event.target);return;}if(action==='sort'&&CreatorIndexUI.mode==='catalogue'){CreatorSortUI.open(event.target);return;}if(action==='bulk-primary'){CreatorBulkUI.open(CreatorIndexUI.mode==='native'?'build':'update',event.target);return;}if(action==='bulk-menu'){CreatorBulkUI.openMenu(event.target);}
+    setMode(value) {
+      const mode = CreatorDirectoryMode.save(value);
+      if (mode === CreatorIndexUI.mode) return;
+      OverlayManager.closeAll('creator-mode-switch');
+      CreatorIndexUI.mode = mode;
+      CreatorIndexUI.page = 1;
+      CreatorIndexUI.query = '';
+      CreatorIndexUI.applyMode();
+      ArtistsPageController.requestRefresh('mode-switch');
     },
-    cleanup({restoreNative=true}={}){CreatorIndexUI.unsubscribe?.();CreatorIndexUI.unsubscribe=null;CreatorIndexUI.searchController?.abort();CreatorIndexUI.searchController=null;CreatorIndexUI.nativeRecords.forEach((record)=>{if(record.nativeInfo?.card){record.nativeInfo.card.hidden=false;CreatorCardRightRail.cleanup(record.nativeInfo.card);delete record.nativeInfo.card.dataset.pmfCreatorKey;}});if(restoreNative)NativeArtistsVisibility.restore(CreatorIndexUI.nativeSnapshot);CreatorIndexUI.modeSelector?.remove();CreatorIndexUI.root?.remove();Object.assign(CreatorIndexUI,{root:null,modeSelector:null,toolbar:null,grid:null,stateNode:null,paginator:null,queuePanel:null,queueButton:null,found:null,nativeGrid:null,nativeSnapshot:null,nativeGeometry:null,searchInput:null,records:[],nativeRecords:[]});},
+    applyMode({
+      refresh = true
+    } = {}) {
+      if (!CreatorIndexUI.root) return;
+      CreatorIndexUI.modeSelector.querySelectorAll('[data-creator-mode]').forEach((button) => {
+        const active = button.dataset.creatorMode === CreatorIndexUI.mode;
+        button.classList.toggle('pmf-active', active);
+        button.setAttribute('aria-pressed', String(active));
+      });
+      const ready = CreatorIndexUI.chrome();
+      if (CreatorIndexUI.queuePanel && CreatorIndexUI.retainedSession?.queueOpen) CreatorIndexUI.queuePanel.hidden = false;
+      CreatorIndexUI.buildPaginator();
+      CreatorIndexUI.bindSearch();
+      NativeArtistsVisibility.apply(CreatorIndexUI.nativeSnapshot, CreatorIndexUI.mode, {
+        proxiesReady: ready
+      });
+      CreatorIndexUI.grid.hidden = CreatorIndexUI.mode === 'native';
+      CreatorIndexUI.stateNode.hidden = true;
+      if (refresh) CreatorIndexUI.render();
+    },
+    setState(kind, message) {
+      if (!CreatorIndexUI.stateNode) return;
+      CreatorIndexUI.stateNode.dataset.state = kind;
+      CreatorIndexUI.stateNode.textContent = message || '';
+      CreatorIndexUI.stateNode.hidden = !message;
+    },
+    setRefreshing(value) {
+      CreatorIndexUI.refreshing = Boolean(value);
+      if (CreatorIndexUI.mode !== 'catalogue' || !CreatorIndexUI.root) return;
+      const summary = CreatorIndexUI.toolbar?.querySelector('[data-creator-summary]');
+      if (summary && CreatorIndexUI.refreshing) summary.textContent = `Refreshing local catalogue… · ${CreatorIndexUI.records.length} cached`;
+      else if (summary) summary.textContent = `Catalogue · ${CreatorIndexUI.records.length} stored`;
+    },
+    recordSignature(record) {
+      const directory = record?.directory || {};
+      const summary = record?.summary || {};
+      const state = record?.state || {};
+      return [directory.creatorKey, directory.creatorName, directory.avatarUrl, directory.bannerUrl, directory.updatedAt, directory.profileCheckedAt, record?.catalogueState, record?.scanned, record?.favorite, state.updatedAt, summary.generatedAt, summary.classificationFingerprint, summary.aggregateEligiblePostCount].join('|');
+    },
+    invalidateFilteredCache(reason = '') {
+      CreatorIndexUI.filteredCache = null;
+      CreatorIndexUI.renderedPageKey = '';
+      if (Logger.debug && reason) Logger.info({ operation: 'creator-local-cache-invalidated', reason });
+    },
+    filteredFingerprint() {
+      return JSON.stringify({
+        revision: CreatorIndexUI.recordsRevision,
+        query: CreatorIndexUI.query,
+        statusFilters: CreatorIndexUI.statusFilters,
+        filterState: CreatorIndexUI.filterState,
+        sort: CreatorIndexUI.sort,
+        countMode: Settings.value.creatorCardBadgeCountMode,
+        excludeMissing: Settings.value.excludePostsWithMissingAttachments
+      });
+    },
+    retainSession() {
+      if (!CreatorIndexUI.records.length && !CreatorIndexUI.retainedSession) return;
+      CreatorIndexUI.retainedSession = {
+        records: CreatorIndexUI.records,
+        recordsRevision: CreatorIndexUI.recordsRevision,
+        filteredCache: CreatorIndexUI.filteredCache,
+        page: CreatorIndexUI.page,
+        pageSize: CreatorIndexUI.pageSize,
+        query: CreatorIndexUI.query,
+        sort: Util.clone(CreatorIndexUI.sort),
+        filterState: Util.clone(CreatorIndexUI.filterState),
+        statusFilters: Util.clone(CreatorIndexUI.statusFilters),
+        queueOpen: CreatorIndexUI.queuePanel ? !CreatorIndexUI.queuePanel.hidden : false,
+        scrollY: Number(window.scrollY) || 0,
+        savedAt: Date.now()
+      };
+    },
+    restoreRetainedSession() {
+      const saved = CreatorIndexUI.retainedSession;
+      if (!saved || CreatorIndexUI.mode !== 'catalogue') {
+        CreatorIndexUI.loading = CreatorIndexUI.mode === 'catalogue';
+        return false;
+      }
+      CreatorIndexUI.records = saved.records || [];
+      CreatorIndexUI.recordsRevision = Number(saved.recordsRevision) || 0;
+      CreatorIndexUI.filteredCache = saved.filteredCache || null;
+      CreatorIndexUI.page = Math.max(1, Number(saved.page) || 1);
+      CreatorIndexUI.pageSize = Number(saved.pageSize) || 50;
+      CreatorIndexUI.query = String(saved.query || '');
+      CreatorIndexUI.sort = Util.clone(saved.sort || CreatorIndexUI.sort);
+      CreatorIndexUI.filterState = CreatorFilterEngine.normalizeState(saved.filterState || CreatorIndexUI.filterState);
+      CreatorIndexUI.statusFilters = CreatorStatusFilters.normalize(saved.statusFilters || CreatorIndexUI.statusFilters);
+      CreatorIndexUI.loading = false;
+      return true;
+    },
+    setRecords(records, nativeRecords = []) {
+      const incoming = records.filter((record) => record.scanned);
+      const previousByKey = new Map(CreatorIndexUI.records.map((record) => [record.directory.creatorKey, record]));
+      const next = incoming.map((record) => {
+        const previous = previousByKey.get(record.directory.creatorKey);
+        return previous && CreatorIndexUI.recordSignature(previous) === CreatorIndexUI.recordSignature(record) ? previous : record;
+      });
+      const previousSignature = CreatorIndexUI.records.map(CreatorIndexUI.recordSignature).join('\n');
+      const nextSignature = next.map(CreatorIndexUI.recordSignature).join('\n');
+      if (previousSignature !== nextSignature) {
+        CreatorIndexUI.records = next;
+        CreatorIndexUI.recordsRevision += 1;
+        CreatorIndexUI.invalidateFilteredCache('records');
+      } else if (!CreatorIndexUI.records.length && next.length) CreatorIndexUI.records = next;
+      CreatorIndexUI.nativeRecords = nativeRecords;
+      CreatorIndexUI.loading = false;
+      CreatorIndexUI.retainSession();
+      CreatorIndexUI.render();
+    },
+    patchRecord(creatorKey, patch = {}) {
+      const record = CreatorIndexUI.records.find((item) => item.directory.creatorKey === creatorKey);
+      if (!record) return false;
+      if (patch.directory) record.directory = CreatorDirectory.merge(record.directory, patch.directory);
+      if (patch.meta !== undefined) record.meta = patch.meta;
+      if (patch.summary !== undefined) record.summary = patch.summary;
+      if (patch.state !== undefined) record.state = patch.state;
+      CreatorIndexUI.recordsRevision += 1;
+      CreatorIndexUI.invalidateFilteredCache('record-patch');
+      CreatorIndexUI.retainSession();
+      if (CreatorIndexUI.mode === 'catalogue' && CreatorIndexUI.root?.isConnected) CreatorIndexUI.renderCatalogue();
+      return true;
+    },
+    filteredRecords() {
+      if (CreatorIndexUI.mode === 'native') return CreatorIndexUI.nativeRecords.filter((record) => CreatorIndexUI.nativeScannedFilter !== 'no-match' || !record.scanned);
+      const fingerprint = CreatorIndexUI.filteredFingerprint();
+      if (CreatorIndexUI.filteredCache?.fingerprint === fingerprint) return CreatorIndexUI.filteredCache.records;
+      const query = CreatorIndexUI.query;
+      const records = CreatorSorter.sort(CreatorIndexUI.records.filter((record) => {
+        const text = `${record.directory.creatorName} ${record.directory.service} ${record.directory.creatorId}`.toLocaleLowerCase();
+        return (!query || text.includes(query)) && CreatorStatusFilters.matches(record, CreatorIndexUI.statusFilters) && CreatorFilterEngine.matches(record, CreatorIndexUI.filterState);
+      }), CreatorIndexUI.sort);
+      CreatorIndexUI.filteredCache = { fingerprint, records, total: records.length, computedAt: Date.now() };
+      return records;
+    },
+    visibleRecords() {
+      const records = CreatorIndexUI.filteredRecords();
+      if (CreatorIndexUI.mode === 'native') return records.filter((record) => record.nativeInfo?.card?.isConnected && !record.nativeInfo.card.hidden);
+      const start = (CreatorIndexUI.page - 1) * CreatorIndexUI.pageSize;
+      return records.slice(start, start + CreatorIndexUI.pageSize);
+    },
+    context(record) {
+      return {
+        creatorKey: record.directory.creatorKey,
+        domain: record.directory.domain,
+        service: record.directory.service,
+        creatorId: record.directory.creatorId,
+        creatorUrl: record.directory.creatorUrl
+      };
+    },
+    decorateNative() {
+      const visible = CreatorIndexUI.filteredRecords();
+      const included = new Set(visible.map((record) => record.directory.creatorKey));
+      CreatorIndexUI.nativeRecords.forEach((record) => {
+        const info = record.nativeInfo;
+        if (!info) return;
+        info.card.hidden = !included.has(record.directory.creatorKey);
+        info.card.dataset.pmfCreatorKey = record.directory.creatorKey;
+        CreatorCardRightRail.render(info, record.meta, record.state);
+      });
+      ArtistsPageController.cards = visible.map((record) => record.nativeInfo).filter(Boolean);
+      ArtistsPageController.cardByElement = new Map(ArtistsPageController.cards.map((info) => [info.card, info]));
+      const summary = CreatorIndexUI.toolbar.querySelector('[data-creator-summary]');
+      if (summary) summary.textContent = 'Native directory · Pawchive controls';
+      CreatorIndexUI.setState('ready', '');
+      NativeArtistsProxy.sync(CreatorIndexUI.found, CreatorIndexUI.toolbar);
+      const mirror = CreatorIndexUI.paginator.querySelector('.pmf-native-paginator-mirror');
+      if (mirror) NativeArtistsProxy.paginator(CreatorIndexUI.found, mirror);
+      CreatorIndexUI.updateQuickFilters();
+    },
+    renderCatalogue() {
+      const records = CreatorIndexUI.filteredRecords();
+      const totalPages = Math.max(1, Math.ceil(records.length / CreatorIndexUI.pageSize));
+      CreatorIndexUI.page = Util.clamp(CreatorIndexUI.page, 1, totalPages);
+      const start = (CreatorIndexUI.page - 1) * CreatorIndexUI.pageSize;
+      const visible = records.slice(start, start + CreatorIndexUI.pageSize);
+      const pageKey = `${CreatorIndexUI.filteredCache?.fingerprint || CreatorIndexUI.recordsRevision}:${CreatorIndexUI.page}:${visible.map((record)=>CreatorIndexUI.recordSignature(record)).join(';')}`;
+
+      if (CreatorIndexUI.renderedPageKey !== pageKey || !CreatorIndexUI.grid.children.length) {
+        const fragment = document.createDocumentFragment();
+        const rendered = [];
+        for (const record of visible) {
+          const built = CreatorCardReconstructor.build(record);
+          const info = {
+            ...built,
+            context: CreatorIndexUI.context(record),
+            creatorName: record.directory.creatorName,
+            displayName: record.directory.creatorName,
+            serviceLabel: CreatorDisplayName.serviceLabel(record.directory.service)
+          };
+          built.card.dataset.pmfCreatorKey = record.directory.creatorKey;
+          fragment.append(built.card);
+          record.renderedInfo = info;
+          rendered.push({ record, info });
+        }
+        CreatorIndexUI.grid.replaceChildren(fragment);
+        for (const { record, info } of rendered) CreatorCardRightRail.render(info, record.meta, record.state);
+        CreatorIndexUI.renderedPageKey = pageKey;
+      }
+
+      ArtistsPageController.cards = visible.map((record) => record.renderedInfo).filter(Boolean);
+      ArtistsPageController.cardByElement = new Map(ArtistsPageController.cards.map((info) => [info.card, info]));
+      if (CreatorIndexUI.loading && !records.length) CreatorIndexUI.setState('loading', 'Loading local catalogue…');
+      else CreatorIndexUI.setState(records.length ? 'ready' : 'empty', records.length ? '' : 'No local Catalogue creators match the current search and filters.');
+      const matches = CreatorIndexUI.toolbar.querySelector('[data-creator-matches]');
+      const summary = CreatorIndexUI.toolbar.querySelector('[data-creator-summary]');
+      const count = CreatorIndexUI.paginator.querySelector('.pmf-filtered-count');
+      const controls = CreatorIndexUI.paginator.querySelector('.pmf-page-controls');
+      if (matches) matches.textContent = `✓ ${records.length} Catalogue creators`;
+      if (summary) summary.textContent = CreatorIndexUI.refreshing ? `Refreshing local catalogue… · ${CreatorIndexUI.records.length} cached` : `Catalogue · ${CreatorIndexUI.records.length} stored`;
+      if (count) count.textContent = records.length ? `Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}` : 'Showing 0 of 0';
+      if (controls) {
+        controls.replaceChildren();
+        const add = (label, page, disabled, action) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = label;
+          button.disabled = disabled;
+          button.dataset.creatorPage = String(page);
+          button.dataset.creatorPageAction = action;
+          if (action === 'page' && page === CreatorIndexUI.page) button.setAttribute('aria-current', 'page');
+          controls.append(button);
+        };
+        add('«', 1, CreatorIndexUI.page === 1, 'first');
+        add('‹', CreatorIndexUI.page - 1, CreatorIndexUI.page === 1, 'previous');
+        for (const page of Paginator.pageButtons(CreatorIndexUI.page, totalPages, Paginator.windowSize(Number(CreatorIndexUI.paginator?.clientWidth) || 800))) add(String(page), page, page === CreatorIndexUI.page, 'page');
+        add('›', CreatorIndexUI.page + 1, CreatorIndexUI.page === totalPages, 'next');
+        add('»', totalPages, CreatorIndexUI.page === totalPages, 'last');
+      }
+      CreatorIndexUI.updateQuickFilters();
+      CreatorIndexUI.retainSession();
+    },
+    render() {
+      if (!CreatorIndexUI.root) return;
+      NativeArtistsVisibility.apply(CreatorIndexUI.nativeSnapshot, CreatorIndexUI.mode, {
+        proxiesReady: true
+      });
+      if (CreatorIndexUI.mode === 'native') CreatorIndexUI.decorateNative();
+      else CreatorIndexUI.renderCatalogue();
+      CreatorIndexUI.updateQueueLabel();
+    },
+    updateQuickFilters() {
+      CreatorIndexUI.paginator?.querySelectorAll('[data-creator-status-filter]').forEach((button) => {
+        const field = button.dataset.creatorStatusFilter;
+        const mode = field === 'native-scanned' ? CreatorIndexUI.nativeScannedFilter : CreatorIndexUI.statusFilters[field];
+        button.classList.toggle('pmf-match', mode === 'match');
+        button.classList.toggle('pmf-no-match', mode === 'no-match');
+        button.setAttribute('aria-pressed', mode === 'off' ? 'false' : mode === 'match' ? 'true' : 'mixed');
+        button.title = field === 'native-scanned' ? 'Hide scanned creators on this Pawchive page' : `${field} filter: ${mode}`;
+      });
+    },
+    updateQueueLabel(snapshot = CatalogueJobManager.snapshot()) {
+      if (!CreatorIndexUI.queueButton) return;
+      const issues = (snapshot.issues || []).length,
+        active = (snapshot.active || []).length,
+        waiting = (snapshot.pending || []).length,
+        history = (snapshot.batches || []).length + (snapshot.recent || []).length;
+      CreatorIndexUI.queueButton.textContent = active || waiting ? `Queue · ${active} active · ${waiting} waiting${issues?` · ${issues} issue${issues===1?'':'s'}`:''}` : issues ? `Queue · ${issues} issue${issues===1?'':'s'}` : (snapshot.recent || []).some((job) => job.status === 'complete') ? 'Queue · recently completed' : history ? 'Queue idle' : 'Queue empty';
+    },
+    handleChange(event) {
+      const proxy = event.target.dataset.nativeProxy;
+      if (proxy === 'service' || proxy === 'sort') NativeArtistsProxy.activate(CreatorIndexUI.found, proxy, event.target.value);
+    },
+    handle(event) {
+      const status = event.target.closest('[data-creator-status-filter]')?.dataset.creatorStatusFilter;
+      if (status) {
+        if (status === 'native-scanned') CreatorIndexUI.nativeScannedFilter = CreatorIndexUI.nativeScannedFilter === 'no-match' ? 'off' : 'no-match';
+        else {
+          CreatorIndexUI.statusFilters[status] = CreatorStatusFilters.cycle(CreatorIndexUI.statusFilters[status]);
+          CreatorStatusFilters.save(CreatorIndexUI.statusFilters);
+        }
+        CreatorIndexUI.page = 1;
+        CreatorIndexUI.invalidateFilteredCache('status-filter');
+        CreatorIndexUI.render();
+        return;
+      }
+      const paginatorIndex = event.target.closest('[data-native-paginator-index]')?.dataset.nativePaginatorIndex;
+      if (paginatorIndex !== undefined) {
+        NativeArtistsProxy.activatePage(CreatorIndexUI.found, paginatorIndex);
+        return;
+      }
+      const page = event.target.closest('[data-creator-page]')?.dataset.creatorPage;
+      if (page) {
+        CreatorIndexUI.page = Number(page);
+        CreatorIndexUI.render();
+        return;
+      }
+      const action = event.target.closest('[data-creator-index-action]')?.dataset.creatorIndexAction;
+      if (action === 'native-service' || action === 'native-sort') {
+        NativeControlMenu.open(action, event.target.closest('button'));
+        return;
+      }
+      if (action === 'queue') {
+        CreatorIndexUI.queuePanel.hidden = !CreatorIndexUI.queuePanel.hidden;
+        CreatorIndexUI.retainSession();
+        return;
+      }
+      if (action === 'settings') {
+        CreatorSettingsUI.open(event.target);
+        return;
+      }
+      if (action === 'filter' && CreatorIndexUI.mode === 'catalogue') {
+        CreatorFilterUI.open(event.target);
+        return;
+      }
+      if (action === 'sort' && CreatorIndexUI.mode === 'catalogue') {
+        CreatorSortUI.open(event.target);
+        return;
+      }
+      if (action === 'bulk-primary') {
+        CreatorBulkUI.open(CreatorIndexUI.mode === 'native' ? 'build' : 'update', event.target);
+        return;
+      }
+      if (action === 'bulk-menu') {
+        CreatorBulkUI.openMenu(event.target);
+      }
+    },
+    cleanup({
+      restoreNative = true
+    } = {}) {
+      CreatorIndexUI.retainSession();
+      CreatorIndexUI.unsubscribe?.();
+      CreatorIndexUI.unsubscribe = null;
+      CreatorIndexUI.searchController?.abort();
+      CreatorIndexUI.searchController = null;
+      CreatorIndexUI.nativeRecords.forEach((record) => {
+        if (record.nativeInfo?.card) {
+          record.nativeInfo.card.hidden = false;
+          CreatorCardRightRail.cleanup(record.nativeInfo.card);
+          delete record.nativeInfo.card.dataset.pmfCreatorKey;
+        }
+      });
+      if (restoreNative) NativeArtistsVisibility.restore(CreatorIndexUI.nativeSnapshot);
+      CreatorIndexUI.modeSelector?.remove();
+      CreatorIndexUI.root?.remove();
+      Object.assign(CreatorIndexUI, {
+        root: null,
+        modeSelector: null,
+        toolbar: null,
+        grid: null,
+        stateNode: null,
+        paginator: null,
+        queuePanel: null,
+        queueButton: null,
+        found: null,
+        nativeGrid: null,
+        nativeSnapshot: null,
+        nativeGeometry: null,
+        searchInput: null,
+        records: [],
+        nativeRecords: [],
+        filteredCache: null,
+        renderedPageKey: '',
+        loading: false,
+        refreshing: false
+      });
+    },
   };
 
   const CreatorSettingsUI = {
@@ -4324,12 +5694,12 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     open(opener) {
       const draft=Util.clone(Settings.value);const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-settings-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Media Filter settings');const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Media Filter settings'));const close=SettingsUI.action('×','cancel');close.className='pmf-icon-close';header.append(close);const layout=SettingsUI.el('div','pmf-settings-layout');const nav=SettingsUI.el('nav');const content=SettingsUI.el('div','pmf-settings-content');const panels=[SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft)];[['general','General'],['default-detection','Default detection'],['scanning','Scanning'],['data','Data & performance']].forEach(([key,label])=>{const button=SettingsUI.action(label,'tab');button.dataset.creatorSettingsTab=key;nav.append(button);});content.append(...panels);layout.append(nav,content);const footer=SettingsUI.el('footer');footer.append(SettingsUI.action('Reset all settings','reset'),SettingsUI.el('span'),SettingsUI.action('Cancel','cancel'));const save=SettingsUI.action('Save & apply','save');save.className='pmf-primary';footer.append(save);dialog.append(header,layout,footer);backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);
       const show=(name)=>{nav.querySelectorAll('button').forEach((button)=>button.classList.toggle('pmf-active',button.dataset.creatorSettingsTab===name));content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel)=>panel.hidden=panel.dataset.pmfSettingsPanel!==name);};show('general');let committed=false,unsubscribe=null;const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true,onClose:()=>{unsubscribe?.();if(!committed)CreatorIndexUI.render();}});unsubscribe=SettingsUI.bindMaintenance(backdrop);
-      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-creator-settings-tab]')?.dataset.creatorSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)show(tab);if(child)CreatorSettingsUI.openChild(child,draft,event.target);if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='reset'){Object.assign(draft,Util.clone(DefaultSettings));CreatorSettingsUI.preview(draft);}if(action==='save'){const next=SettingsUI.collect(dialog,draft);Settings.save(next);committed=true;OverlayManager.close(overlay,'save');CreatorIndexUI.render();}if(action==='update-missing-attachment-metadata')MissingAttachmentMaintenance.run();if(action==='stop-missing-attachment-metadata')MissingAttachmentMaintenance.stop();if(action==='resume-missing-attachment-metadata')MissingAttachmentMaintenance.resume();if(action==='repair-creator-profile-metadata')CreatorProfileRepairManager.run();if(action==='stop-creator-profile-repair')CreatorProfileRepairManager.stop();});
+      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-creator-settings-tab]')?.dataset.creatorSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)show(tab);if(child)CreatorSettingsUI.openChild(child,draft,event.target);if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='reset'){Object.assign(draft,Util.clone(DefaultSettings));CreatorSettingsUI.preview(draft);}if(action==='save'){const next=SettingsUI.collect(dialog,draft);Settings.save(next);committed=true;OverlayManager.close(overlay,'save');CreatorIndexUI.render();}if(action==='update-missing-attachment-metadata')MissingAttachmentMaintenance.openScopeDialog(event.target);if(action==='stop-missing-attachment-metadata')MissingAttachmentMaintenance.stop();if(action==='resume-missing-attachment-metadata')MissingAttachmentMaintenance.resume();if(action==='retry-failed-missing-attachment-metadata')MissingAttachmentMaintenance.retryFailed();if(action==='repair-creator-profile-metadata')CreatorProfileRepairManager.run();if(action==='stop-creator-profile-repair')CreatorProfileRepairManager.stop();if(action==='resume-creator-profile-repair')CreatorProfileRepairManager.resume();if(action==='retry-failed-creator-profile-repair')CreatorProfileRepairManager.retryFailed();});
       backdrop.addEventListener('change',()=>{Object.assign(draft,SettingsUI.collect(dialog,draft));CreatorSettingsUI.preview(draft);});
     },
     openChild(name,draft,opener) {
       const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-small-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');const creatorStatus=name==='creator-status-badges',hidden=name==='hidden-creator-dim',attachment=name==='creator-attachment-badges';const title=creatorStatus?'Creator-card status badges':hidden?'Hidden creator-card appearance':attachment?'Creator card attachment badges':name==='seen-dim'?'Dim seen post cards':'Badge settings';dialog.innerHTML=`<header><strong>${title}</strong><button class="pmf-icon-close" data-child-action="cancel">×</button></header><div class="pmf-editor-body"></div><footer><span></span><button data-child-action="cancel">Cancel</button><button class="pmf-primary" data-child-action="apply">Apply</button></footer>`;const body=dialog.querySelector('.pmf-editor-body');
-      if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Dim strength</span>${SettingsUI.select('strength',draft[key].strength,[['low','Low'],['medium','Medium'],['high','High']]).outerHTML}</div></section>`;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';const fields=creatorStatus?['favorited','liked','hidden']:attachment?['videos','images','archives','projectFiles','externalLinks']:['favorited','liked','seen'];body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Badge size</span>${SettingsUI.select('size',draft[sizeKey],[['small','Small'],['medium','Medium'],['big','Big']]).outerHTML}</div>${attachment?`<div class="pmf-settings-row"><span>Count method</span>${SettingsUI.select('countMethod',draft.creatorCardBadgeCountMode,[['posts','Matching posts'],['attachments','Attachments / links']]).outerHTML}</div>`:''}</section><section class="pmf-settings-section"><h3>Visible badges</h3>${fields.map((field)=>`<label class="pmf-check"><input type="checkbox" name="${field}" ${draft[key].types[field]?'checked':''}> ${field[0].toUpperCase()+field.slice(1)}</label>`).join('')}</section>`;}
+      if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Dim strength</span>${SettingsUI.select('strength',draft[key].strength,[['low','Low'],['medium','Medium'],['high','High']]).outerHTML}</div></section>`;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';const fields=creatorStatus?['favorited','liked','hidden']:attachment?['videos','images','archives','projectFiles','externalLinks']:['favorited','liked','seen'];body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Badge size</span>${SettingsUI.select('size',draft[sizeKey],[['small','Small'],['medium','Medium'],['big','Big']]).outerHTML}</div>${attachment?`<div class="pmf-settings-row"><span>Count method</span>${SettingsUI.select('countMethod',draft.creatorCardBadgeCountMode,[['posts','Posts containing media'],['attachments','Total attachments/links from every post']]).outerHTML}</div>`:''}</section><section class="pmf-settings-section"><h3>Visible badges</h3>${fields.map((field)=>`<label class="pmf-check"><input type="checkbox" name="${field}" ${draft[key].types[field]?'checked':''}> ${field[0].toUpperCase()+field.slice(1)}</label>`).join('')}</section>`;}
       backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-child-action]')?.dataset.childAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';draft[key].strength=dialog.querySelector('[name="strength"]').value;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';draft[sizeKey]=dialog.querySelector('[name="size"]').value;if(attachment)draft.creatorCardBadgeCountMode=dialog.querySelector('[name="countMethod"]').value;dialog.querySelectorAll('input[type="checkbox"]').forEach((input)=>{draft[key].types[input.name]=input.checked;});}CreatorSettingsUI.preview(draft);OverlayManager.close(overlay,'apply');}});
     },
   };
@@ -4352,7 +5722,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       const syncControls=()=>{const assign=(name,value)=>{const control=dialog.querySelector(`[name="${name}"]`);if(control)control.value=value||'';};assign('service',draft.service);assign('catalogueState',draft.catalogueState);['dateIndexedFrom','dateIndexedTo','dateUpdatedFrom','dateUpdatedTo','lastCatalogueUpdateFrom','lastCatalogueUpdateTo','earliestPublishedFrom','latestPublishedTo','publishedWithinFrom','publishedWithinTo'].forEach((name)=>assign(name,draft[name]));dialog.querySelector('[name="includePartial"]').checked=draft.includePartialLowerBounds;dialog.querySelector('[name="publicFavoritesEnabled"]').checked=Boolean(draft.publicFavorites);dialog.querySelector('[name="totalPostsEnabled"]').checked=Boolean(draft.totalPosts);Object.keys(draft.media).forEach((type)=>{dialog.querySelector(`[name="media-${type}"]`).checked=draft.media[type].enabled;});Object.keys(draft.postStatuses).forEach((type)=>{dialog.querySelector(`[name="status-${type}"]`).checked=draft.postStatuses[type].enabled;});};
       const collect=()=>{draft.service=dialog.querySelector('[name="service"]').value;draft.catalogueState=dialog.querySelector('[name="catalogueState"]').value;draft.includePartialLowerBounds=dialog.querySelector('[name="includePartial"]').checked;['dateIndexedFrom','dateIndexedTo','dateUpdatedFrom','dateUpdatedTo','lastCatalogueUpdateFrom','lastCatalogueUpdateTo','earliestPublishedFrom','latestPublishedTo','publishedWithinFrom','publishedWithinTo'].forEach((name)=>{draft[name]=dialog.querySelector(`[name="${name}"]`).value;});draft.publicFavorites=dialog.querySelector('[name="publicFavoritesEnabled"]').checked?CreatorAggregateCondition.normalize(draft.publicFavorites||{}):null;draft.totalPosts=dialog.querySelector('[name="totalPostsEnabled"]').checked?CreatorAggregateCondition.normalize(draft.totalPosts||{}):null;Object.keys(draft.media).forEach((type)=>{draft.media[type].enabled=dialog.querySelector(`[name="media-${type}"]`)?.checked||false;});Object.keys(draft.postStatuses).forEach((type)=>{draft.postStatuses[type].enabled=dialog.querySelector(`[name="status-${type}"]`)?.checked||false;});draft.customRules=[...dialog.querySelectorAll('[data-custom-rule-index]')].map((row,index)=>CreatorCustomRule.normalize({id:draft.customRules[index]?.id,enabled:row.querySelector('[name="customEnabled"]').checked,field:row.querySelector('[name="customField"]').value,match:row.querySelector('[name="customMatch"]').value,value:row.querySelector('[name="customValue"]').value,count:{operator:row.querySelector('[name="customOperator"]').value,from:row.querySelector('[name="customFrom"]').value,to:row.querySelector('[name="customTo"]').value}}));};
       dialog.querySelector('[name="creatorPreset"]').addEventListener('change',(event)=>{const applied=CreatorPresets.apply(presetRecord,event.target.value);if(applied){draft=applied;syncControls();}});
-      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-filter-action]')?.dataset.filterAction;const settingsAction=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(child?.startsWith('creator-media-'))CreatorFilterUI.openMedia(child.replace('creator-media-',''),draft,event.target);if(child?.startsWith('creator-status-'))CreatorFilterUI.openAggregate(child.replace('creator-status-',''),draft,event.target,{status:true});if(child?.startsWith('creator-aggregate-'))CreatorFilterUI.openAggregate(child.replace('creator-aggregate-',''),draft,event.target);if(settingsAction==='add-custom-rule'){collect();draft.customRules.push(CreatorCustomRule.normalize({}));renderCustomRules();}if(action==='remove-custom-rule'){collect();draft.customRules.splice(Number(event.target.closest('[data-rule-index]').dataset.ruleIndex),1);renderCustomRules();}if(settingsAction==='save-preset'){collect();const name=globalThis.prompt?.('Creator preset name','Creator preset');if(name){presetRecord=CreatorPresets.create(presetRecord,name,draft);GlobalUI.flash('Creator preset saved.');}}if(settingsAction==='update-preset'){collect();presetRecord=CreatorPresets.update(presetRecord,dialog.querySelector('[name="creatorPreset"]').value,draft);GlobalUI.flash('Creator preset updated.');}if(settingsAction==='rename-preset'){const id=dialog.querySelector('[name="creatorPreset"]').value;const current=presetRecord.presets.find((preset)=>preset.id===id);const name=globalThis.prompt?.('Rename creator preset',current?.name||'');if(name)presetRecord=CreatorPresets.rename(presetRecord,id,name);}if(settingsAction==='delete-preset'){const id=dialog.querySelector('[name="creatorPreset"]').value;presetRecord=CreatorPresets.remove(presetRecord,id);if(id==='default')GlobalUI.flash('Default cannot be deleted.');}if(settingsAction==='reset-default-preset'){presetRecord=CreatorPresets.resetDefault(presetRecord);draft=CreatorFilterEngine.normalizeState({});syncControls();renderCustomRules();}if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){collect();const invalid=draft.customRules.find((rule)=>rule.enabled&&!CreatorCustomRule.valid(rule));if(invalid){GlobalUI.flash('Complete or remove every enabled custom Catalogue rule.');return;}CreatorIndexUI.filterState=CreatorFilterEngine.normalizeState(draft);GM_setValue(Config.creatorFilterStateKey,CreatorIndexUI.filterState);CreatorIndexUI.page=1;OverlayManager.close(overlay,'apply');ArtistsPageController.requestRefresh('filters-applied');}});
+      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-filter-action]')?.dataset.filterAction;const settingsAction=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(child?.startsWith('creator-media-'))CreatorFilterUI.openMedia(child.replace('creator-media-',''),draft,event.target);if(child?.startsWith('creator-status-'))CreatorFilterUI.openAggregate(child.replace('creator-status-',''),draft,event.target,{status:true});if(child?.startsWith('creator-aggregate-'))CreatorFilterUI.openAggregate(child.replace('creator-aggregate-',''),draft,event.target);if(settingsAction==='add-custom-rule'){collect();draft.customRules.push(CreatorCustomRule.normalize({}));renderCustomRules();}if(action==='remove-custom-rule'){collect();draft.customRules.splice(Number(event.target.closest('[data-rule-index]').dataset.ruleIndex),1);renderCustomRules();}if(settingsAction==='save-preset'){collect();const name=globalThis.prompt?.('Creator preset name','Creator preset');if(name){presetRecord=CreatorPresets.create(presetRecord,name,draft);GlobalUI.flash('Creator preset saved.');}}if(settingsAction==='update-preset'){collect();presetRecord=CreatorPresets.update(presetRecord,dialog.querySelector('[name="creatorPreset"]').value,draft);GlobalUI.flash('Creator preset updated.');}if(settingsAction==='rename-preset'){const id=dialog.querySelector('[name="creatorPreset"]').value;const current=presetRecord.presets.find((preset)=>preset.id===id);const name=globalThis.prompt?.('Rename creator preset',current?.name||'');if(name)presetRecord=CreatorPresets.rename(presetRecord,id,name);}if(settingsAction==='delete-preset'){const id=dialog.querySelector('[name="creatorPreset"]').value;presetRecord=CreatorPresets.remove(presetRecord,id);if(id==='default')GlobalUI.flash('Default cannot be deleted.');}if(settingsAction==='reset-default-preset'){presetRecord=CreatorPresets.resetDefault(presetRecord);draft=CreatorFilterEngine.normalizeState({});syncControls();renderCustomRules();}if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){collect();const invalid=draft.customRules.find((rule)=>rule.enabled&&!CreatorCustomRule.valid(rule));if(invalid){GlobalUI.flash('Complete or remove every enabled custom Catalogue rule.');return;}CreatorIndexUI.filterState=CreatorFilterEngine.normalizeState(draft);GM_setValue(Config.creatorFilterStateKey,CreatorIndexUI.filterState);CreatorIndexUI.page=1;CreatorIndexUI.invalidateFilteredCache('filters-applied');OverlayManager.close(overlay,'apply');CreatorIndexUI.render();}});
     },
     openAggregate(type,draft,opener,{status=false}={}) {
       const target=status?draft.postStatuses:draft;const source=status?target[type]:target[type]||{};const count=CreatorAggregateCondition.normalize(source.count||source);const percentage=CreatorAggregateCondition.normalize(source.percentage||{},true);const title=status?`${type[0].toUpperCase()+type.slice(1)} posts`:type==='publicFavorites'?'Public creator favorite count':'Total Catalogue posts';
@@ -4377,7 +5747,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
 
   const CreatorSortUI = {
     modes:[['popularity','Popularity'],['alphabetical','Alphabetical'],['service','Service'],['indexed','Date indexed'],['updated','Date updated'],['posts','Catalogue post count'],['catalogueUpdated','Catalogue updated'],['latest','Latest post'],['earliest','Earliest post'],...['videos','images','archives','projectFiles','externalLinks'].flatMap((type)=>[[`${type}:posts`,`${type} — Posts`],[`${type}:${type==='externalLinks'?'links':'attachments'}`,`${type} — Attachments / links`],[`${type}:percentage`,`${type} — Catalogue percentage`]]),['liked','Liked posts'],['seen','Seen posts'],['favorited','Favorited posts']],
-    open(opener){AnchoredMenu.open(opener,CreatorSortUI.modes.map(([value,label])=>({value,label})),{selected:CreatorIndexUI.sort.mode,onSelect:(mode)=>{if(CreatorIndexUI.sort.mode===mode)CreatorIndexUI.sort.direction=CreatorIndexUI.sort.direction==='asc'?'desc':'asc';else CreatorIndexUI.sort={mode,direction:mode==='alphabetical'||mode==='service'?'asc':'desc'};CreatorIndexUI.toolbar.querySelector('[data-creator-index-action="sort"]').textContent=`Sort: ${CreatorSortUI.modes.find((item)=>item[0]===mode)?.[1]} ${CreatorIndexUI.sort.direction==='asc'?'▲':'▼'}`;CreatorIndexUI.render();}});},
+    open(opener){AnchoredMenu.open(opener,CreatorSortUI.modes.map(([value,label])=>({value,label})),{selected:CreatorIndexUI.sort.mode,onSelect:(mode)=>{if(CreatorIndexUI.sort.mode===mode)CreatorIndexUI.sort.direction=CreatorIndexUI.sort.direction==='asc'?'desc':'asc';else CreatorIndexUI.sort={mode,direction:mode==='alphabetical'||mode==='service'?'asc':'desc'};CreatorIndexUI.toolbar.querySelector('[data-creator-index-action="sort"]').textContent=`Sort: ${CreatorSortUI.modes.find((item)=>item[0]===mode)?.[1]} ${CreatorIndexUI.sort.direction==='asc'?'▲':'▼'}`;CreatorIndexUI.invalidateFilteredCache('sort');CreatorIndexUI.render();}});},
   };
 
   const CreatorBulkSelection = {
@@ -4396,16 +5766,296 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
   };
 
   const CreatorProfileRepairManager = {
-    active:null,listeners:new Set(),inFlight:new Map(),ttl:24*60*60*1000,
-    snapshot(){const state=CreatorProfileRepairManager.active;return state?{running:!state.stopped,total:state.total,completed:state.completed,failed:state.failed,remaining:Math.max(0,state.total-state.completed-state.failed),stopped:state.stopped,message:state.message}:{running:false,stopped:Boolean(GM_getValue(Config.creatorProfileRepairKey,null)?.stopped)};},
-    subscribe(listener){CreatorProfileRepairManager.listeners.add(listener);listener(CreatorProfileRepairManager.snapshot());return()=>CreatorProfileRepairManager.listeners.delete(listener);},
-    notify(){const value=CreatorProfileRepairManager.snapshot();CreatorProfileRepairManager.listeners.forEach((listener)=>{try{listener(value);}catch(error){Logger.warn('Creator repair listener failed.',error);}});},
-    fromApi(raw,record){return CreatorDirectory.normalize({...record,creatorName:raw?.name||raw?.username||raw?.title,avatarUrl:raw?.icon||raw?.avatar||raw?.avatar_url,thumbnailUrl:raw?.icon||raw?.avatar||raw?.avatar_url,bannerUrl:raw?.banner||raw?.banner_url||raw?.background,publicFavoriteCount:raw?.favorited??raw?.favorite_count,indexedAt:Number(raw?.indexed)*1000||record.indexedAt,updatedAt:Number(raw?.updated)*1000||record.updatedAt,source:'creator-api',quality:3});},
-    fromHtml(html,record){const doc=new DOMParser().parseFromString(String(html||''),'text/html'),text=(selector)=>doc.querySelector(selector)?.getAttribute('content')||doc.querySelector(selector)?.textContent||'',image=(selector)=>doc.querySelector(selector)?.getAttribute('content')||doc.querySelector(selector)?.getAttribute('src')||'';const favorites=doc.body?.textContent?.match(/([\d,]+)\s+favorites?/i),background=String(doc.querySelector('[style*="background-image"]')?.style?.backgroundImage||''),banner=background.slice(background.indexOf('(')+1,background.lastIndexOf(')')).replace(/^["']|["']$/g,'');return CreatorDirectory.normalize({...record,creatorName:text('meta[property="og:title"]')||text('h1'),avatarUrl:image('meta[property="og:image"]')||image('.user-header img,.creator-header img'),thumbnailUrl:image('meta[property="og:image"]')||image('.user-header img,.creator-header img'),bannerUrl:image('meta[property="og:image"]')||banner,publicFavoriteCount:favorites?Number(favorites[1].replace(/,/g,'')):record.publicFavoriteCount,creatorUrl:record.creatorUrl,profileCheckedAt:Date.now(),source:'profile-html',quality:4});},
-    async repair(record,{signal,generation=ArtistsPageController.generation,force=false}={}){const current=CreatorDirectory.normalize(record.directory||record),key=current.creatorKey;if(!force&&!CreatorDirectory.isWeak(current)||!force&&current.profileCheckedAt&&Date.now()-current.profileCheckedAt<CreatorProfileRepairManager.ttl)return current;if(CreatorProfileRepairManager.inFlight.has(key))return CreatorProfileRepairManager.inFlight.get(key);const promise=(async()=>{let best=current;try{const creators=await NativeCreatorDirectorySource.creators(signal);const raw=creators.find((item)=>String(item.id)===current.creatorId&&String(item.service)===current.service);if(raw)best=CreatorDirectory.merge(best,CreatorProfileRepairManager.fromApi(raw,best));if(CreatorDirectory.isWeak(best)){await CatalogueRequestScheduler.waitTurn({signal,operation:'creator-profile-repair',creatorKey:key,requestKind:'profile-html'});const response=await fetch(best.creatorUrl,{credentials:'same-origin',signal,headers:{Accept:'text/html'}});if(response.status===429){CatalogueRequestScheduler.applyRateLimit(Number(response.headers.get('Retry-After'))*1000||Config.defaultRateLimitDelayMs,{creatorKey:key,requestKind:'profile-html'});throw new Error('Pawchive rate limited creator repair.');}if(!response.ok)throw new Error(`Creator profile returned HTTP ${response.status}.`);best=CreatorDirectory.merge(best,CreatorProfileRepairManager.fromHtml(await response.text(),best));}best.profileCheckedAt=Date.now();await Cache.putCreatorDirectory([best]);if(generation===ArtistsPageController.generation&&CreatorIndexUI.root?.isConnected){const local=CreatorIndexUI.records.find((item)=>item.directory.creatorKey===key);if(local)local.directory=best;ArtistsPageController.requestRefresh('creator-profile-repair');}return best;}finally{CreatorProfileRepairManager.inFlight.delete(key);}})();CreatorProfileRepairManager.inFlight.set(key,promise);return promise;},
-    async repairVisible(records,generation){const weak=(records||[]).filter((record)=>CreatorDirectory.isWeak(record.directory));for(const record of weak){if(generation!==ArtistsPageController.generation)return;try{await CreatorProfileRepairManager.repair(record,{generation});}catch(error){if(error.name!=='AbortError')Logger.warn(`Creator profile repair failed for ${record.directory.creatorKey}.`,error);}}},
-    async run({resume=false}={}){if(CreatorProfileRepairManager.active)return CreatorProfileRepairManager.active.promise;await CatalogueJobManager.acquireMaintenanceSlot();const checkpoint=resume?GM_getValue(Config.creatorProfileRepairKey,null):null,records=CreatorIndexUI.records.filter((record)=>CreatorDirectory.isWeak(record.directory)),remainingKeys=new Set(checkpoint?.remainingKeys||records.map((record)=>record.directory.creatorKey)),tasks=records.filter((record)=>remainingKeys.has(record.directory.creatorKey)),controller=new AbortController(),state={controller,total:Number(checkpoint?.total)||tasks.length,completed:Number(checkpoint?.completed)||0,failed:Number(checkpoint?.failed)||0,stopped:false,message:'Repairing creator profile metadata…'};CreatorProfileRepairManager.active=state;CreatorProfileRepairManager.notify();const save=(remaining)=>GM_setValue(Config.creatorProfileRepairKey,{version:1,total:state.total,completed:state.completed,failed:state.failed,remainingKeys:remaining,stopped:state.stopped,updatedAt:Date.now()});state.promise=(async()=>{const remaining=tasks.map((record)=>record.directory.creatorKey);for(const record of tasks){if(controller.signal.aborted){state.stopped=true;break;}try{await CreatorProfileRepairManager.repair(record,{signal:controller.signal,force:true});state.completed+=1;}catch(error){if(error.name==='AbortError'){state.stopped=true;break;}state.failed+=1;}remaining.shift();state.message=`Repaired ${state.completed} of ${state.total}`;save(remaining);CreatorProfileRepairManager.notify();}save(remaining);return CreatorProfileRepairManager.snapshot();})().finally(()=>{CreatorProfileRepairManager.active=null;CatalogueJobManager.releaseMaintenanceSlot();CreatorProfileRepairManager.notify();});return state.promise;},
-    stop(){const state=CreatorProfileRepairManager.active;if(state){state.stopped=true;state.controller.abort();}},
+    active: null,
+    listeners: new Set(),
+    inFlight: new Map(),
+    ttl: 24 * 60 * 60 * 1000,
+    checkpoint() {
+      return GM_getValue(Config.creatorProfileRepairKey, null);
+    },
+    snapshot() {
+      const state = CreatorProfileRepairManager.active || CreatorProfileRepairManager.checkpoint();
+      if (!state) return { running: false, stopped: false, total: 0, completed: 0, failed: 0, remaining: 0, message: '' };
+      const failedKeys = Array.isArray(state.failedKeys) ? state.failedKeys : [];
+      const remainingKeys = Array.isArray(state.remainingKeys) ? state.remainingKeys : [];
+      const startedAt = Number(state.startedAt) || 0;
+      const completed = Number(state.completed) || 0;
+      const elapsed = startedAt ? Math.max(1, Date.now() - startedAt) : 0;
+      return {
+        running: Boolean(CreatorProfileRepairManager.active && !state.stopped),
+        stopped: Boolean(state.stopped),
+        total: Number(state.total) || 0,
+        completed,
+        failed: failedKeys.length,
+        remaining: new Set([...remainingKeys, ...failedKeys]).size,
+        rate: elapsed ? completed / (elapsed / 1000) : 0,
+        message: state.message || ''
+      };
+    },
+    subscribe(listener) {
+      CreatorProfileRepairManager.listeners.add(listener);
+      listener(CreatorProfileRepairManager.snapshot());
+      return () => CreatorProfileRepairManager.listeners.delete(listener);
+    },
+    notify() {
+      const value = CreatorProfileRepairManager.snapshot();
+      CreatorProfileRepairManager.listeners.forEach((listener) => {
+        try { listener(value); }
+        catch (error) { Logger.warn('Creator repair listener failed.', error); }
+      });
+    },
+    persist(state) {
+      const checkpoint = {
+        version: 2,
+        operation: 'creator-profile-repair',
+        plannedKeys: [...new Set(state.plannedKeys || [])],
+        remainingKeys: [...new Set(state.remainingKeys || [])],
+        failedKeys: [...new Set(state.failedKeys || [])],
+        total: Number(state.total) || 0,
+        completed: Number(state.completed) || 0,
+        stopped: Boolean(state.stopped),
+        message: state.message || '',
+        startedAt: Number(state.startedAt) || Date.now(),
+        updatedAt: Date.now()
+      };
+      GM_setValue(Config.creatorProfileRepairKey, checkpoint);
+      return checkpoint;
+    },
+    absoluteUrl(value, record) {
+      const raw = String(value || '').trim();
+      if (!raw || raw.startsWith('data:') || raw.startsWith('blob:')) return '';
+      try { return new URL(raw, record.creatorUrl || location.origin).href; }
+      catch { return ''; }
+    },
+    fromApi(raw, record) {
+      const avatar = raw?.icon || raw?.avatar || raw?.avatar_url || '';
+      const banner = raw?.banner || raw?.banner_url || raw?.background || raw?.cover || '';
+      return CreatorDirectory.normalize({
+        ...record,
+        creatorName: raw?.name || raw?.username || raw?.title,
+        avatarUrl: CreatorProfileRepairManager.absoluteUrl(avatar, record),
+        thumbnailUrl: CreatorProfileRepairManager.absoluteUrl(avatar, record),
+        bannerUrl: CreatorProfileRepairManager.absoluteUrl(banner, record),
+        publicFavoriteCount: raw?.favorited ?? raw?.favorite_count,
+        indexedAt: Number(raw?.indexed) * 1000 || record.indexedAt,
+        updatedAt: Number(raw?.updated) * 1000 || record.updatedAt,
+        avatarSource: avatar ? 'creator-api' : record.avatarSource,
+        bannerSource: banner ? 'creator-api' : record.bannerSource,
+        source: 'creator-api',
+        quality: 3
+      });
+    },
+    fromHtml(html, record) {
+      const doc = new DOMParser().parseFromString(String(html || ''), 'text/html');
+      const content = (selector, attribute = 'content') => {
+        const node = doc.querySelector(selector);
+        return node?.getAttribute?.(attribute) || node?.textContent || '';
+      };
+      const imageFrom = (selectors) => {
+        for (const selector of selectors) {
+          const node = doc.querySelector(selector);
+          if (!node) continue;
+          const raw = node.getAttribute?.('src') || node.getAttribute?.('content') || node.getAttribute?.('data-src') || node.getAttribute?.('data-lazy-src') || '';
+          const normalized = CreatorProfileRepairManager.absoluteUrl(raw, record);
+          if (normalized) return { url: normalized, selector };
+        }
+        return { url: '', selector: '' };
+      };
+      const backgroundFrom = (selectors) => {
+        for (const selector of selectors) {
+          const node = doc.querySelector(selector);
+          if (!node) continue;
+          const style = String(node.getAttribute?.('style') || node.style?.backgroundImage || '');
+          const match = style.match(/background(?:-image)?\s*:\s*url\(["']?([^"')]+)|url\(["']?([^"')]+)/i);
+          const normalized = CreatorProfileRepairManager.absoluteUrl(match?.[1] || match?.[2] || '', record);
+          if (normalized) return { url: normalized, selector };
+        }
+        return { url: '', selector: '' };
+      };
+      const avatar = imageFrom([
+        '[data-avatar] img',
+        'img[data-avatar]',
+        '.user-header__avatar img',
+        '.user-header img[class*="avatar"]',
+        '.creator-header img[class*="avatar"]',
+        'img[class*="avatar"]',
+        'img[alt*="avatar" i]'
+      ]);
+      let banner = imageFrom([
+        '[data-banner] img',
+        '[data-cover] img',
+        '.user-header__banner img',
+        '.creator-header__banner img',
+        'img[class*="banner"]',
+        'img[class*="cover"]'
+      ]);
+      if (!banner.url) banner = backgroundFrom([
+        '[data-banner][style*="background"]',
+        '[data-cover][style*="background"]',
+        '.user-header [style*="background-image"]',
+        '.creator-header [style*="background-image"]',
+        '[class*="banner"][style*="background"]',
+        '[class*="cover"][style*="background"]'
+      ]);
+      // og:image is only an ambiguous backdrop fallback. It must never be reused
+      // automatically as both avatar and banner.
+      if (!banner.url) {
+        const og = CreatorProfileRepairManager.absoluteUrl(content('meta[property="og:image"]'), record);
+        if (og && og !== avatar.url) banner = { url: og, selector: 'meta[property="og:image"]' };
+      }
+      const favorites = doc.body?.textContent?.match(/([\d,]+)\s+favorites?/i);
+      return CreatorDirectory.normalize({
+        ...record,
+        creatorName: content('meta[property="og:title"]') || content('h1', 'textContent'),
+        avatarUrl: avatar.url,
+        thumbnailUrl: avatar.url,
+        bannerUrl: banner.url,
+        publicFavoriteCount: favorites ? Number(favorites[1].replace(/,/g, '')) : record.publicFavoriteCount,
+        creatorUrl: record.creatorUrl,
+        profileCheckedAt: Date.now(),
+        avatarSource: avatar.selector || record.avatarSource,
+        bannerSource: banner.selector || record.bannerSource,
+        source: 'profile-html',
+        quality: 4
+      });
+    },
+    async repair(record, { signal, generation = ArtistsPageController.generation, force = false } = {}) {
+      const current = CreatorDirectory.normalize(record.directory || record);
+      const key = current.creatorKey;
+      const includeEnrichment = Boolean(force);
+      if (!CreatorDirectory.needsRepair(current, { includeEnrichment })) return current;
+      if (!force && current.profileCheckedAt && Date.now() - current.profileCheckedAt < CreatorProfileRepairManager.ttl) return current;
+      if (!force && current.profileRepairTerminalAt && Date.now() - current.profileRepairTerminalAt < CreatorProfileRepairManager.ttl) return current;
+      if (CreatorProfileRepairManager.inFlight.has(key)) return CreatorProfileRepairManager.inFlight.get(key);
+      const promise = (async () => {
+        let best = current;
+        const before = JSON.stringify([best.creatorName, best.avatarUrl, best.bannerUrl, best.publicFavoriteCount, best.creatorUrl, best.serviceLabel]);
+        try {
+          try {
+            const creators = await NativeCreatorDirectorySource.creators(signal);
+            const raw = creators.find((item) => String(item.id) === current.creatorId && String(item.service) === current.service);
+            if (raw) best = CreatorDirectory.merge(best, CreatorProfileRepairManager.fromApi(raw, best));
+          } catch (error) {
+            if (error.name === 'AbortError') throw error;
+            Logger.warn(`Creator API lookup failed for ${key}; trying profile HTML.`, error);
+          }
+          if (CreatorDirectory.needsRepair(best, { includeEnrichment })) {
+            await CatalogueRequestScheduler.waitTurn({ signal, operation: 'creator-profile-repair', creatorKey: key, requestKind: 'profile-html' });
+            const response = await fetch(best.creatorUrl, { credentials: 'same-origin', signal, headers: { Accept: 'text/html' } });
+            if (response.status === 429) {
+              CatalogueRequestScheduler.applyRateLimit(Number(response.headers.get('Retry-After')) * 1000 || Config.defaultRateLimitDelayMs, { creatorKey: key, requestKind: 'profile-html' });
+              const error = new Error('Pawchive rate limited creator repair.');
+              error.retryable = true;
+              throw error;
+            }
+            if (!response.ok) {
+              const error = new Error(`Creator profile returned HTTP ${response.status}.`);
+              error.retryable = response.status >= 500;
+              throw error;
+            }
+            best = CreatorDirectory.merge(best, CreatorProfileRepairManager.fromHtml(await response.text(), best));
+          }
+          best.profileCheckedAt = Date.now();
+          const after = JSON.stringify([best.creatorName, best.avatarUrl, best.bannerUrl, best.publicFavoriteCount, best.creatorUrl, best.serviceLabel]);
+          if (after === before && CreatorDirectory.needsRepair(best, { includeEnrichment })) best.profileRepairTerminalAt = Date.now();
+          await Cache.putCreatorDirectory([best]);
+          if (generation === ArtistsPageController.generation) CreatorIndexUI.patchRecord(key, { directory: best });
+          return best;
+        } finally {
+          CreatorProfileRepairManager.inFlight.delete(key);
+        }
+      })();
+      CreatorProfileRepairManager.inFlight.set(key, promise);
+      return promise;
+    },
+    async repairVisible(records, generation) {
+      // Explicit idle repair helper for essential identity failures only. Normal
+      // Local catalogue rendering never calls this method.
+      const weak = (records || []).filter((record) => CreatorDirectory.identityWeak(record.directory)).slice(0, 3);
+      for (const record of weak) {
+        if (generation !== ArtistsPageController.generation) return;
+        try { await CreatorProfileRepairManager.repair(record, { generation }); }
+        catch (error) { if (error.name !== 'AbortError') Logger.warn(`Creator profile repair failed for ${record.directory.creatorKey}.`, error); }
+      }
+    },
+    async records() {
+      const retained = CreatorIndexUI.retainedSession?.records || [];
+      const local = CreatorIndexUI.records.length ? CreatorIndexUI.records : retained;
+      if (local.length) return local.filter((record) => CreatorDirectory.needsRepair(record.directory, { includeEnrichment: true }));
+      const directory = await Cache.getCreatorDirectory();
+      return [...directory.values()].filter((record) => CreatorDirectory.needsRepair(record, { includeEnrichment: true })).map((directoryRecord) => ({
+        directory: directoryRecord,
+        meta: null,
+        state: CreatorState.empty(directoryRecord.creatorKey),
+        summary: null,
+        scanned: true,
+        catalogueState: 'partial'
+      }));
+    },
+    async run({ resume = false, retryFailed = false } = {}) {
+      if (CreatorProfileRepairManager.active) return CreatorProfileRepairManager.active.promise;
+      await CatalogueJobManager.acquireMaintenanceSlot();
+      const checkpoint = resume || retryFailed ? CreatorProfileRepairManager.checkpoint() : null;
+      const records = await CreatorProfileRepairManager.records();
+      const recordByKey = new Map(records.map((record) => [record.directory.creatorKey, record]));
+      const requestedKeys = checkpoint ? [...new Set([...(retryFailed ? checkpoint.failedKeys || [] : checkpoint.remainingKeys || []), ...(checkpoint.failedKeys || [])])] : [...recordByKey.keys()];
+      const tasks = requestedKeys.map((key) => recordByKey.get(key)).filter(Boolean);
+      const taskKeySet = new Set(tasks.map((record) => record.directory.creatorKey));
+      const controller = new AbortController();
+      const state = {
+        controller,
+        plannedKeys: checkpoint?.plannedKeys || tasks.map((record) => record.directory.creatorKey),
+        remainingKeys: tasks.map((record) => record.directory.creatorKey),
+        failedKeys: [...new Set(checkpoint?.failedKeys || [])].filter((key) => taskKeySet.has(key)),
+        total: Number(checkpoint?.total) || tasks.length,
+        completed: Number(checkpoint?.completed) || 0,
+        stopped: false,
+        message: 'Repairing creator profile metadata…',
+        startedAt: Number(checkpoint?.startedAt) || Date.now()
+      };
+      CreatorProfileRepairManager.active = state;
+      CreatorProfileRepairManager.persist(state);
+      CreatorProfileRepairManager.notify();
+      state.promise = (async () => {
+        for (const record of tasks) {
+          if (controller.signal.aborted) { state.stopped = true; break; }
+          const key = record.directory.creatorKey;
+          try {
+            await CreatorProfileRepairManager.repair(record, { signal: controller.signal, force: true });
+            state.completed += 1;
+            state.remainingKeys = state.remainingKeys.filter((value) => value !== key);
+            state.failedKeys = state.failedKeys.filter((value) => value !== key);
+          } catch (error) {
+            if (error.name === 'AbortError') { state.stopped = true; break; }
+            if (!state.failedKeys.includes(key)) state.failedKeys.push(key);
+            if (!state.remainingKeys.includes(key)) state.remainingKeys.push(key);
+            Logger.warn(`Creator profile repair failed for ${key}.`, error);
+          }
+          state.message = `Repaired ${state.completed} of ${state.total}`;
+          CreatorProfileRepairManager.persist(state);
+          CreatorProfileRepairManager.notify();
+        }
+        state.message = state.stopped ? 'Creator profile repair stopped.' : state.failedKeys.length ? 'Creator profile repair finished with retryable failures.' : 'Creator profile repair complete.';
+        CreatorProfileRepairManager.persist(state);
+        return CreatorProfileRepairManager.snapshot();
+      })().finally(() => {
+        CreatorProfileRepairManager.active = null;
+        CatalogueJobManager.releaseMaintenanceSlot();
+        CreatorProfileRepairManager.notify();
+      });
+      return state.promise;
+    },
+    stop() {
+      const state = CreatorProfileRepairManager.active;
+      if (!state) return;
+      state.stopped = true;
+      state.message = 'Stopping creator profile repair…';
+      CreatorProfileRepairManager.persist(state);
+      state.controller.abort();
+      CreatorProfileRepairManager.notify();
+    },
+    resume() { return CreatorProfileRepairManager.run({ resume: true }); },
+    retryFailed() { return CreatorProfileRepairManager.run({ retryFailed: true }); },
   };
 
   const CreatorBulkUI = {
@@ -4460,7 +6110,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       ArtistsPageController.unsubscribeJob=CatalogueJobManager.subscribe(()=>ArtistsPageController.renderJobs());ArtistsPageController.unsubscribeSettings=SettingsEvents.subscribe((event)=>{if(!ArtistsPageController.mounted())return;CatalogueJobManager.setConcurrency(event.current.catalogueConcurrentJobs);AttachmentBadgeSizing.applyAll({reason:'settings-event'});ArtistsPageController.renderBadgesFromCurrentState();Logger.info({operation:'creator-badge-settings-applied',enabled:event.current.creatorCardBadges.enabled,enabledTypes:CreatorCardBadgeRenderer.enabledTypes(event.current.creatorCardBadges),visibleCardCount:ArtistsPageController.cards.length,changed:event.changed});});try{await ArtistsPageController.requestRefresh('mount');}catch(error){CreatorIndexUI.setState('error',`Could not load the creator index: ${error.message}`);Logger.error('Could not load the creator index.',error);return guard();}if(!guard()){ArtistsPageController.cleanup();return false;}if(Logger.debug)Logger.info({operation:'artists-page-mounted',pageKey:page.pageKey,creatorCardCount:ArtistsPageController.cards.length});return true;
     },
     requestRefresh(reason='request') {
-      ArtistsPageController.refreshReasons.add(reason);if(ArtistsPageController.refreshPromise){ArtistsPageController.refreshPending=true;return ArtistsPageController.refreshPromise;}const run=async()=>{do{ArtistsPageController.refreshPending=false;const reasons=[...ArtistsPageController.refreshReasons];ArtistsPageController.refreshReasons.clear();await ArtistsPageController.refreshNow(reasons);}while(ArtistsPageController.refreshPending&&ArtistsPageController.mounted());};ArtistsPageController.refreshPromise=run().finally(()=>{ArtistsPageController.refreshPromise=null;});return ArtistsPageController.refreshPromise;
+      ArtistsPageController.refreshReasons.add(reason);if(ArtistsPageController.refreshPromise){ArtistsPageController.refreshPending=true;return ArtistsPageController.refreshPromise;}const run=async()=>{CreatorIndexUI.setRefreshing(true);try{do{ArtistsPageController.refreshPending=false;const reasons=[...ArtistsPageController.refreshReasons];ArtistsPageController.refreshReasons.clear();await ArtistsPageController.refreshNow(reasons);}while(ArtistsPageController.refreshPending&&ArtistsPageController.mounted());}finally{CreatorIndexUI.setRefreshing(false);}};ArtistsPageController.refreshPromise=run().finally(()=>{ArtistsPageController.refreshPromise=null;});return ArtistsPageController.refreshPromise;
     },
     async refresh(){return ArtistsPageController.requestRefresh('legacy-refresh');},
     async refreshNow(reasons=[]) {
@@ -4491,7 +6141,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       ArtistsPageController.backfillKeys.add(info.context.creatorKey);ArtistsPageController.backfillQueue.push({context:info.context,creatorName:info.creatorName,generation:ArtistsPageController.generation});ArtistsPageController.pumpBackfills();
     },
     pumpBackfills() {
-      while(ArtistsPageController.backfillActive<2&&ArtistsPageController.backfillQueue.length){const task=ArtistsPageController.backfillQueue.shift();ArtistsPageController.backfillActive+=1;const run=async()=>{const started=Date.now();try{const summary=await CreatorCatalogueSummary.recomputeAndPersist(task.context);if(Logger.debug)Logger.info({operation:'creator-summary-backfill',creatorKey:task.context.creatorKey,postCount:summary.sourcePostCount,counts:summary.counts,fingerprint:summary.classificationFingerprint,elapsedMs:Date.now()-started});if(task.generation===ArtistsPageController.generation&&ArtistsPageController.mounted())await ArtistsPageController.refresh();}catch(error){Logger.warn('Creator summary backfill failed.',error);}finally{ArtistsPageController.backfillActive-=1;ArtistsPageController.pumpBackfills();}};if(typeof requestIdleCallback==='function')requestIdleCallback(()=>run(),{timeout:800});else setTimeout(run,0);}
+      while(ArtistsPageController.backfillActive<2&&ArtistsPageController.backfillQueue.length){const task=ArtistsPageController.backfillQueue.shift();ArtistsPageController.backfillActive+=1;const run=async()=>{const started=Date.now();try{const summary=await CreatorCatalogueSummary.recomputeAndPersist(task.context);if(Logger.debug)Logger.info({operation:'creator-summary-backfill',creatorKey:task.context.creatorKey,postCount:summary.sourcePostCount,counts:summary.counts,fingerprint:summary.classificationFingerprint,elapsedMs:Date.now()-started});if(task.generation===ArtistsPageController.generation&&ArtistsPageController.mounted()){const meta=await Cache.getMeta(task.context.creatorKey);CreatorIndexUI.patchRecord(task.context.creatorKey,{summary,meta});}}catch(error){Logger.warn('Creator summary backfill failed.',error);}finally{ArtistsPageController.backfillActive-=1;ArtistsPageController.pumpBackfills();}};if(typeof requestIdleCallback==='function')requestIdleCallback(()=>run(),{timeout:800});else setTimeout(run,0);}
     },
     handleContextMenu(event) {
       const card=event.target.closest?.('[data-pmf-creator-key]');const info=card&&ArtistsPageController.cardByElement.get(card);if(!info)return;event.preventDefault();ArtistsPageController.openAction(info);

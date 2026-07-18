@@ -2,11 +2,21 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.6**
+Current version: **0.10.7**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.7 Local catalogue performance and scalable maintenance
+
+Local catalogue state is now retained across creator navigation and restored before the background IndexedDB refresh. The retained view preserves search, filters, sort, page, Queue-panel state, and scroll position. After records are loaded, ordinary Local pagination reuses a cached filtered/sorted array, slices the next 50 records, and renders the cards through one `DocumentFragment`; it does not start creator-profile requests or reload all creator records.
+
+Creator metadata repair is no longer coupled to Local rendering. Essential identity problems—such as missing or numeric names and invalid creator identity—are separated from optional enrichment such as missing banners or favorite counts. Manual repair has durable Stop, Resume, and Retry-failed state, and profile HTML uses distinct avatar and banner selectors instead of assigning one `og:image` to both.
+
+The main **Creator cards** Settings section now directly exposes **Count method** with **Posts containing media** and **Total attachments/links from every post**, followed by **Hide and don’t count posts with missing attachments**. The same controls and Data & performance maintenance actions are available from creator pages and `/artists`.
+
+**Update missing-attachment metadata** now offers Current creator, Current Local catalogue page, First N unknown posts, and All unknown posts. It uses structured details first, a separately bounded HTML fallback, adaptive request concurrency, batched IndexedDB writes, creator-level summary recomputation, rate/ETA reporting, and durable Stop/Resume/Retry-failed checkpoints. Failed work remains retryable, and buffered successes are not removed from the checkpoint until their batch write commits.
 
 ## v0.10.6 authoritative Queue, paginator, and metadata repair
 

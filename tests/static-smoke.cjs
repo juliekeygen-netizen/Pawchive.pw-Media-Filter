@@ -12,7 +12,7 @@ const {
 const json = (value) => JSON.parse(JSON.stringify(value));
 const creator = Route.parse('https://pawchive.pw/fanbox/user/12345?o=50&q=cat');
 
-assert.equal(Config.version, '0.10.6');
+assert.equal(Config.version, '0.10.7');
 assert.equal(Config.schemaVersion, 2);
 assert.equal(Config.databaseVersion, 5);
 assert.equal(Config.settingsKey, 'pmf-settings-v5');
@@ -88,7 +88,7 @@ assert.equal(CatalogueModel.button({ catalogue: covered }, { hasPosts: true }).l
 assert.equal(CatalogueModel.button(CatalogueModel.empty()).label, 'Scan');
 
 const settingsMethod = originalSource.slice(originalSource.indexOf('  const SettingsUI = {'),originalSource.indexOf('  UI.openSettings=SettingsUI.open;'));
-assert.ok(settingsMethod.includes("['scanning','Scanning']"));
+assert.ok(settingsMethod.includes("['scanning', 'Scanning']"));
 assert.ok(settingsMethod.includes('Show attachment badges on post cards'));
 assert.ok(settingsMethod.includes('Attachment badge size'));
 assert.ok(settingsMethod.includes('Confirm creator card scans'));
