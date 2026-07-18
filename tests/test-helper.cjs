@@ -32,7 +32,7 @@ function loadUserscript() {
   const originalSource = fs.readFileSync(userscriptPath, 'utf8');
   const source = originalSource.replace(
     '  Lifecycle.start();',
-    '  globalThis.__pmfTest = { Config, Util, SettingsEvents, Settings, Route, PawchiveData, MediaClassifier, ExternalLinkDetector, ProjectDetector, CatalogueMetadataPolicy, PostNormalizer, CatalogueOnlyMigration, Cache, CatalogueRequestScheduler, PostStatusEvents, PostStatus, FavoriteStateResolver, PostStatusFilters, FavoriteSyncCoordinator, PawchiveAPI, FilterEngine, PostSorter, FilterSummary, CatalogueModel, CreatorDirectory, CreatorState, CreatorStatusFilters, CreatorPresets, CreatorAggregateCondition, CreatorCustomRule, CreatorFilterEngine, CreatorSorter, CreatorCatalogueSummary, ArtistCatalogueAction, CreatorDisplayName, ArtistsDOM, CreatorCardReconstructor, CreatorGridGeometry, NativeArtistsVisibility, AttachmentBadgeSizing, CreatorCardBadgeRenderer, CreatorCardRightRail, CatalogueRunner, CatalogueJobManager, Presets, OverlayManager, PawchiveDOM, BadgeRenderer, CompactGridScale, CompactThumbnailRatio, CompactLayoutEngine, CreatorSessionCache, PostStatusStateCoordinator, CardDimTreatment, SeenCardTreatment, HiddenCreatorTreatment, PostStatusBadgeRenderer, StatusBadgeRenderer, CardRenderer, Paginator, OperationIssues, MetadataDetailPool, Catalogue, BaseUI, UI, SettingsUI, CreatorQueuePanel, CreatorIndexUI, CreatorSettingsUI, CreatorFilterUI, CreatorSortUI, CreatorBulkSelection, CreatorBulkUI, ArtistsPageController, App, NativeActionAlignment, PostPageController, CreatorActionController, CreatorPageController, isPmfOwnedNode, PmfDomMutationGuard, NativeStylesheetHealth, Lifecycle };',
+    '  globalThis.__pmfTest = { Config, Util, SettingsEvents, Settings, Route, PawchiveData, MediaClassifier, ExternalLinkDetector, ProjectDetector, CatalogueMetadataPolicy, PostNormalizer, CatalogueOnlyMigration, Cache, CatalogueRequestScheduler, PostStatusEvents, PostStatus, FavoriteStateResolver, PostStatusFilters, FavoriteSyncCoordinator, PawchiveAPI, FilterEngine, PostSorter, FilterSummary, CatalogueModel, CreatorDirectory, CreatorState, CreatorStatusFilters, CreatorDirectoryMode, CreatorPresets, CreatorAggregateCondition, CreatorCustomRule, CreatorFilterEngine, CreatorSorter, CreatorCatalogueSummary, ArtistCatalogueAction, CreatorDisplayName, ArtistsDOM, CreatorCardReconstructor, CreatorGridGeometry, NativeArtistsVisibility, NativeArtistsProxy, AttachmentBadgeSizing, CreatorCardBadgeRenderer, CreatorCardRightRail, CatalogueRunner, CatalogueJobManager, Presets, OverlayManager, PawchiveDOM, BadgeRenderer, CompactGridScale, CompactThumbnailRatio, CompactLayoutEngine, CreatorSessionCache, PostStatusStateCoordinator, CardDimTreatment, SeenCardTreatment, HiddenCreatorTreatment, PostStatusBadgeRenderer, StatusBadgeRenderer, CardRenderer, Paginator, OperationIssues, MetadataDetailPool, Catalogue, BaseUI, UI, SettingsUI, CreatorQueuePanel, CreatorIndexUI, CreatorSettingsUI, CreatorFilterUI, CreatorSortUI, CreatorBulkSelection, CreatorBulkUI, ArtistsPageController, App, NativeActionAlignment, PostPageController, CreatorActionController, CreatorPageController, isPmfOwnedNode, PmfDomMutationGuard, NativeStylesheetHealth, Lifecycle };',
   );
   const stored = new Map();
   let uuidCount = 0;
@@ -64,6 +64,11 @@ function loadUserscript() {
     append(...children) { this.children.push(...children); },
     appendChild(child) { this.children.push(child); return child; },
     replaceChildren(...children) { this.children = children; },
+    insertAdjacentElement(position, child) { this.children.push(child); child.parentElement = this; return child; },
+    insertAdjacentHTML() {},
+    contains(child) { return this === child || this.children.includes(child); },
+    matches() { return false; },
+    closest() { return null; },
     getBoundingClientRect() { return { width:this.clientWidth, height:0, left:0, top:0, right:this.clientWidth, bottom:0 }; },
     querySelector() { return null; },
     querySelectorAll() { return []; },
@@ -71,7 +76,7 @@ function loadUserscript() {
     remove() {},
   });
   const context = {
-    console, URL, DOMException, AbortController, structuredClone, setTimeout, clearTimeout,
+    console, URL, Event, DOMException, AbortController, structuredClone, setTimeout, clearTimeout,
     queueMicrotask, setInterval, clearInterval,
     crypto: { randomUUID: () => `test-id-${++uuidCount}` },
     location: { href: 'https://pawchive.pw/artists', origin: 'https://pawchive.pw' },

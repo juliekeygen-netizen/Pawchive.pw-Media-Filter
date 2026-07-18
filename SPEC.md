@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.1 specification
+# Pawchive.pw Media Filter v0.10.2 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.1`
+- Userscript and `Config.version`: `0.10.2`
 - Settings: `pmf-settings-v5`
 - Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -23,15 +23,22 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Creator filter state: `pmf-creator-filter-state-v1`
 - Creator presets: `pmf-creator-presets-v1`
 - Creator quick filters: `pmf-creator-status-filters-v1`
+- Creator directory mode: `pmf-creator-directory-mode-v1` (`native` or `catalogue`, default `native`)
 - Creator queue restoration: `pmf-creator-queue-session-v1`, payload version 2, in `sessionStorage`
 
-## Unified creator index
+## Creator directory modes
 
-Every supported `/artists` route uses one PMF-owned toolbar, paginator, and reconstructed creator grid. Native creator links are discovery evidence only: PMF never clones a live native card into the owned grid. Reconstructed cards contain safe directory identity, avatar/banner URLs, service, name, popularity, state, and Catalogue-derived badges. Their grid width and gaps are measured from the native grid before it is hidden.
+Every supported `/artists` route exposes one selector directly below Pawchive's search area.
 
-The controller keeps one saved native-grid reference, observes only that native grid, coalesces refresh requests, and rejects PMF-owned links during discovery. Native search remains available. Duplicate native grid, selector, and paginator elements are reversibly hidden only while the healthy PMF root is mounted. Directory records are independent from Catalogue metadata, so a known creator is not necessarily Scanned. Scanned means a complete or partial local Catalogue exists.
+**Native directory** preserves Pawchive as the data and DOM authority. The native search input and submission remain native; service, sort, direction, result count, paginator offsets, cards, and grid geometry come from the current Pawchive page. PMF proxies activate the exact native controls and paginator elements and are shown before the corresponding native visuals are hidden. PMF decorates native cards in place and may apply only the negative Scanned filter to the current native page. It does not reconstruct cards, synthesize a local page count, or fetch later pages to fill filtered gaps.
 
-The existing Pawchive creator search field filters the unified index and remains available to Pawchive’s native discovery mechanism. Creator filter, preset, quick-status, sort, and pagination state are separate from post filtering and post presets.
+**Catalogue** is a local view containing only creators whose metadata has stored posts or creator-page coverage. It searches, filters, sorts, and paginates locally at 50 creators per page. Its quick filters are Favorite, Like, and Hidden. Cards are generated from a sanitized clone of the current native card template when possible, otherwise from a safe fallback. All creator-specific links, labels, artwork, IDs, inline event handlers, data attributes, and framework attributes are replaced or removed. The local grid uses the measured native column count, gaps, card width, and card height.
+
+Mode-specific search listeners are abortable. Native navigation, Turbo replacement, BFCache restoration, mode switching, failed mounts, and shutdown restore the complete native UI and remove PMF card decoration. Queue state is independent from visual mode; bulk scope uses the current native page in Native mode and the current local result set in Catalogue mode.
+
+Creator status badges and settings contain Favorited, Liked, and Hidden only. Legacy stored `scanned` toggles normalize away without changing the Settings schema.
+
+The existing Pawchive creator search field remains the only creator search input. In Native directory it keeps Pawchive’s original submission behavior; in Catalogue mode an abortable listener filters only the local Catalogue set and is removed when leaving that mode. Creator filter, preset, quick-status, sort, and pagination state remain separate from post filtering and post presets.
 
 Favorite is Pawchive-native tri-state evidence. Like and Hidden are local creator state. Unknown Favorite matches neither positive nor negative Favorite filters. Hiding does not alter the current filter or immediately remove a card.
 

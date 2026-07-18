@@ -2,11 +2,21 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.1**
+Current version: **0.10.2**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.2 Native directory and Catalogue modes
+
+`/artists` now has two explicit, persisted modes. **Native directory** is the default and keeps Pawchive's real search, current service/sort/direction state, paginator state, native cards, and native grid geometry authoritative. PMF mirrors the native controls only after the proxy is ready, decorates the current native cards in place, and offers one negative Scanned filter for the current Pawchive page. It never fills native results from the local creator directory.
+
+**Catalogue** is the local index. It contains only creators with actual partial or complete local Catalogue coverage, filters and searches locally, provides the advanced PMF filter/sort controls and Favorite/Like/Hidden quick filters, and paginates 50 results at a time. Catalogue cards use a sanitized native card template when one is available, with creator-specific links, text, images, IDs, event attributes, and framework attributes replaced or removed. The Catalogue grid copies the measured native column count, gaps, card width, and card height.
+
+Switching modes removes the prior mode's search listeners and overlays without reloading. Cleanup restores Pawchive's grid, service/sort/direction controls, count, paginator, search placeholder, and card decorations. Existing Queue/bulk work continues independently of the selected visual mode.
+
+The former creator-card **Scanned** status badge, Catalogue quick filter, and setting have been removed. Old stored Scanned badge/filter values are ignored during normalization. Settings schema 4, `pmf-settings-v5`, post schema 2, and IndexedDB version 5 remain unchanged; the selected directory mode is stored separately in `pmf-creator-directory-mode-v1`.
 
 ## v0.10.1 creator-index corrective completion
 
@@ -24,11 +34,11 @@ Post schema 2 and IndexedDB version 5 are unchanged.
 
 `/artists` is now one PMF-owned creator index. Pawchive’s native creator cards are captured as templates and directory evidence, then reconstructed in a stable grid that combines current directory results, locally known creators, creator state, and Catalogue summaries. The native creator search field is reused; PMF does not add a duplicate search input.
 
-The creator index has independent creator filters, creator presets, sorting, and four global quick filters: Favorite, Like, Hidden, and Scanned. Scanned means any local Catalogue exists, including partial coverage. Known creator and Scanned creator are intentionally different concepts. Unknown native Favorite is excluded from both positive and negative Favorite filters.
+Historical note for v0.10.0: that release exposed Favorite, Like, Hidden, and Scanned creator quick filters. v0.10.2 supersedes that combined index: Catalogue mode now exposes only Favorite, Like, and Hidden, while Native directory has the single negative current-page Catalogue-availability filter described above.
 
 Creator filters support directory fields, complete/partial/unscanned Catalogue state, media post and attachment/link counts, optional editable Catalogue percentages, and post-status aggregates. Percentages always use `posts containing the type ÷ total Catalogue posts × 100`. Aggregate filters require complete Catalogues by default; partial Catalogues can be explicitly included as lower-bound results.
 
-Individual creator pages add local **Like/Unlike** and **Hide/Unhide** actions beside Pawchive’s real Favorite action. Like and Hidden are stored locally and never make a Pawchive request. Creator cards use one coordinated right rail for Favorite/Like, attachment totals, and Hidden/Scanned status. Hidden cards can use the shared Low/Medium/High dim treatment.
+Individual creator pages add local **Like/Unlike** and **Hide/Unhide** actions beside Pawchive’s real Favorite action. Like and Hidden are stored locally and never make a Pawchive request. Creator cards use one coordinated right rail for Favorite/Like, attachment totals, and Hidden status. Hidden cards can use the shared Low/Medium/High dim treatment.
 
 The `/artists` toolbar exposes a split bulk action for Update, Scan, and Resume. Confirmed batches freeze creator order, deduplicate queued/active creators, respect whole-operation concurrency 1 or 2, and persist waiting descriptors in `sessionStorage`. The expandable Queue/Issues panel supports Stop, Move to top, Remove, Retry, Dismiss, Clear completed, and Cancel remaining batch. Interrupted active work is reported as interrupted after reload rather than completed.
 
@@ -50,7 +60,7 @@ Creator quick-filter icons and post-card status icons use separate, stable outer
 
 v0.8.3 keeps post schema 2 and IndexedDB version 4. It adds a one-time card-scale migration, one compact-layout authority, persistent post-status coordination, a five-creator LRU session cache, coalesced navigation reconciliation, soft BFCache/Turbo reuse, direct-sibling post actions, and a reusable draft-based Settings UI.
 
-Scanned creators always use the compact Catalogue grid; unscanned creators retain Pawchive's native grid. Filter, preset, search, sort, page/anchor, layout, and scroll state are persisted automatically.
+In the v0.10.2 split, Native directory always retains Pawchive's native grid and Catalogue mode always uses the compact local Catalogue grid. Filter, preset, search, sort, page/anchor, layout, and scroll state are persisted automatically.
 
 
 

@@ -1,4 +1,14 @@
-# Pawchive.pw Media Filter v0.10.1 testing
+# Pawchive.pw Media Filter v0.10.2 testing
+
+## v0.10.2 `/artists` mode matrix
+
+Run the automated suite first. It covers version/mode persistence, native proxy activation, current-page negative Scanned filtering, Catalogue membership, sanitized templates, exact measured columns and height, 50-result pagination, repeated switching, cleanup/restoration, legacy Scanned-setting normalization, Queue/bulk preservation, and retained post-page behavior.
+
+In Tampermonkey, verify Native directory is the first-run default. Search for a creator not stored locally; change Service, Sort, direction, and every paginator control; confirm Pawchive's real cards, count, URL/state, and native column geometry remain authoritative. Toggle the negative Scanned filter and confirm it only hides scanned cards already on the current page without filling from later pages.
+
+Switch to Catalogue and confirm only partial/complete local Catalogues appear, search is local, advanced filters and sorts work, quick filters are Favorite/Like/Hidden only, pages contain at most 50 creators, and the grid has the same measured column count/card height as Native mode. Inspect cloned cards for correct creator links, names, service, popularity, avatar/banner, and no stale IDs or framework/event attributes.
+
+Repeat Native â†” Catalogue switching, search submission, native pagination, browser Back/Forward, Turbo navigation, BFCache return, Settings changes, Queue operations, and cleanup. Force a Catalogue load failure and disable the userscript; native search, controls, count, paginator, cards, grid, placeholder, and card styling must be fully restored with no duplicate roots or listeners.
 
 ## v0.10.1 corrective completion live matrix
 
@@ -18,7 +28,7 @@
 Test at approximately 1920×1080 and 2560×1440.
 
 1. Open `/artists` with many creators and a short result set. Exercise native search, pagination, Back/Forward, refresh, Turbo, and BFCache. Confirm one PMF toolbar/grid/paginator, no blank page, stable card geometry, and native restoration if mounting is interrupted.
-2. Cycle Favorite, Like, Hidden, and Scanned through Off → Match → No match. Confirm unknown Favorite matches neither active Favorite state and partial Catalogues count as Scanned.
+2. In Catalogue mode, cycle Favorite, Like, and Hidden through Off → Match → No match. Confirm unknown Favorite matches neither active Favorite state. Separately verify Native directory's negative Catalogue-availability filter only hides current-page cards that have local Catalogue data.
 3. Test creator directory, Catalogue, every media child dialog, posts versus attachments/links, all four operators, 0/50/100/decimal/Between percentages, complete-only behavior, partial lower-bound opt-in, post-status aggregates, combined AND rules, and creator presets.
 4. Test every creator sort in both directions. Confirm stable ties, unknown-last behavior, and a stable visible anchor where practical.
 5. On creator profiles test Favorite, Like/Unlike, and Hide/Unhide. Confirm action order/alignment, reload persistence, deduplication after navigation, and no Pawchive request for Like/Hide.
