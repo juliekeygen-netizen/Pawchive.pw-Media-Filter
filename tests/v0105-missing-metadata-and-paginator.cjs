@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { loadUserscript } = require('./test-helper.cjs');
 
 const { api: { Config, Settings, PostMissingStats, CreatorCatalogueSummary, Paginator } } = loadUserscript();
-assert.equal(Config.version, '0.10.5');
+assert.equal(Config.version, '0.10.6');
 
 const parsed = PostMissingStats.parse(' Missing 1 full-res photo, 2 videos and 3 archives. ');
 assert.equal(parsed.missingStatsKnown, true);
@@ -35,4 +35,4 @@ assert.equal(summary.excludedMissingAttachmentPostCount, 20);
 assert.equal(summary.media.videos.posts, 480);
 assert.equal(summary.completeness, 'complete');
 
-console.log('Pawchive Media Filter v0.10.5 missing metadata and paginator tests passed.');
+console.log('Pawchive Media Filter v0.10.6 missing metadata and paginator tests passed.');

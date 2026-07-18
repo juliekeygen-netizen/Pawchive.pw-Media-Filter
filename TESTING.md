@@ -1,4 +1,14 @@
-# Pawchive.pw Media Filter v0.10.5 testing
+# Pawchive.pw Media Filter v0.10.6 testing
+
+## v0.10.6 corrective matrix
+
+1. Run `node tests/v0106-authoritative-runtime.cjs`, then the complete executable suite.
+2. On Local Catalogue pages 1, 2, middle, penultimate, and final, verify `« ‹ [stable window] › »`, 50 cards per page, correct disabled boundaries, and no empty page after filter/search changes.
+3. With 500 stored posts and 20 checked-missing exclusions, verify stored coverage remains 500, aggregate eligibility is 480, and 240 eligible matches display/filter/sort as 50%.
+4. Complete Queue work, wait at least 15 seconds, reload, retry an issue, clear completed, start a new idle batch, and append to an active batch. Verify success history, issue retention, snapshot fields, and terminal totals.
+5. Open both Settings contexts. Start/Stop/Resume missing-attachment maintenance, close/reopen Settings, reload, and confirm structured-data preference, live counts, failure retention, and checkpoint continuation.
+6. Repair a numeric creator name with missing imagery. Confirm name/avatar/banner/favorite persistence and card refresh without rescanning Catalogue posts.
+7. Repeat Native directory → creator → Back at least 20 times and confirm one mode selector, root, toolbar, paginator, Queue panel, overlay owner, and listener/observer set.
 
 ## v0.10.5 corrective follow-up matrix
 

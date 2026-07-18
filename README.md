@@ -2,11 +2,19 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.5**
+Current version: **0.10.6**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.6 authoritative Queue, paginator, and metadata repair
+
+The Local Catalogue renderer now directly owns a stable five-button desktop (three-button narrow) page window with persistent First, Previous, Next, and Last controls. Aggregate media, status, Favorite, custom-extension, custom-rule, tooltip, and sorting percentages use the aggregate-eligible post count; stored Catalogue coverage remains unchanged.
+
+Queue session v4 is serialized and restored directly, including directory snapshots, batches, terminal accounting, issues, recent history, and concurrency. Successful history has no expiry timer: it remains until **Clear completed** or the next idle batch. Retries preserve snapshots and reverse exactly one prior terminal contribution.
+
+Weak creator records can be repaired lazily or through **Repair creator profile metadata**. **Update missing-attachment metadata** now uses structured data first and persists Stop/Resume progress, failures, remaining IDs, and affected creators. Both actions and live progress are available from creator-page and `/artists` Settings. Existing v1-v3 Queue sessions migrate in place; IndexedDB, post schema, settings, presets, and Catalogue data remain compatible.
 
 ## v0.10.5 corrective follow-up
 

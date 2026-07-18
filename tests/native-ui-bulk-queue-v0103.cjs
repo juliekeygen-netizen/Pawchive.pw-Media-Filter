@@ -8,8 +8,8 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config, Util, CatalogueJobManager, CreatorBulkSelection, NativeArtistsProxy } = api;
 
-assert.equal(Config.version, '0.10.5');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.5/);
+assert.equal(Config.version, '0.10.6');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.6/);
 for (const [name, source] of [
   ['userscript', originalSource],
   ...['README.md', 'SPEC.md', 'TESTING.md'].map((name) => [
@@ -41,7 +41,7 @@ assert.match(originalSource, /Queue · recently completed/);
 assert.match(originalSource, /Queue idle/);
 assert.match(originalSource, /terminalJobs/);
 assert.match(originalSource, /finished,remaining/);
-assert.match(originalSource, /version:3,waiting,active,recent,batches/);
+assert.match(originalSource, /version:4,waiting,active,recent,batches/);
 assert.match(originalSource, /host\.dataset\.selectedTab/);
 assert.match(originalSource, /host\.scrollTop=scrollTop/);
 assert.match(originalSource, /balanceTrailing/);

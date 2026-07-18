@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, context } = loadUserscript();
 const { Config, NativeActionAlignment, PostPageController } = api;
 
-assert.equal(Config.version, '0.10.5');
+assert.equal(Config.version, '0.10.6');
 
 function styleStore() {
   const values = new Map();

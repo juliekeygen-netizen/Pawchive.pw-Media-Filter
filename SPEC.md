@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.5 specification
+# Pawchive.pw Media Filter v0.10.6 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.5`
+- Userscript and `Config.version`: `0.10.6`
 - Settings: `pmf-settings-v5`
 - Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -17,7 +17,18 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Post-status store: `postStatuses`, keyed by domain/service/creator/post with a `creatorKey` index
 - Native Favorites sync state: `pmf-favorite-sync-v1`
 - Global quick-status filters: `pmf-post-status-filters-v1`
+- Queue session: authoritative schema 4 with explicit migration from schemas 1-3
+- Missing-attachment checkpoint: `pmf-missing-attachment-maintenance-v1`
+- Creator-profile repair checkpoint: `pmf-creator-profile-repair-v1`
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.10.6 contracts
+
+- `sourcePostCount` is the authoritative stored Catalogue count. `aggregateEligiblePostCount` is the denominator for media, status, Favorite, custom-extension, and custom-rule percentages. `excludedMissingAttachmentPostCount` reports only checked-missing posts excluded from aggregates; unknown posts remain eligible.
+- Local Catalogue pagination renders First, Previous, a stable numbered window, Next, and Last. It displays 50 creators per page, clamps after every result change, and does not alter the Native Pawchive paginator.
+- Queue session v4 writes pending, active, recent, issue-derived terminal rows, batches, terminal job contributions, concurrency, and normalized `directorySnapshot` values in one pass. Completed success history is user-cleared or idle-batch-cleared, never timer-expired.
+- Creator snapshots are merged without replacing strong names, URLs, images, service labels, or finite favorite counts with weak data. Repair uses local/native evidence, the creator API, and profile HTML in that order.
+- Missing-attachment maintenance prefers stored and detail-API structured fields, falls back to post HTML, and persists resumable progress. Closing Settings does not stop maintenance.
 - Catalogue-only migration marker: `pmf-catalogue-only-migration-v1`
 - Card-scale migration marker: `pmf-card-scale-v083-migrated`
 - Creator filter state: `pmf-creator-filter-state-v1`
