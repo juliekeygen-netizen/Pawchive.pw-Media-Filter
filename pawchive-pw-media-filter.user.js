@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.10.3
+// @version      0.10.4
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.10.3',
+    version: '0.10.4',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -86,6 +86,7 @@
     postAttachmentBadgeSize: 'small',
     creatorAttachmentBadgeSize: 'small',
     creatorCardBadgeCountMode: 'posts',
+    excludePostsWithMissingAttachments: false,
     postStatusBadgeSize: 'small',
     confirmCreatorCardScan: true,
     catalogueConcurrentJobs: 1,
@@ -345,6 +346,7 @@
       output.creatorCardBadgeCountMode=['posts','attachments'].includes(safe.creatorCardBadgeCountMode)
         ? safe.creatorCardBadgeCountMode
         : 'posts';
+      output.excludePostsWithMissingAttachments=safe.excludePostsWithMissingAttachments===true;
       output.postStatusBadgeSize=['small','medium','big'].includes(safe.postStatusBadgeSize)
         ? safe.postStatusBadgeSize
         : 'small';
@@ -832,6 +834,24 @@
     },
   };
 
+  // Pawchive does not consistently expose this on list responses.  Keep the
+  // three-state distinction: unknown, checked/no missing attachments, checked/missing.
+  const PostMissingStats = {
+    parse(text='') {
+      const raw=String(text||'').replace(/\s+/g,' ').trim();
+      if(!raw)return{missingStatsKnown:false,hasMissingStats:false,missingStatsText:'',missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingFileCount:0,missingUnknownCount:0};
+      const result={missingStatsKnown:true,hasMissingStats:true,missingStatsText:raw,missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingFileCount:0,missingUnknownCount:0};
+      let matched=false;for(const match of raw.matchAll(/(\d+)\s+(?:full[- ]res\s+)?(photos?|images?|videos?|audio|files?|attachments?)/gi)){const count=Number(match[1])||0,type=match[2].toLowerCase();matched=true;result.missingAttachmentCount+=count;if(/photo|image/.test(type))result.missingImageCount+=count;else if(/video/.test(type))result.missingVideoCount+=count;else if(/audio/.test(type))result.missingAudioCount+=count;else result.missingFileCount+=count;}
+      if(!matched)result.missingUnknownCount=1;return result;
+    },
+    fromRaw(raw={}) {
+      const value=raw.missing_stats??raw.missingStats??raw.missing_attachments??raw.missingAttachments??raw.post_missing_stats;
+      if(value==null)return{missingStatsKnown:Boolean(raw.missingStatsKnown),hasMissingStats:Boolean(raw.hasMissingStats),missingStatsText:String(raw.missingStatsText||''),missingAttachmentCount:Number(raw.missingAttachmentCount)||0,missingImageCount:Number(raw.missingImageCount)||0,missingVideoCount:Number(raw.missingVideoCount)||0,missingAudioCount:Number(raw.missingAudioCount)||0,missingFileCount:Number(raw.missingFileCount)||0,missingUnknownCount:Number(raw.missingUnknownCount)||0};
+      if(value===false||value===0||String(value).trim()==='')return{missingStatsKnown:true,hasMissingStats:false,missingStatsText:'',missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingFileCount:0,missingUnknownCount:0};
+      return PostMissingStats.parse(typeof value==='string'?value:raw.missingStatsText||String(value));
+    },
+  };
+
   const PostNormalizer = {
     mediaPath(path) {
       if (!path) return '';
@@ -874,6 +894,7 @@
       const service = String(raw.service || context.service);
       const creatorId = String(raw.user || raw.creator_id || context.creatorId);
       const postUrl = raw.post_url || `/${encodeURIComponent(service)}/user/${encodeURIComponent(creatorId)}/post/${encodeURIComponent(id)}`;
+      const missing=PostMissingStats.fromRaw(raw);
       return {
         key: `${context.creatorKey}|${id}`,
         creatorKey: context.creatorKey,
@@ -924,6 +945,9 @@
         hasArchives: buckets.archive.length > 0,
         hasExternalLinks: links.externalLinks.length > 0,
         hasLikelyExternalMedia: links.likelyMediaLinks.length > 0,
+        ...missing,
+        missingStatsObservedAt:missing.missingStatsKnown?Date.now():0,
+        missingStatsSource:missing.missingStatsKnown?'api':'' ,
         completeness,
         cacheSources: {
           scan: Boolean(raw.cacheSources?.scan),
@@ -947,6 +971,15 @@
         content: post.content,
         tags: post.invalidTagsValue ?? post.tags,
         thumbnail: post.thumbnailUrl,
+        missingStatsKnown:post.missingStatsKnown,
+        hasMissingStats:post.hasMissingStats,
+        missingStatsText:post.missingStatsText,
+        missingAttachmentCount:post.missingAttachmentCount,
+        missingImageCount:post.missingImageCount,
+        missingVideoCount:post.missingVideoCount,
+        missingAudioCount:post.missingAudioCount,
+        missingFileCount:post.missingFileCount,
+        missingUnknownCount:post.missingUnknownCount,
         cacheSources: post.cacheSources,
       };
     },
@@ -972,6 +1005,7 @@
         mediaDownloadLinkCount: 0, mediaDownloadLinks: [],
         hasVideo: false, hasMp4: false, hasImages: false, hasArchives: false,
         hasExternalLinks: false, hasLikelyExternalMedia: false,
+        missingStatsKnown:false,hasMissingStats:false,missingStatsText:'',missingAttachmentCount:0,missingImageCount:0,missingVideoCount:0,missingAudioCount:0,missingFileCount:0,missingUnknownCount:0,missingStatsObservedAt:0,missingStatsSource:'',
         completeness: 'unresolved', cacheSources:{scan:false,catalogue:false}, scannedAt: 0, scanSchemaVersion: Config.schemaVersion,
       };
     },
@@ -1790,6 +1824,7 @@
     },
     matches(post, state, query = '', status = null) {
       if (!post) return false;
+      if(Settings.value.excludePostsWithMissingAttachments&&post.missingStatsKnown&&post.hasMissingStats)return false;
       return FilterEngine.mediaPredicate(post, state)
         && FilterEngine.customRulesPredicate(post, state)
         && FilterEngine.publishedDatePredicate(post, state)
@@ -2067,9 +2102,13 @@
       const earliest=(a,b)=>a==null?b:b==null?a:Math.min(a,b);const latest=(a,b)=>a==null?b:b==null?a:Math.max(a,b);
       next.indexedAt=earliest(old.indexedAt,next.indexedAt);next.updatedAt=latest(old.updatedAt,next.updatedAt);
       next.firstSeenAt=earliest(old.firstSeenAt,next.firstSeenAt);next.lastSeenInDirectoryAt=latest(old.lastSeenInDirectoryAt,next.lastSeenInDirectoryAt);
-      if(incoming.publicFavoriteCount==null)next.publicFavoriteCount=old.publicFavoriteCount;
-      if(!incoming.avatarUrl&&!incoming.thumbnailUrl){next.avatarUrl=old.avatarUrl;next.thumbnailUrl=old.thumbnailUrl;}
-      if(!incoming.bannerUrl)next.bannerUrl=old.bannerUrl;
+      const weakName=(value,id)=>!String(value||'').trim()||String(value).trim()===String(id||'').trim()||/^\d+$/.test(String(value||'').trim());
+      if(weakName(incoming.creatorName,next.creatorId)&&!weakName(old.creatorName,old.creatorId))next.creatorName=old.creatorName;
+      if(incoming.publicFavoriteCount==null||!Number.isFinite(Number(incoming.publicFavoriteCount)))next.publicFavoriteCount=old.publicFavoriteCount;
+      if(!String(incoming.avatarUrl||incoming.thumbnailUrl||'').trim()){next.avatarUrl=old.avatarUrl;next.thumbnailUrl=old.thumbnailUrl;}
+      if(!String(incoming.bannerUrl||'').trim())next.bannerUrl=old.bannerUrl;
+      if(!String(incoming.serviceLabel||'').trim()&&String(old.serviceLabel||'').trim())next.serviceLabel=old.serviceLabel;
+      if(!String(incoming.creatorUrl||'').trim()&&String(old.creatorUrl||'').trim())next.creatorUrl=old.creatorUrl;
       return next;
     },
     fromCard(info) {
@@ -2208,8 +2247,8 @@
         mediaLinkLogicVersion:2,
       });
     },
-    cataloguePosts(posts) {
-      return (posts||[]).filter((post)=>post?.cacheSources?.catalogue===true&&post.scanSchemaVersion===Config.schemaVersion);
+    cataloguePosts(posts,{displayEligible=false}={}) {
+      return (posts||[]).filter((post)=>post?.cacheSources?.catalogue===true&&post.scanSchemaVersion===Config.schemaVersion&&(!displayEligible||!Settings.value.excludePostsWithMissingAttachments||!post.missingStatsKnown||!post.hasMissingStats));
     },
     extensionFingerprint(values){return Util.normalizeExtensions(values||[]).values.sort().join('|');},
     customExtensionAggregate(posts,values) {
@@ -2238,7 +2277,7 @@
       return CreatorCatalogueSummary.cataloguePosts(posts).reduce((total,post)=>{const status=statuses.get(String(post.id))||PostStatus.empty({creatorKey:post.creatorKey,postId:String(post.id),postKey:post.key});if(status.liked)total.liked+=1;if(status.seen)total.seen+=1;const favorite=FavoriteStateResolver.resolve({postKey:post.key,postStatus:status,snapshotMeta,snapshotMembership});if(typeof favorite==='boolean'){total.favoriteKnown+=1;if(favorite)total.favorited+=1;}return total;},{liked:0,seen:0,favorited:0,favoriteKnown:0});
     },
     compute(posts,catalogueState={},now=Date.now(),options={}) {
-      const usable=CreatorCatalogueSummary.cataloguePosts(posts);const safe=(value)=>Math.max(0,Number(value)||0);const media={videos:{posts:0,attachments:0},images:{posts:0,attachments:0},archives:{posts:0,attachments:0},projectFiles:{posts:0,attachments:0},externalLinks:{posts:0,links:0}};
+      const usable=CreatorCatalogueSummary.cataloguePosts(posts,{displayEligible:true});const safe=(value)=>Math.max(0,Number(value)||0);const media={videos:{posts:0,attachments:0},images:{posts:0,attachments:0},archives:{posts:0,attachments:0},projectFiles:{posts:0,attachments:0},externalLinks:{posts:0,links:0}};
       let earliestPublishedAt=null,latestPublishedAt=null;const publishedTimestamps=[];usable.forEach((post)=>{[['videos','videoCount'],['images','imageCount'],['archives','archiveCount']].forEach(([type,key])=>{const count=safe(post[key]);media[type].attachments+=count;if(count>0)media[type].posts+=1;});const projectAttachments=safe(post.projectFileCount);media.projectFiles.attachments+=projectAttachments;if(projectAttachments>0||post.hasProjectFiles===true)media.projectFiles.posts+=1;const links=safe(post.externalLinkCount);media.externalLinks.links+=links;if(links>0)media.externalLinks.posts+=1;const stamp=Date.parse(post.published||post.publishedAt||'');if(Number.isFinite(stamp)){publishedTimestamps.push(stamp);earliestPublishedAt=earliestPublishedAt==null?stamp:Math.min(earliestPublishedAt,stamp);latestPublishedAt=latestPublishedAt==null?stamp:Math.max(latestPublishedAt,stamp);}});
       const evaluation=CatalogueModel.evaluateCoverage(catalogueState);const counts=Object.fromEntries(Object.entries(media).map(([key,value])=>[key,value.attachments??value.links??0]));
       const dynamic=CreatorFilterEngine.normalizeState(options.filterState||{});const customExtensionAggregates={};const extensionValues=dynamic.media.customExtensions?.extensions||[];if(extensionValues.length){const aggregate=CreatorCatalogueSummary.customExtensionAggregate(usable,extensionValues);customExtensionAggregates[aggregate.fingerprint]=aggregate;}
@@ -2586,8 +2625,9 @@
     normalizeBatch(batch={}){const terminalJobs=batch.terminalJobs&&typeof batch.terminalJobs==='object'?{...batch.terminalJobs}:{};const completed=Math.max(0,Number(batch.completed??batch.complete)||0);return{...batch,total:Math.max(0,Number(batch.total)||0),waiting:Math.max(0,Number(batch.waiting)||0),active:Math.max(0,Number(batch.active)||0),completed,complete:completed,failed:Math.max(0,Number(batch.failed)||0),stopped:Math.max(0,Number(batch.stopped)||0),removed:Math.max(0,Number(batch.removed)||0),terminalJobs};},
     recordTerminal(job,status=job?.status){if(!job?.batchId||!['complete','failed','stopped','interrupted','removed'].includes(status))return false;const current=CatalogueJobManager.batches.get(job.batchId)||CatalogueJobManager.createBatch({id:job.batchId,label:job.batchLabel});Object.assign(current,CatalogueJobManager.normalizeBatch(current));CatalogueJobManager.batches.set(current.id,current);if(current.terminalJobs[job.id])return false;const field=status==='complete'?'completed':status==='failed'?'failed':status==='removed'?'removed':'stopped';current.terminalJobs[job.id]=field;current[field]+=1;current.complete=current.completed;current.total=Math.max(current.total,current.completed+current.failed+current.stopped+current.removed);current.updatedAt=Date.now();return true;},
     updateBatch(batchId){if(!batchId)return null;const original=CatalogueJobManager.batches.get(batchId)||CatalogueJobManager.createBatch({id:batchId});const batch=CatalogueJobManager.normalizeBatch(original);CatalogueJobManager.batches.set(batchId,batch);const live=[...CatalogueJobManager.pendingJobs,...CatalogueJobManager.activeJobs.values()].filter((job)=>job.batchId===batchId);[...CatalogueJobManager.recentJobs.values()].filter((job)=>job.batchId===batchId).forEach((job)=>CatalogueJobManager.recordTerminal(job));batch.waiting=live.filter((job)=>job.status==='queued').length;batch.active=live.filter((job)=>job.status==='running').length;batch.complete=batch.completed;const finished=batch.completed+batch.failed+batch.stopped+batch.removed;batch.total=Math.max(batch.total,finished+batch.active+batch.waiting);batch.updatedAt=Date.now();return batch;},
-    enqueue(context,requestedAction,{creatorName=context.creatorId,front=false,batchId='',batchLabel='',batchSequence=0}={}) {
+    enqueue(context,requestedAction,{creatorName=context.creatorId,front=false,batchId='',batchLabel='',batchSequence=0,directorySnapshot=null}={}) {
       const existing=CatalogueJobManager.activeForCreator(context.creatorKey)||CatalogueJobManager.queuedForCreator(context.creatorKey);if(existing)return{accepted:false,state:existing.status==='queued'?'already-queued':'already-active',job:existing,position:CatalogueJobManager.queuePosition(context.creatorKey)};
+      const snapshot=CreatorDirectory.normalize(directorySnapshot||{...context,creatorName,creatorUrl:context.creatorUrl});Cache.getCreatorDirectory([context.creatorKey]).then((known)=>Cache.putCreatorDirectory([CreatorDirectory.merge(known.get(context.creatorKey)||{},snapshot)])).catch((error)=>Logger.warn('Could not save queued creator directory snapshot.',error));
       const job={id:`catalogue-job-${Date.now()}-${++CatalogueJobManager.sequence}`,creatorKey:context.creatorKey,creatorName,context:{...context},requestedAction,kind:requestedAction,status:'queued',queuedAt:Date.now(),queueOrder:front?--CatalogueJobManager.queueOrder:++CatalogueJobManager.queueOrder,batchId:String(batchId||''),batchLabel:String(batchLabel||''),batchSequence:Number(batchSequence)||0,progress:{kind:requestedAction},controller:null,result:null,error:null};if(job.batchId&&!CatalogueJobManager.batches.has(job.batchId))CatalogueJobManager.createBatch({id:job.batchId,label:job.batchLabel,total:0});if(front)CatalogueJobManager.pendingJobs.unshift(job);else CatalogueJobManager.pendingJobs.push(job);CatalogueJobManager.queuedByCreator.set(job.creatorKey,job);CatalogueJobManager.updateBatch(job.batchId);CatalogueJobManager.persistSession();Logger.info({operation:'catalogue-job-enqueued',creatorKey:job.creatorKey,requestedAction,queuePosition:CatalogueJobManager.queuePosition(job.creatorKey),queueLength:CatalogueJobManager.pendingJobs.length,activeCount:CatalogueJobManager.activeJobs.size,concurrency:CatalogueJobManager.concurrency});CatalogueJobManager.notify();CatalogueJobManager.pump();return{accepted:true,state:job.status==='running'?'started':'queued',job,position:CatalogueJobManager.queuePosition(job.creatorKey)};
     },
     async reevaluate(job){if(job.requestedAction==='metadata-retry')return'metadata-retry';const meta=await Cache.getMeta(job.creatorKey);const action=ArtistCatalogueAction.forState(meta,null);return action==='build'?'build':action==='resume'?'resume':'update';},
@@ -2614,6 +2654,13 @@
     async resumeFromBfcache(){const descriptors=CatalogueJobManager.suspendedDescriptors.splice(0);await CatalogueJobManager.suspendedSettlement;descriptors.reverse().forEach((item)=>{const result=CatalogueJobManager.enqueue(item.context,item.requestedAction,{...item,front:true});if(result.job){result.job.id=item.id||result.job.id;result.job.queueOrder=Number(item.queueOrder)||result.job.queueOrder;result.job.queuedAt=Number(item.queuedAt)||result.job.queuedAt;}});CatalogueJobManager.persistSession();},
     shutdown(){CatalogueJobManager.activeJobs.forEach((job)=>{job.shutdown=true;job.controller?.abort();});CatalogueJobManager.pendingJobs=[];CatalogueJobManager.activeJobs.clear();CatalogueJobManager.queuedByCreator.clear();CatalogueJobManager.recentJobs.clear();CatalogueJobManager.batches.clear();CatalogueJobManager.suspendedDescriptors=[];CatalogueJobManager.suspendedSettlement=Promise.resolve();CatalogueJobManager.notify();},
   };
+
+  const catalogueEnqueueBase=CatalogueJobManager.enqueue.bind(CatalogueJobManager);
+  CatalogueJobManager.enqueue=function enqueueWithDirectorySnapshot(context,requestedAction,options={}){const snapshot=CreatorDirectory.normalize(options.directorySnapshot||{...context,creatorName:options.creatorName||context.creatorId,creatorUrl:context.creatorUrl});const result=catalogueEnqueueBase(context,requestedAction,options);if(result.job){result.job.directorySnapshot=snapshot;Cache.getCreatorDirectory([snapshot.creatorKey]).then((known)=>Cache.putCreatorDirectory([CreatorDirectory.merge(known.get(snapshot.creatorKey)||{},snapshot)])).catch((error)=>Logger.warn('Could not persist creator directory snapshot.',error));CatalogueJobManager.persistSession();}return result;};
+  const cataloguePersistBase=CatalogueJobManager.persistSession.bind(CatalogueJobManager);
+  CatalogueJobManager.persistSession=function persistSessionWithDirectorySnapshot(){const saved=cataloguePersistBase();try{const storage=globalThis.sessionStorage,data=JSON.parse(storage?.getItem(Config.creatorQueueSessionKey)||'{}');const snapshots=new Map([...CatalogueJobManager.pendingJobs,...CatalogueJobManager.activeJobs.values(),...CatalogueJobManager.recentJobs.values()].map((job)=>[job.id,job.directorySnapshot]).filter(([,snapshot])=>snapshot));['waiting','active','recent'].forEach((key)=>{(data[key]||[]).forEach((job)=>{if(snapshots.has(job.id))job.directorySnapshot=snapshots.get(job.id);});});storage?.setItem(Config.creatorQueueSessionKey,JSON.stringify(data));}catch(error){Logger.warn('Could not add creator snapshots to queue session.',error);}return saved;};
+  const catalogueClearCompletedBase=CatalogueJobManager.clearCompleted.bind(CatalogueJobManager);
+  CatalogueJobManager.clearCompleted=function clearCompletedDurably(){catalogueClearCompletedBase();for(const [id,batch] of CatalogueJobManager.batches){const state=CatalogueJobManager.normalizeBatch(batch);if(!state.active&&!state.waiting&&!state.failed&&!state.stopped)CatalogueJobManager.batches.delete(id);}CatalogueJobManager.persistSession();CatalogueJobManager.notify();};
 
   const Presets = {
     record: null,
@@ -2708,15 +2755,23 @@
         active: false,
     },
     top() { return OverlayManager.stack.at(-1) || null; },
-    open({ id = Presets.id(), node, root = node, opener = document.activeElement, modal = false, dismissible = true, onClose = null }) {
-      const entry = { id, node, root, opener, modal, dismissible, onClose };
+    open({ id = Presets.id(), owner = '', node, root = node, opener = document.activeElement, modal = false, dismissible = true, onClose = null }) {
+      // Anchored menus share one owner.  This avoids the detached-shadow and
+      // duplicate outside-listener symptom caused by rapidly reopening controls.
+      if(!modal){
+        const matching=owner&&OverlayManager.stack.find((entry)=>!entry.modal&&entry.owner===owner);
+        if(matching&&matching.opener===opener){OverlayManager.close(matching.id,'toggle');return null;}
+        [...OverlayManager.stack].filter((entry)=>!entry.modal).reverse().forEach((entry)=>OverlayManager.close(entry.id,'another-popup'));
+      }
+      const entry = { id, owner, node, root, opener, modal, dismissible, onClose };
       OverlayManager.stack.push(entry); OverlayManager.sync();
+      opener?.setAttribute?.('aria-expanded','true');
       queueMicrotask(() => node?.querySelector?.('[autofocus], input, button, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus?.());
       return id;
     },
     close(id = OverlayManager.top()?.id, reason = 'programmatic') {
       const index = OverlayManager.stack.findIndex((entry) => entry.id === id); if (index < 0) return false;
-      const [entry] = OverlayManager.stack.splice(index, 1); entry.root?.remove?.(); entry.onClose?.(reason); OverlayManager.sync();
+      const [entry] = OverlayManager.stack.splice(index, 1); entry.root?.remove?.(); entry.opener?.setAttribute?.('aria-expanded','false'); entry.onClose?.(reason); OverlayManager.sync();
       if (entry.opener?.isConnected) entry.opener.focus?.();
       return true;
     },
@@ -4104,14 +4159,14 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         const creator=name==='hidden-creator-dim';const setting=creator?draft.hiddenCreatorTreatment:draft.seenCardTreatment;const appearance=SettingsUI.section('Appearance');const strength=SettingsUI.select(creator?'hiddenCreatorTreatmentStrength':'seenCardTreatmentStrength',setting.strength,[['low','Low'],['medium','Medium'],['high','High']]);strength.querySelector('select').disabled=!setting.enabled;appearance.append(SettingsUI.row('Dim strength',strength));child.append(appearance);
       }else{
         const status=name==='post-status-badges';const creatorStatus=name==='creator-status-badges';const creator=name==='creator-attachment-badges';const key=status?'postStatusBadges':creatorStatus?'creatorStatusBadges':creator?'creatorCardBadges':'catalogueBadges';const choices=status?[['favorited','Favorited'],['liked','Liked'],['seen','Seen']]:creatorStatus?[['favorited','Favorited'],['liked','Liked'],['hidden','Hidden']]:[['videos','Videos'],['images','Images'],['archives','Archives'],['projectFiles','Project files'],['externalLinks','External links']];
-        const sizeName=status?'postStatusBadgeSize':creatorStatus?'creatorStatusBadgeSize':creator?'creatorAttachmentBadgeSize':'postAttachmentBadgeSize';const appearance=SettingsUI.section('Appearance');appearance.append(SettingsUI.row(status?'Post status badge size':creatorStatus?'Badge size':'Attachment badge size',SettingsUI.select(sizeName,draft[sizeName],[['small','Small'],['medium','Medium'],['big','Big']])));if(creator)appearance.append(SettingsUI.row('Count method',SettingsUI.select('creatorCardBadgeCountMode',draft.creatorCardBadgeCountMode,[['posts','Matching posts'],['attachments','Attachments / links']])));const visible=SettingsUI.section(status?'Visible statuses':creatorStatus?'Visible badges':'Visible badge types');choices.forEach(([field,label])=>visible.append(SettingsUI.toggle(`child-${key}-${field}`,draft[key].types[field],label)));child.append(appearance,visible);
+        const sizeName=status?'postStatusBadgeSize':creatorStatus?'creatorStatusBadgeSize':creator?'creatorAttachmentBadgeSize':'postAttachmentBadgeSize';const appearance=SettingsUI.section('Appearance');appearance.append(SettingsUI.row(status?'Post status badge size':creatorStatus?'Badge size':'Attachment badge size',SettingsUI.select(sizeName,draft[sizeName],[['small','Small'],['medium','Medium'],['big','Big']])));if(creator){appearance.append(SettingsUI.row('Count method',SettingsUI.select('creatorCardBadgeCountMode',draft.creatorCardBadgeCountMode,[['posts','Matching posts'],['attachments','Attachments / links']])));appearance.append(SettingsUI.toggle('excludePostsWithMissingAttachments',draft.excludePostsWithMissingAttachments,'Hide and don’t count posts with missing attachments'));}const visible=SettingsUI.section(status?'Visible statuses':creatorStatus?'Visible badges':'Visible badge types');choices.forEach(([field,label])=>visible.append(SettingsUI.toggle(`child-${key}-${field}`,draft[key].types[field],label)));child.append(appearance,visible);
       }
       content.append(child);App.ui.settingsChild=name;
     },
     collect(dialog,draft){
       const get=(name)=>dialog.querySelector(`[name="${name}"]`);const readExtensions=(name)=>Util.normalizeExtensions(String(get(name)?.value||draft[name].join(',')).split(/[\s,]+/)).values;
       return Settings.normalize({...draft,compactCardScale:get('compactCardScale')?.value||draft.compactCardScale,compactThumbnailAspectRatio:get('compactThumbnailAspectRatio')?.value||draft.compactThumbnailAspectRatio,
-        postAttachmentBadgeSize:get('postAttachmentBadgeSize')?.value||draft.postAttachmentBadgeSize,creatorAttachmentBadgeSize:get('creatorAttachmentBadgeSize')?.value||draft.creatorAttachmentBadgeSize,postStatusBadgeSize:get('postStatusBadgeSize')?.value||draft.postStatusBadgeSize,creatorStatusBadgeSize:get('creatorStatusBadgeSize')?.value||draft.creatorStatusBadgeSize,creatorCardBadgeCountMode:get('creatorCardBadgeCountMode')?.value||draft.creatorCardBadgeCountMode,
+        postAttachmentBadgeSize:get('postAttachmentBadgeSize')?.value||draft.postAttachmentBadgeSize,creatorAttachmentBadgeSize:get('creatorAttachmentBadgeSize')?.value||draft.creatorAttachmentBadgeSize,postStatusBadgeSize:get('postStatusBadgeSize')?.value||draft.postStatusBadgeSize,creatorStatusBadgeSize:get('creatorStatusBadgeSize')?.value||draft.creatorStatusBadgeSize,creatorCardBadgeCountMode:get('creatorCardBadgeCountMode')?.value||draft.creatorCardBadgeCountMode,excludePostsWithMissingAttachments:get('excludePostsWithMissingAttachments')?.checked??draft.excludePostsWithMissingAttachments,
         confirmCreatorCardScan:get('confirmCreatorCardScan')?.checked??draft.confirmCreatorCardScan,synchronizeNativeFavorites:get('synchronizeNativeFavorites')?.checked??draft.synchronizeNativeFavorites,
         catalogueConcurrentJobs:Number(get('catalogueConcurrentJobs')?.value||draft.catalogueConcurrentJobs),concurrency:Number(get('concurrency')?.value||draft.concurrency),retryFailed:get('retryFailed')?.checked??draft.retryFailed,
         externalLinkScope:get('externalLinkScope')?.value||draft.externalLinkScope,videoExtensions:readExtensions('videoExtensions'),imageExtensions:readExtensions('imageExtensions'),archiveExtensions:readExtensions('archiveExtensions'),projectExtensions:readExtensions('projectExtensions'),
@@ -4230,6 +4285,9 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     cleanup({restoreNative=true}={}){CreatorIndexUI.unsubscribe?.();CreatorIndexUI.unsubscribe=null;CreatorIndexUI.searchController?.abort();CreatorIndexUI.searchController=null;CreatorIndexUI.nativeRecords.forEach((record)=>{if(record.nativeInfo?.card){record.nativeInfo.card.hidden=false;CreatorCardRightRail.cleanup(record.nativeInfo.card);delete record.nativeInfo.card.dataset.pmfCreatorKey;}});if(restoreNative)NativeArtistsVisibility.restore(CreatorIndexUI.nativeSnapshot);CreatorIndexUI.modeSelector?.remove();CreatorIndexUI.root?.remove();Object.assign(CreatorIndexUI,{root:null,modeSelector:null,toolbar:null,grid:null,stateNode:null,paginator:null,queuePanel:null,queueButton:null,found:null,nativeGrid:null,nativeSnapshot:null,nativeGeometry:null,searchInput:null,records:[],nativeRecords:[]});},
   };
 
+  // Catalogue mode deliberately uses the mature shared page-window helper.
+  CreatorIndexUI.renderCatalogue=function renderCatalogueStable(){const records=CreatorIndexUI.filteredRecords(),totalPages=Math.max(1,Math.ceil(records.length/CreatorIndexUI.pageSize));CreatorIndexUI.page=Util.clamp(CreatorIndexUI.page,1,totalPages);const start=(CreatorIndexUI.page-1)*CreatorIndexUI.pageSize,visible=records.slice(start,start+CreatorIndexUI.pageSize);CreatorIndexUI.grid.replaceChildren();visible.forEach((record)=>{const built=CreatorCardReconstructor.build(record);const info={...built,context:CreatorIndexUI.context(record),creatorName:record.directory.creatorName,displayName:record.directory.creatorName,serviceLabel:CreatorDisplayName.serviceLabel(record.directory.service)};built.card.dataset.pmfCreatorKey=record.directory.creatorKey;CreatorIndexUI.grid.append(built.card);CreatorCardRightRail.render(info,record.meta,record.state);record.renderedInfo=info;});ArtistsPageController.cards=visible.map((record)=>record.renderedInfo);ArtistsPageController.cardByElement=new Map(ArtistsPageController.cards.map((info)=>[info.card,info]));CreatorIndexUI.setState(records.length?'ready':'empty',records.length?'':'No local Catalogue creators match the current search and filters.');const matches=CreatorIndexUI.toolbar.querySelector('[data-creator-matches]'),summary=CreatorIndexUI.toolbar.querySelector('[data-creator-summary]'),count=CreatorIndexUI.paginator.querySelector('.pmf-filtered-count'),controls=CreatorIndexUI.paginator.querySelector('.pmf-page-controls');if(matches)matches.textContent=`✓ ${records.length} Catalogue creators`;if(summary)summary.textContent=`Catalogue · ${CreatorIndexUI.records.length} stored`;if(count)count.textContent=records.length?`Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}`:'Showing 0 of 0';if(controls){controls.replaceChildren();const add=(label,page,disabled,action)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.dataset.creatorPage=String(page);button.dataset.creatorPageAction=action;if(action==='page'&&page===CreatorIndexUI.page)button.setAttribute('aria-current','page');controls.append(button);};add('«',1,CreatorIndexUI.page===1,'first');add('‹',CreatorIndexUI.page-1,CreatorIndexUI.page===1,'previous');for(const page of Paginator.pageButtons(CreatorIndexUI.page,totalPages,Paginator.windowSize(Number(CreatorIndexUI.paginator?.clientWidth)||800)))add(String(page),page,page===CreatorIndexUI.page,'page');add('›',CreatorIndexUI.page+1,CreatorIndexUI.page===totalPages,'next');add('»',totalPages,CreatorIndexUI.page===totalPages,'last');}CreatorIndexUI.updateQuickFilters();};
+
   const CreatorSettingsUI = {
     preview(draft){const committed=Settings.value;Settings.value=Settings.normalize(draft);try{CreatorIndexUI.render();}finally{Settings.value=committed;}},
     open(opener) {
@@ -4276,11 +4334,11 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
   };
 
   const AnchoredMenu = {
-    open(opener,items,{selected='',onSelect=()=>{}}={}){const menu=SettingsUI.el('div','pmf-floating-menu pmf-surface pmf-control-menu');menu.setAttribute('role','menu');items.forEach(({value,label})=>{const button=SettingsUI.el('button','',label);button.type='button';button.dataset.menuValue=String(value);button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(String(value)===String(selected)));menu.append(button);});document.body.append(menu);const rect=opener.getBoundingClientRect();menu.style.left=`${rect.left}px`;menu.style.top=`${rect.bottom+4}px`;menu.style.width=`${rect.width}px`;menu.style.minWidth=`${rect.width}px`;const overlay=OverlayManager.open({node:menu,root:menu,opener,dismissible:true});menu.addEventListener('click',(event)=>{const value=event.target.closest('[data-menu-value]')?.dataset.menuValue;if(value===undefined)return;onSelect(value);OverlayManager.close(overlay,'select');});menu.querySelector('[aria-checked="true"]')?.focus();return overlay;},
+    open(opener,items,{selected='',onSelect=()=>{},anchor=opener,owner=`anchored:${opener?.dataset?.creatorIndexAction||opener?.id||opener?.getAttribute?.('aria-label')||'menu'}`}={}){const menu=SettingsUI.el('div','pmf-floating-menu pmf-surface pmf-control-menu');menu.setAttribute('role','menu');items.forEach(({value,label})=>{const button=SettingsUI.el('button','',label);button.type='button';button.dataset.menuValue=String(value);button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(String(value)===String(selected)));menu.append(button);});document.body.append(menu);const rect=(anchor||opener).getBoundingClientRect();const width=Math.max(1,rect.width);menu.style.left=`${Math.max(4,Math.min(rect.left,window.innerWidth-width-4))}px`;menu.style.top=`${rect.bottom+4}px`;menu.style.width=`${width}px`;menu.style.minWidth=`${width}px`;const overlay=OverlayManager.open({owner,node:menu,root:menu,opener,dismissible:true});if(!overlay){menu.remove();return null;}menu.addEventListener('click',(event)=>{const value=event.target.closest('[data-menu-value]')?.dataset.menuValue;if(value===undefined)return;onSelect(value);OverlayManager.close(overlay,'select');});menu.querySelector('[aria-checked="true"]')?.focus();return overlay;},
   };
 
   const NativeControlMenu = {
-    open(action,opener){const service=action==='native-service',source=service?CreatorIndexUI.found?.serviceControl:CreatorIndexUI.found?.sortControl;if(!source)return;AnchoredMenu.open(opener,NativeArtistsProxy.options(source,{service}),{selected:source.value,onSelect:(value)=>{NativeArtistsProxy.activate(CreatorIndexUI.found,service?'service':'sort',value);queueMicrotask(()=>NativeArtistsProxy.sync(CreatorIndexUI.found,CreatorIndexUI.toolbar));}});},
+    open(action,opener){const service=action==='native-service',source=service?CreatorIndexUI.found?.serviceControl:CreatorIndexUI.found?.sortControl;if(!source)return;AnchoredMenu.open(opener,NativeArtistsProxy.options(source,{service}),{owner:`artists:${action}`,selected:source.value,onSelect:(value)=>{NativeArtistsProxy.activate(CreatorIndexUI.found,service?'service':'sort',value);queueMicrotask(()=>NativeArtistsProxy.sync(CreatorIndexUI.found,CreatorIndexUI.toolbar));}});},
   };
 
   const CreatorSortUI = {
@@ -4299,15 +4357,24 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
   const NativeCreatorDirectorySource = {
     cache:null,
     async creators(signal){if(NativeCreatorDirectorySource.cache)return NativeCreatorDirectorySource.cache;const response=await fetch('/api/v1/creators',{signal,credentials:'same-origin'});if(!response.ok)throw new Error(`Native creator directory request failed (${response.status}).`);const data=await response.json();NativeCreatorDirectorySource.cache=Array.isArray(data)?data:[];return NativeCreatorDirectorySource.cache;},
-    compare(a,b,field){const value=(item)=>field==='indexed'||field==='updated'?Number(item[field])||0:String(item[field]??'').toLocaleLowerCase();const left=value(a),right=value(b);return left<right?-1:left>right?1:0;},
+    compare(a,b,field){const numeric=['indexed','updated','favorited','popularity','favorites'].includes(String(field));const value=(item)=>numeric?Number(item[field]??item.favorited??item.favorite_count) || 0:String(item[field]??item.name??'').toLocaleLowerCase();const left=value(a),right=value(b);return typeof left==='string'?left.localeCompare(right,undefined,{numeric:true,sensitivity:'base'}):left-right;},
     async records(signal){const found=CreatorIndexUI.found,service=found?.serviceControl?.value||'',field=found?.sortControl?.value||'favorited',direction=found?.directionControl?.value||'desc',query=String(CreatorIndexUI.searchInput?.value||'').trim().toLocaleLowerCase(),existing=new Map([...CreatorIndexUI.records,...CreatorIndexUI.nativeRecords].map((record)=>[record.directory.creatorKey,record]));let creators=[...await NativeCreatorDirectorySource.creators(signal)];creators=creators.filter((creator)=>(!service||creator.service===service)&&(!query||String(creator.name||'').toLocaleLowerCase().includes(query))).sort((a,b)=>NativeCreatorDirectorySource.compare(a,b,field)*(direction==='asc'?1:-1));return creators.map((creator)=>{const creatorKey=`${location.hostname}|${creator.service}|${creator.id}`,known=existing.get(creatorKey);if(known)return known;return{directory:CreatorDirectory.normalize({creatorKey,domain:location.hostname,service:creator.service,creatorId:String(creator.id),creatorName:creator.name||String(creator.id),creatorUrl:`${location.origin}/${creator.service}/user/${creator.id}`,publicFavoriteCount:creator.favorited,indexedAt:Number(creator.indexed)*1000,updatedAt:Number(creator.updated)*1000}),meta:null,state:CreatorState.empty(creatorKey),summary:null,catalogueState:'unscanned',scanned:false};});},
   };
 
   const CreatorBulkUI = {
-    openMenu(opener){AnchoredMenu.open(opener,[{value:'resume',label:'Retry/resume incomplete'}],{onSelect:()=>CreatorBulkUI.open('resume',opener)});},
-    async selected(kind,scope,count,signal){const source=scope==='page'?CreatorIndexUI.visibleRecords():CreatorIndexUI.mode==='native'?await NativeCreatorDirectorySource.records(signal):CreatorIndexUI.filteredRecords();return CreatorBulkSelection.first(source,kind,scope==='page'?150:Util.clamp(Number(count)||50,1,150));},
+    openMenu(opener){AnchoredMenu.open(opener,[{value:'resume',label:'Retry/resume incomplete'}],{anchor:opener.closest('.pmf-split-primary')||opener,owner:`artists:split:${CreatorIndexUI.mode}`,onSelect:()=>CreatorBulkUI.open('resume',opener)});},
+    async selected(kind,scope,count,signal){const source=scope==='page'?CreatorIndexUI.visibleRecords():CreatorIndexUI.mode==='native'?await NativeCreatorDirectorySource.records(signal):CreatorIndexUI.filteredRecords();const limit=scope==='page'?Number.MAX_SAFE_INTEGER:scope==='all'?Number.MAX_SAFE_INTEGER:kind==='build'?Util.clamp(Number(count)||50,1,1000):Math.max(1,Number(count)||50);return CreatorBulkSelection.first(source,kind,limit);},
     open(kind,opener){const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-confirm-dialog pmf-bulk-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');const label=kind==='build'?'scan':kind==='resume'?'resume':'update';dialog.innerHTML=`<header><strong>Bulk ${label} creators</strong><button class="pmf-icon-close" data-bulk-action="cancel" aria-label="Close">×</button></header><div class="pmf-confirm-body"><section><h3>Scope</h3><label class="pmf-bulk-scope"><input type="radio" name="scope" value="page" checked><span><strong>Current visible result page</strong><small>Use the cards currently shown in this mode.</small></span></label><label class="pmf-bulk-scope"><input type="radio" name="scope" value="first"><span><strong>First matching creators</strong><small>Continue past unavailable or already queued creators.</small></span><input type="number" name="first" min="1" max="150" value="50" aria-label="Number of creators"></label></section><section><h3>Preview</h3><p data-bulk-count></p><ol data-bulk-preview></ol></section></div><footer><span></span><button data-bulk-action="cancel">Cancel</button><button class="pmf-primary" data-bulk-action="confirm"></button></footer>`;backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);let selected=[],revision=0,controller=null;const refresh=async()=>{const current=++revision;controller?.abort();controller=new AbortController();const scope=dialog.querySelector('[name="scope"]:checked').value,count=dialog.querySelector('[name="first"]').value,confirm=dialog.querySelector('[data-bulk-action="confirm"]');confirm.disabled=true;confirm.textContent='Loading preview…';dialog.querySelector('[data-bulk-count]').textContent=scope==='first'&&CreatorIndexUI.mode==='native'?'Checking matching native-directory creators…':'';try{const next=await CreatorBulkUI.selected(kind,scope,count,controller.signal);if(current!==revision)return;selected=next;dialog.querySelector('[data-bulk-count]').textContent=selected.length?`${selected.length} creator${selected.length===1?'':'s'} will be queued`:'No actionable creators are available in this scope.';dialog.querySelector('[data-bulk-preview]').innerHTML=selected.slice(0,10).map(({record,action})=>`<li><strong>${Util.escapeHtml(record.directory.creatorName)}</strong><small>${action==='build'?'Scan':action==='resume'?'Resume':'Update'}</small></li>`).join('');confirm.disabled=!selected.length;confirm.textContent=`Queue ${selected.length} ${label}${selected.length===1?'':'s'}`;}catch(error){if(error.name!=='AbortError'){selected=[];dialog.querySelector('[data-bulk-count]').textContent=error.message;confirm.textContent=`Queue 0 ${label}s`;}}};const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true,onClose:()=>controller?.abort()});refresh();dialog.addEventListener('change',refresh);dialog.querySelector('[name="first"]').addEventListener('input',Util.debounce(refresh,150));backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-bulk-action]')?.dataset.bulkAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='confirm'&&selected.length){const batch=CatalogueJobManager.createBatch({label:`Bulk ${label}`,total:selected.length});selected.forEach(({record,action:actualAction},index)=>CatalogueJobManager.enqueue(CreatorIndexUI.context(record),actualAction,{creatorName:record.directory.creatorName,batchId:batch.id,batchLabel:batch.label,batchSequence:index+1}));OverlayManager.close(overlay,'confirm');CreatorIndexUI.queuePanel.hidden=false;CreatorQueuePanel.render();}});
     },
+  };
+
+  // Keep the bulk dialog's selection frozen only at confirmation.  Native
+  // discovery is cancelled and generation-guarded whenever its scope changes.
+  CreatorBulkUI.open = function openBulk(kind,opener){
+    const backdrop=SettingsUI.el('div','pmf-modal-backdrop'),dialog=SettingsUI.el('section','pmf-dialog pmf-confirm-dialog pmf-bulk-dialog pmf-surface');
+    const label=kind==='build'?'scan':kind==='resume'?'resume':'update';const all=kind==='build'?'':`<label class="pmf-bulk-scope"><input type="radio" name="scope" value="all"><span><strong>All creators</strong><small>Use every eligible creator in the current filtered result.</small></span></label>`;
+    dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.innerHTML=`<header><strong>Bulk ${label} creators</strong><button class="pmf-icon-close" data-bulk-action="cancel" aria-label="Close">×</button></header><div class="pmf-confirm-body"><section><h3>Scope</h3><label class="pmf-bulk-scope"><input type="radio" name="scope" value="page" checked><span><strong>Current visible result page</strong><small>Use the cards currently shown in this mode.</small></span></label><label class="pmf-bulk-scope"><input type="radio" name="scope" value="first"><span><strong>First matching creators</strong><small>Continue past unavailable or already queued creators.</small></span><input type="number" name="first" min="1" ${kind==='build'?'max="1000"':''} value="50"></label>${all}</section><section><h3>Preview</h3><p data-bulk-count></p><ol data-bulk-preview tabindex="0"></ol></section></div><footer><span></span><button data-bulk-action="cancel">Cancel</button><button class="pmf-primary" data-bulk-action="confirm"></button></footer>`;
+    backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);let selected=[],revision=0,controller=null;const refresh=async()=>{const generation=++revision;controller?.abort();controller=new AbortController();const scope=dialog.querySelector('[name="scope"]:checked').value,count=dialog.querySelector('[name="first"]').value,confirm=dialog.querySelector('[data-bulk-action="confirm"]');confirm.disabled=true;confirm.textContent='Loading preview…';try{const next=await CreatorBulkUI.selected(kind,scope,count,controller.signal);if(generation!==revision)return;selected=next;dialog.querySelector('[data-bulk-count]').textContent=selected.length?`${selected.length} creator${selected.length===1?'':'s'} selected`:'No actionable creators are available in this scope.';dialog.querySelector('[data-bulk-preview]').innerHTML=selected.slice(0,100).map(({record,action},index)=>`<li><strong>${index+1}. ${Util.escapeHtml(record.directory.creatorName||record.directory.creatorId)}</strong><small>${action==='build'?'Scan':action==='resume'?'Resume':'Update'}</small></li>`).join('')+(selected.length>100?`<li class="pmf-bulk-more">…and ${selected.length-100} more</li>`:'');confirm.disabled=!selected.length;confirm.textContent=`Queue ${selected.length} ${label}${selected.length===1?'':'s'}`;}catch(error){if(error.name!=='AbortError'){selected=[];dialog.querySelector('[data-bulk-count]').textContent=error.message;confirm.textContent=`Queue 0 ${label}s`;}}};const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true,onClose:()=>controller?.abort()});refresh();dialog.addEventListener('change',refresh);dialog.querySelector('[name="first"]').addEventListener('input',Util.debounce(refresh,150));backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-bulk-action]')?.dataset.bulkAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='confirm'&&selected.length){const batch=CatalogueJobManager.createBatch({label:`Bulk ${label}`,total:selected.length});selected.forEach(({record,action:actualAction},index)=>CatalogueJobManager.enqueue(CreatorIndexUI.context(record),actualAction,{creatorName:record.directory.creatorName,directorySnapshot:record.directory,batchId:batch.id,batchLabel:batch.label,batchSequence:index+1}));OverlayManager.close(overlay,'confirm');CreatorIndexUI.queuePanel.hidden=false;CreatorQueuePanel.render();}});
   };
 
   GM_addStyle(`
@@ -4336,6 +4403,8 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     .pmf-creator-queue-panel{max-height:min(480px,calc(100vh - 220px));overflow:auto;overscroll-behavior:contain}.pmf-queue-tabs{display:flex;justify-content:center;gap:8px;border-bottom:1px solid var(--pmf-border);margin-bottom:10px}.pmf-queue-tabs button{border:0;background:transparent;color:var(--pmf-muted);padding:7px 12px}.pmf-queue-tabs button.pmf-active{color:var(--pmf-accent);border-bottom:2px solid var(--pmf-accent)}.pmf-queue-progress{display:grid;gap:5px;text-align:center;padding:9px;border-left:3px solid var(--pmf-success);background:#18231e}.pmf-queue-progress progress{width:100%;accent-color:var(--pmf-success)}.pmf-queue-batch{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center;margin-top:8px;padding:8px;border:1px solid var(--pmf-border);background:var(--pmf-panel)}.pmf-queue-batch>span{justify-self:end;color:var(--pmf-muted)}.pmf-queue-batch>progress{width:100%;grid-column:1/-1}.pmf-queue-batch>button{grid-column:2;grid-row:3}.pmf-queue-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--pmf-border)}.pmf-queue-row div{display:flex;flex-direction:column}.pmf-queue-row span{display:flex;gap:5px}.pmf-queue-row button{min-height:28px}.pmf-bulk-dialog .pmf-confirm-body{display:grid;gap:16px}.pmf-bulk-dialog .pmf-confirm-body section{padding:12px;border:1px solid var(--pmf-border);border-radius:5px;background:#191e21}.pmf-bulk-dialog h3{margin:0 0 10px;color:var(--pmf-accent);font-size:12px;text-transform:uppercase}.pmf-bulk-scope{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0}.pmf-bulk-scope span{display:flex;flex-direction:column;gap:3px}.pmf-bulk-scope small{color:var(--pmf-muted)}.pmf-bulk-scope input[type="number"]{width:82px}.pmf-bulk-dialog [data-bulk-preview]{max-height:210px;overflow:auto;margin:8px 0 0}.pmf-bulk-dialog [data-bulk-preview] li{display:flex;justify-content:space-between;gap:14px;padding:5px 0}.pmf-bulk-dialog [data-bulk-preview] small{color:var(--pmf-muted)}
     @media(max-width:760px){.pmf-creator-index-toolbar .pmf-controls,.pmf-creator-index-toolbar .pmf-native-proxy-controls{grid-template-columns:1fr 1fr 52px}.pmf-creator-index-toolbar .pmf-filter-button{grid-column:1/-1}.pmf-split-primary{grid-column:2}.pmf-creator-index-grid{grid-template-columns:1fr!important}}
   `);
+
+  GM_addStyle('.pmf-bulk-dialog [data-bulk-preview]{padding-right:18px;scrollbar-width:none;-ms-overflow-style:none}.pmf-bulk-dialog [data-bulk-preview]::-webkit-scrollbar{display:none}.pmf-bulk-dialog [data-bulk-preview] li{display:grid!important;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center}.pmf-bulk-dialog [data-bulk-preview] strong{overflow-wrap:anywhere}.pmf-bulk-dialog .pmf-bulk-more{display:block!important;color:var(--pmf-muted)}');
 
   const ArtistsPageController = {
     page:null,found:null,cards:[],cardByElement:new Map(),metas:new Map(),states:new Map(),directory:new Map(),metaErrors:new Set(),controller:null,observer:null,generation:0,refreshRevision:0,refreshPromise:null,refreshPending:false,refreshReasons:new Set(),unsubscribeJob:null,unsubscribeSettings:null,renderingOwnedUi:false,backfillQueue:[],backfillKeys:new Set(),backfillActive:0,
@@ -4866,7 +4935,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     pendingReason:'startup',
     mutationSchedule: Util.debounce(() => Lifecycle.routeHealth('documentElement mutation'), 140),
     removeStaleRoots() {
-      document.querySelectorAll('#pmf-root, #pmf-toolbar, .pmf-filtered-paginator, .pmf-filter-grid').forEach((node) => node.remove());
+      document.querySelectorAll('#pmf-root, #pmf-toolbar, #pmf-artists-root, #pmf-creator-mode-selector, .pmf-filtered-paginator, .pmf-filter-grid').forEach((node) => node.remove());
     },
     restoreNativePage() {
       document.querySelectorAll('.card-list__items,.paginator').forEach((node)=>{if(!node.closest('[data-pmf-owned="true"]'))node.hidden=false;});

@@ -2,13 +2,13 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.3**
+Current version: **0.10.4**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
 
-## v0.10.3 native UI, bulk, and Queue corrective release
+## v0.10.4 artists lifecycle, bulk metadata, and Queue corrective release
 
 Native directory mode now uses compact segmented mode controls and Pawchive-style anchored menus for Service and Sort. Sort direction is part of the Sort control, the mirrored paginator deduplicates controls by semantic role, its status line is centered, and the Queue state sits at the far left of the native status row. Creator-page post filters and sort menus use the exact width and left edge of their triggers, and the trailing Hide action receives balanced native-header spacing.
 

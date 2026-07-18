@@ -1,6 +1,6 @@
-# Pawchive.pw Media Filter v0.10.3 testing
+# Pawchive.pw Media Filter v0.10.4 testing
 
-## v0.10.3 native UI, bulk, and Queue matrix
+## v0.10.4 artists lifecycle, bulk metadata, and Queue matrix
 
 Run `tests/native-ui-bulk-queue-v0103.cjs` and the complete suite. Then verify both modes on live `/artists`:
 

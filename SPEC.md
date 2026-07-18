@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.3 specification
+# Pawchive.pw Media Filter v0.10.4 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.3`
+- Userscript and `Config.version`: `0.10.4`
 - Settings: `pmf-settings-v5`
 - Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -26,7 +26,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Creator directory mode: `pmf-creator-directory-mode-v1` (`native` or `catalogue`, default `native`)
 - Creator queue restoration: `pmf-creator-queue-session-v1`, payload version 3, in `sessionStorage`
 
-## v0.10.3 corrective behavior
+## v0.10.4 corrective behavior
 
 Native directory owns neither Pawchive's data nor card rendering. Its PMF controls are proxy buttons and anchored menus that activate Pawchive's real Service, Sort, direction, and paginator controls. A sort choice toggles direction when reselected and otherwise uses the native default direction for that field. Mirrored paginator items are deduplicated by first/previous/page/next/last role and activate the exact surviving native element.
 
