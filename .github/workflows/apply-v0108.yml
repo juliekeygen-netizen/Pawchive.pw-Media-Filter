@@ -1,0 +1,61 @@
+name: Apply Pawchive v0.10.8
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0108/**'
+      - '.github/workflows/apply-v0108.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct, validate, apply, test, and publish v0.10.8
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat .pawchive-v0108/part00 .pawchive-v0108/part01 | tr -d '\r\n' > /tmp/pawchive-v0108.patch.xz.b64
+          test "$(wc -c < /tmp/pawchive-v0108.patch.xz.b64)" -eq 33132
+          echo '31020b423b95da7cefd50c7085142af08f6999125ef2c58009b6b7c2eb8cda46  /tmp/pawchive-v0108.patch.xz.b64' | sha256sum -c -
+
+          base64 -d /tmp/pawchive-v0108.patch.xz.b64 > /tmp/pawchive-v0108.patch.xz
+          test "$(wc -c < /tmp/pawchive-v0108.patch.xz)" -eq 24848
+          echo '4245ba34190cfaaa64b3bd950629e6b3d958c0ccd709444de2ac2c2e51019b76  /tmp/pawchive-v0108.patch.xz' | sha256sum -c -
+
+          xz -d -c /tmp/pawchive-v0108.patch.xz > /tmp/pawchive-v0108.patch
+          test "$(wc -c < /tmp/pawchive-v0108.patch)" -eq 124297
+          echo 'd3fecc114ea5851182b685b7383ad19564d1d65186d4294ed68717f12a81b353  /tmp/pawchive-v0108.patch' | sha256sum -c -
+
+          git apply --check /tmp/pawchive-v0108.patch
+          git apply /tmp/pawchive-v0108.patch
+
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          test "$test_count" -eq 43
+          git diff --check
+
+          rm -rf .pawchive-v0108
+          rm -f .github/workflows/apply-v0108.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.10.8 streaming metadata maintenance'
+          git push origin HEAD:master
