@@ -2,11 +2,17 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.8**
+Current version: **0.10.9**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.9 live-test fixes
+
+Creator attachment badges now remain visible while aggregate totals are being recomputed after changing **Hide and don’t count posts with missing attachments** or another aggregate-affecting setting. Compatible prior totals stay visible until each current summary is committed, and the creator directory starts a controlled background refresh instead of temporarily removing every badge.
+
+Missing creator artwork that returns 404 is remembered for the current page session, preventing repeated requests for the same broken banner or avatar whenever Local creator cards rerender. Missing-attachment checkpoints now retain only the 50 most recent terminal task IDs plus a total terminal count, reconcile already-committed pending tasks after reload, and preserve failure-limit pause messages.
 
 ## v0.10.8 bounded streaming maintenance and cleanup
 

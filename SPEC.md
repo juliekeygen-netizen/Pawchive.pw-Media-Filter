@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.8 specification
+# Pawchive.pw Media Filter v0.10.9 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.8`
+- Userscript and `Config.version`: `0.10.9`
 - Settings: `pmf-settings-v5`
 - Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -21,6 +21,14 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.10.9 live-test contracts
+
+- Aggregate-setting changes must not blank creator attachment badges. A structurally compatible prior summary may remain visible while its fingerprint is stale, but a background refresh must recompute and replace it.
+- Broken creator avatar or banner URLs are suppressed for the current page session after the first load failure so Local rerenders do not generate repeated 404 requests.
+- Missing-attachment checkpoints retain at most 50 recent terminal task IDs and a separate cumulative terminal count.
+- Resume reconciliation counts pending IDs whose metadata was already committed before an interrupted checkpoint save.
+- Failure-limit pause messages remain visible after the worker finalizes.
 
 ## v0.10.8 contracts
 

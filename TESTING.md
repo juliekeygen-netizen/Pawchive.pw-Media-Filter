@@ -1,4 +1,12 @@
-# Pawchive.pw Media Filter v0.10.8 testing
+# Pawchive.pw Media Filter v0.10.9 testing
+
+## v0.10.9 live-test regression matrix
+
+1. Enable **Hide and don’t count posts with missing attachments** while creator attachment badges are visible. Existing badges must remain visible while their totals update in the background.
+2. On a creator with a missing banner, keep DevTools Network open and change Local catalogue pages repeatedly. The same failed banner URL must not be requested repeatedly after its first failure in the page session.
+3. Stop and reload a metadata run immediately after a write batch, then Resume. Already committed posts must be reconciled into complete/missing totals instead of leaving `completed < total` with zero remaining.
+4. Simulate or observe many terminal post failures. The checkpoint must retain no more than 50 recent terminal IDs while the displayed terminal total remains cumulative.
+5. Confirm a pause caused by either 25 consecutive retryable failures or 250 collected retryable failures keeps its specific explanation after the worker settles.
 
 ## v0.10.8 streaming maintenance matrix
 

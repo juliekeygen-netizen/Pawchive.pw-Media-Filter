@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.9
+
+- Kept compatible creator attachment totals visible while aggregate-affecting settings trigger background summary recomputation.
+- Added session-level suppression for broken creator avatar and banner URLs to prevent repeated 404 requests during Local rerenders.
+- Bounded terminal metadata checkpoint history to 50 recent IDs while preserving a cumulative terminal count.
+- Reconciled already-committed pending tasks into completion counters after interrupted checkpoint saves.
+- Preserved explicit failure-limit pause messages through worker finalization.
+- Added live-finding regression coverage for stale-summary rendering, artwork failures, bounded terminal history, and recovery accounting.
+
 ## 0.10.8
 
 - Replaced whole-library missing-metadata planning with resumable IndexedDB cursor streaming in bounded 500-row chunks.

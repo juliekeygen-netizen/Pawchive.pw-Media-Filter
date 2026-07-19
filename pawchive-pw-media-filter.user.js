@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.10.8
+// @version      0.10.9
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.10.8',
+    version: '0.10.9',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -2584,9 +2584,12 @@
       const customRuleAggregates={};dynamic.customRules.filter((rule)=>rule.enabled).forEach((rule)=>{const aggregate=CreatorCatalogueSummary.customRuleAggregate(usable,rule);customRuleAggregates[aggregate.fingerprint]=aggregate;});
       return {version:CreatorCatalogueSummary.version,computedAt:now,sourcePostCount:stored.length,aggregateEligiblePostCount:usable.length,excludedMissingAttachmentPostCount,classificationFingerprint:CreatorCatalogueSummary.fingerprint(),media,counts,earliestPublishedAt,latestPublishedAt,publishedTimestamps:publishedTimestamps.sort((a,b)=>a-b),lastCatalogueUpdateAt:Number(catalogueState.lastUpdateCheckAt||catalogueState.lastFullBuildAt||catalogueState.completedAt)||null,statuses:CreatorCatalogueSummary.statusTotals(usable,options.statuses,options.snapshotMeta,options.snapshotMembership),customExtensionAggregates,customRuleAggregates,retryableMetadataCount:Util.unique((catalogueState.retryableMetadataIds||[]).map(String)).length,malformedRecordCount:evaluation.malformedListRecordCount,completeness:evaluation.coverageComplete?'complete':stored.length?'partial':'unscanned'};
     },
+    compatible(summary,catalogueState,sourcePostCount=null) {
+      const count=sourcePostCount==null?Math.max(0,Number(catalogueState?.storedPostCount)||0):Math.max(0,Number(sourcePostCount)||0);
+      return Boolean(summary&&summary.version===CreatorCatalogueSummary.version&&Math.max(0,Number(summary.sourcePostCount)||0)===count&&summary.media&&summary.completeness);
+    },
     valid(summary,catalogueState,sourcePostCount=null) {
-      const coverage=CatalogueModel.evaluateCoverage(catalogueState||{});const count=sourcePostCount==null?Math.max(0,Number(catalogueState?.storedPostCount)||0):Math.max(0,Number(sourcePostCount)||0);
-      return Boolean(summary&&summary.version===CreatorCatalogueSummary.version&&summary.classificationFingerprint===CreatorCatalogueSummary.fingerprint()&&Math.max(0,Number(summary.sourcePostCount)||0)===count&&summary.media&&summary.completeness);
+      return CreatorCatalogueSummary.compatible(summary,catalogueState,sourcePostCount)&&summary.classificationFingerprint===CreatorCatalogueSummary.fingerprint();
     },
     async computeAuthoritative(context,posts,catalogueState) {
       const statuses=await Cache.getCreatorStatuses(context.creatorKey);const host=context.domain||String(context.creatorKey).split('|')[0]||location.hostname;const snapshotMeta=await Cache.getFavoriteSyncMeta(host);const snapshotMembership=await Cache.getFavoriteSnapshotKeys(host,snapshotMeta?.activeSnapshotId);const filterState=CreatorFilterEngine.normalizeState(GM_getValue(Config.creatorFilterStateKey,{}));
@@ -2672,6 +2675,46 @@
     },
   };
 
+  const CreatorArtworkFailureCache = {
+    failed:new Set(),
+    loaded:new Set(),
+    probes:new Map(),
+    normalize(value){try{const url=new URL(String(value||''),location.href);return ['http:','https:'].includes(url.protocol)?url.href:'';}catch{return'';}},
+    has(value){const url=CreatorArtworkFailureCache.normalize(value);return Boolean(url&&CreatorArtworkFailureCache.failed.has(url));},
+    mark(value){const url=CreatorArtworkFailureCache.normalize(value);if(url){CreatorArtworkFailureCache.loaded.delete(url);CreatorArtworkFailureCache.failed.add(url);}return url;},
+    probe(value) {
+      const url=CreatorArtworkFailureCache.normalize(value);if(!url)return Promise.resolve(false);
+      if(CreatorArtworkFailureCache.failed.has(url))return Promise.resolve(false);
+      if(CreatorArtworkFailureCache.loaded.has(url)||typeof globalThis.Image!=='function')return Promise.resolve(true);
+      let probe=CreatorArtworkFailureCache.probes.get(url);
+      if(!probe){
+        probe=new Promise((resolve)=>{const image=new globalThis.Image();image.onload=()=>{CreatorArtworkFailureCache.loaded.add(url);resolve(true);};image.onerror=()=>{CreatorArtworkFailureCache.failed.add(url);resolve(false);};image.src=url;});
+        CreatorArtworkFailureCache.probes.set(url,probe);
+      }
+      return probe;
+    },
+    watch(value,onFailure=()=>{},onSuccess=()=>{}) {
+      const url=CreatorArtworkFailureCache.normalize(value);if(!url){onFailure();return Promise.resolve(false);}
+      return CreatorArtworkFailureCache.probe(url).then((ok)=>{if(ok)onSuccess(url);else onFailure(url);return ok;});
+    },
+    applyImage(image,value) {
+      const url=CreatorArtworkFailureCache.normalize(value);if(!image)return'';
+      const clear=()=>{image.removeAttribute?.('src');image.removeAttribute?.('srcset');};
+      const apply=()=>{image.src=url;image.srcset=url;};
+      if(!url||CreatorArtworkFailureCache.failed.has(url)){clear();return'';}
+      if(CreatorArtworkFailureCache.loaded.has(url)||typeof globalThis.Image!=='function'){apply();return url;}
+      clear();CreatorArtworkFailureCache.watch(url,clear,apply);return url;
+    },
+    applyBackground(node,value,gradient='linear-gradient(#0007,#0007)') {
+      const url=CreatorArtworkFailureCache.normalize(value);if(!node)return'';
+      const clear=()=>{node.style.backgroundImage='none';};
+      const apply=()=>{node.style.backgroundImage=`${gradient},url("${url.replace(/"/g,'%22')}")`;};
+      if(!url||CreatorArtworkFailureCache.failed.has(url)){clear();return'';}
+      if(CreatorArtworkFailureCache.loaded.has(url)||typeof globalThis.Image!=='function'){apply();return url;}
+      clear();CreatorArtworkFailureCache.watch(url,clear,apply);return url;
+    },
+  };
+
   const CreatorCardReconstructor = {
     safeUrl(value){try{const url=new URL(String(value||''),location.href);return ['http:','https:'].includes(url.protocol)?url.href:'';}catch{return'';}},
     template:null,
@@ -2682,16 +2725,16 @@
     },
     buildFromTemplate(record){
       if(!CreatorCardReconstructor.template)return null;const directory=record.directory||{};const card=CreatorCardReconstructor.sanitize(CreatorCardReconstructor.template.cloneNode(true));card.dataset.pmfOwned='true';card.classList.add('pmf-catalogue-creator-card');const link=card.matches('a[href]')?card:card.querySelector('a[href]');if(!link)return null;link.href=CreatorCardReconstructor.safeUrl(directory.creatorUrl)||'#';
-      card.querySelectorAll('a[href]').forEach((node)=>{node.href=link.href;node.setAttribute('aria-label',`Open ${directory.creatorName||directory.creatorId||'creator'}`);});const image=card.querySelector('img');const avatar=CreatorCardReconstructor.safeUrl(directory.avatarUrl||directory.thumbnailUrl);if(image){image.alt=`${directory.creatorName||directory.creatorId||'Creator'} avatar`;if(avatar){image.src=avatar;image.srcset=avatar;}else{image.removeAttribute('src');image.removeAttribute('srcset');}}
-      const banner=CreatorCardReconstructor.safeUrl(directory.bannerUrl);const visual=[card,...card.querySelectorAll('[style*="background-image"]')].find((node)=>node.style?.backgroundImage);if(visual)visual.style.backgroundImage=banner?`linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.8)),url("${banner.replace(/"/g,'%22')}")`:'none';
+      card.querySelectorAll('a[href]').forEach((node)=>{node.href=link.href;node.setAttribute('aria-label',`Open ${directory.creatorName||directory.creatorId||'creator'}`);});const image=card.querySelector('img');const avatar=CreatorCardReconstructor.safeUrl(directory.avatarUrl||directory.thumbnailUrl);if(image){image.alt=`${directory.creatorName||directory.creatorId||'Creator'} avatar`;CreatorArtworkFailureCache.applyImage(image,avatar);}
+      const banner=CreatorCardReconstructor.safeUrl(directory.bannerUrl);const visual=[card,...card.querySelectorAll('[style*="background-image"]')].find((node)=>node.style?.backgroundImage);if(visual)CreatorArtworkFailureCache.applyBackground(visual,banner,'linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.8))');
       const service=card.querySelector('.user-card__service,[class*="service"]');if(service)service.textContent=directory.serviceLabel||CreatorDisplayName.serviceLabel(directory.service);const name=card.querySelector('.user-card__name,[class*="name"]');if(name)name.textContent=directory.creatorName||directory.creatorId||'Creator';const count=card.querySelector('.user-card__count,[class*="count"]');if(count)count.innerHTML=directory.publicFavoriteCount==null?'':`<b>${Number(directory.publicFavoriteCount).toLocaleString()}</b> favorites`;const content=card.querySelector('.user-card__info,[class*="info"]');content?.setAttribute('data-pmf-creator-content','true');return{card,link};
     },
     build(record){
       const templated=CreatorCardReconstructor.buildFromTemplate(record);if(templated)return templated;
       const directory=record.directory||{};const card=document.createElement('article');card.className='pmf-reconstructed-creator-card';card.dataset.pmfOwned='true';
       const link=document.createElement('a');link.className='pmf-reconstructed-creator-link';link.href=CreatorCardReconstructor.safeUrl(directory.creatorUrl)||'#';
-      const visual=document.createElement('span');visual.className='pmf-reconstructed-creator-visual';const banner=CreatorCardReconstructor.safeUrl(directory.bannerUrl);if(banner)visual.style.backgroundImage=`linear-gradient(#0007,#0007),url("${banner.replace(/"/g,'%22')}")`;
-      const avatar=CreatorCardReconstructor.safeUrl(directory.avatarUrl||directory.thumbnailUrl);if(avatar){const image=document.createElement('img');image.src=avatar;image.alt='';image.loading='lazy';visual.append(image);}else{const placeholder=document.createElement('span');placeholder.className='pmf-reconstructed-avatar-placeholder';placeholder.textContent=String(directory.creatorName||directory.creatorId||'?').trim().slice(0,1).toUpperCase()||'?';visual.append(placeholder);}
+      const visual=document.createElement('span');visual.className='pmf-reconstructed-creator-visual';const banner=CreatorCardReconstructor.safeUrl(directory.bannerUrl);if(banner)CreatorArtworkFailureCache.applyBackground(visual,banner);
+      const avatar=CreatorCardReconstructor.safeUrl(directory.avatarUrl||directory.thumbnailUrl);if(avatar){const image=document.createElement('img');image.alt='';image.loading='lazy';CreatorArtworkFailureCache.applyImage(image,avatar);visual.append(image);}else{const placeholder=document.createElement('span');placeholder.className='pmf-reconstructed-avatar-placeholder';placeholder.textContent=String(directory.creatorName||directory.creatorId||'?').trim().slice(0,1).toUpperCase()||'?';visual.append(placeholder);}
       const content=document.createElement('span');content.className='pmf-reconstructed-creator-content';content.dataset.pmfCreatorContent='true';const service=document.createElement('small');service.textContent=directory.serviceLabel||CreatorDisplayName.serviceLabel(directory.service);const name=document.createElement('strong');name.textContent=directory.creatorName||directory.creatorId||'Creator';content.append(service,name);
       if(directory.publicFavoriteCount!=null){const favorites=document.createElement('small');favorites.textContent=`${Number(directory.publicFavoriteCount).toLocaleString()} favorites`;content.append(favorites);}
       link.append(visual,content);card.append(link);return{card,link};
@@ -2808,7 +2851,7 @@
     refreshReservations(root=document,reason='refresh') { root?.querySelectorAll?.('.pmf-creator-card-has-badges').forEach((card)=>CreatorCardBadgeRenderer.layout(card,reason)); },
     render(info,meta) {
       const {card,context}=info;CreatorCardBadgeRenderer.decorateIdentity(info);CreatorCardBadgeRenderer.cleanupBadges(card);
-      if(!Settings.value.creatorCardBadges.enabled)return null;const normalized=CatalogueModel.normalize(meta||{},{restoreTransient:false});const summary=normalized.catalogue.creatorCardSummary;if(!CreatorCatalogueSummary.valid(summary,normalized.catalogue))return null;
+      if(!Settings.value.creatorCardBadges.enabled)return null;const normalized=CatalogueModel.normalize(meta||{},{restoreTransient:false});const summary=normalized.catalogue.creatorCardSummary;if(!CreatorCatalogueSummary.compatible(summary,normalized.catalogue))return null;
       const types=CreatorCardBadgeRenderer.enabledTypes();if(!types.length)return null;const rail=document.createElement('span');rail.className='pmf-creator-card-badges';rail.dataset.pmfOwned='true';rail.setAttribute('aria-label',`Complete local Catalogue attachment totals for ${info.creatorName}`);
       const warning=summary.retryableMetadataCount||summary.malformedRecordCount;const countMode=Settings.value.creatorCardBadgeCountMode;const logicalColumns=CreatorCardBadgeRenderer.columns(types);[...logicalColumns].reverse().forEach((typesInColumn,reverseIndex)=>{const logicalIndex=logicalColumns.length-1-reverseIndex;const column=document.createElement('span');column.className='pmf-creator-badge-column';column.dataset.pmfOwned='true';column.dataset.pmfColumnIndex=String(logicalIndex);column.dataset.pmfBadgeTypes=typesInColumn.join(',');typesInColumn.forEach((type)=>{const media=summary.media?.[type]||{};const count=Math.max(0,Number(countMode==='posts'?media.posts:(media.attachments??media.links))||0);const [noun,icon]=CreatorCardBadgeRenderer.labels[type];const exact=count.toLocaleString();const posts=Number(summary.aggregateEligiblePostCount??summary.sourcePostCount).toLocaleString();const unit=countMode==='posts'?'matching post':'attachment/link';const pending=warning?` Known local total. ${warning} post${warning===1?' has':'s have'} optional metadata pending, so this number may be incomplete.`:'';const badge=document.createElement('span');badge.className=`pmf-creator-badge pmf-creator-badge--${type}`;badge.dataset.pmfOwned='true';badge.title=`${exact} ${count===1?unit:`${unit}s`} across ${posts} aggregate-eligible Catalogue posts.${pending}`;badge.setAttribute('aria-label',`${exact} ${count===1?unit:`${unit}s`} for ${noun} in this creator's aggregate-eligible local Catalogue.${pending}`);badge.innerHTML=`${icon}<span>${CreatorCardBadgeRenderer.formatCount(count)}</span>`;column.append(badge);});rail.append(column);});
       card.append(rail);CreatorCardBadgeRenderer.reserveTarget(info)?.setAttribute?.('data-pmf-creator-content','true');card.classList.add('pmf-creator-card-has-badges');CreatorCardBadgeRenderer.layout(card,'render');globalThis.requestAnimationFrame?.(()=>CreatorCardBadgeRenderer.layout(card,'animation-frame'));
@@ -3920,7 +3963,9 @@ sync() {
         pendingIds,
         remainingIds: pendingIds,
         failedIds: [...new Set((value.failedIds || []).map(String).filter(Boolean))],
-        permanentFailedIds: [...new Set((value.permanentFailedIds || []).map(String).filter(Boolean))],
+        permanentFailedIds: [...new Set((value.permanentFailedIds || value.recentPermanentFailedIds || []).map(String).filter(Boolean))].slice(-50),
+        permanentFailedCount: Math.max(Number(value.permanentFailedCount) || 0, Array.isArray(value.permanentFailedIds) ? value.permanentFailedIds.length : 0, Array.isArray(value.recentPermanentFailedIds) ? value.recentPermanentFailedIds.length : 0),
+        pauseReason: String(value.pauseReason || ''),
         affectedCreators: [...new Set((value.affectedCreators || []).map(String).filter(Boolean))],
         completed: Math.max(0, Number(value.completed) || 0),
         attempted: Math.max(0, Number(value.attempted) || 0),
@@ -3939,6 +3984,7 @@ sync() {
       if (!state) return { running: false, stopped: false, total: 0, completed: 0, checkedComplete: 0, checkedMissing: 0, failed: 0, permanentFailed: 0, remaining: 0, remainingEstimated: false, currentRate: 0, averageRate: 0, rate: 0, etaMs: 0, scope: '', message: '' };
       const failedIds = Array.isArray(state.failedIds) ? state.failedIds : [];
       const permanentFailedIds = Array.isArray(state.permanentFailedIds) ? state.permanentFailedIds : [];
+      const permanentFailedCount = Math.max(Number(state.permanentFailedCount) || 0, permanentFailedIds.length);
       const pendingIds = Array.isArray(state.pendingIds) ? state.pendingIds : Array.isArray(state.remainingIds) ? state.remainingIds : [];
       const completed = Number(state.completed) || 0;
       const startedAt = Number(state.startedAt) || 0;
@@ -3961,7 +4007,7 @@ sync() {
         checkedComplete: Number(state.checkedComplete) || 0,
         checkedMissing: Number(state.checkedMissing) || 0,
         failed: failedIds.length,
-        permanentFailed: permanentFailedIds.length,
+        permanentFailed: permanentFailedCount,
         remaining,
         remainingKnown: knownRemaining,
         remainingEstimated: !state.scanDone,
@@ -4033,6 +4079,13 @@ sync() {
           continue;
         }
         if (state) {
+          const outstanding = state.pendingIds.includes(id) || state.failedIds.includes(id);
+          if (post && outstanding && post.missingStatsKnown) {
+            state.completed += 1;
+            if (post.hasMissingStats) state.checkedMissing += 1;
+            else state.checkedComplete += 1;
+            state.recoveredCompleted = (Number(state.recoveredCompleted) || 0) + 1;
+          }
           state.pendingIds = state.pendingIds.filter((value) => value !== id);
           state.failedIds = state.failedIds.filter((value) => value !== id);
         }
@@ -4060,7 +4113,10 @@ sync() {
         remainingIds: pendingIds,
         plannedIds: pendingIds,
         failedIds: [...new Set(state.failedIds || [])],
-        permanentFailedIds: [...new Set(state.permanentFailedIds || [])],
+        permanentFailedIds: [...new Set(state.permanentFailedIds || [])].slice(-50),
+        recentPermanentFailedIds: [...new Set(state.permanentFailedIds || [])].slice(-50),
+        permanentFailedCount: Math.max(Number(state.permanentFailedCount) || 0, (state.permanentFailedIds || []).length),
+        pauseReason: String(state.pauseReason || ''),
         completed: Number(state.completed) || 0,
         attempted: Number(state.attempted) || 0,
         discovered: Number(state.discovered) || 0,
@@ -4279,7 +4335,11 @@ sync() {
             if (error.permanent) {
               state.pendingIds = state.pendingIds.filter((value) => value !== id);
               state.failedIds = state.failedIds.filter((value) => value !== id);
-              if (!state.permanentFailedIds.includes(id)) state.permanentFailedIds.push(id);
+              if (!state.permanentFailedIds.includes(id)) {
+                state.permanentFailedCount = (Number(state.permanentFailedCount) || 0) + 1;
+                state.permanentFailedIds.push(id);
+                state.permanentFailedIds = state.permanentFailedIds.slice(-50);
+              }
             } else {
               if (!state.failedIds.includes(id)) state.failedIds.push(id);
               if (!state.pendingIds.includes(id)) state.pendingIds.push(id);
@@ -4292,7 +4352,8 @@ sync() {
             Logger.warn(`Missing metadata check failed for post ${task.post.id}.`, error);
             if (state.consecutiveFailures >= 25 || state.failedIds.length >= 250) {
               state.stopped = true;
-              state.message = state.failedIds.length >= 250
+              state.pauseReason = state.failedIds.length >= 250 ? 'retryable-failure-cap' : 'consecutive-retryable-failures';
+              state.message = state.pauseReason === 'retryable-failure-cap'
                 ? 'Metadata update paused after collecting 250 retryable failures.'
                 : 'Metadata update paused after 25 consecutive retryable failures.';
               state.controller.abort();
@@ -4333,7 +4394,9 @@ sync() {
           scanDone: Boolean(saved?.scanDone),
           pendingIds: [...new Set(saved?.pendingIds || [])],
           failedIds: [...new Set(saved?.failedIds || [])],
-          permanentFailedIds: [...new Set(saved?.permanentFailedIds || [])],
+          permanentFailedIds: [...new Set(saved?.permanentFailedIds || [])].slice(-50),
+          permanentFailedCount: Math.max(Number(saved?.permanentFailedCount) || 0, (saved?.permanentFailedIds || []).length),
+          pauseReason: '',
           completed: Number(saved?.completed) || 0,
           attempted: Number(saved?.attempted) || 0,
           discovered: Number(saved?.discovered) || 0,
@@ -4380,7 +4443,7 @@ sync() {
               App.render();
             }
             state.currentCreator = '';
-            if (!state.message.includes('25 consecutive')) {
+            if (!state.pauseReason) {
               state.message = state.stopped ? 'Missing-attachment metadata update stopped.' : state.failedIds.length ? 'Missing-attachment metadata update finished with retryable failures.' : state.scanDone ? 'Missing-attachment metadata update complete.' : 'Missing-attachment metadata retry complete.';
             }
           } catch (error) {
@@ -5754,7 +5817,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       const directory = record?.directory || {};
       const summary = record?.summary || {};
       const state = record?.state || {};
-      return [directory.creatorKey, directory.creatorName, directory.avatarUrl, directory.bannerUrl, directory.updatedAt, directory.profileCheckedAt, record?.catalogueState, record?.scanned, record?.favorite, state.updatedAt, summary.generatedAt, summary.classificationFingerprint, summary.aggregateEligiblePostCount].join('|');
+      return [directory.creatorKey, directory.creatorName, directory.avatarUrl, directory.bannerUrl, directory.updatedAt, directory.profileCheckedAt, record?.catalogueState, record?.scanned, record?.favorite, record?.summaryStale===true, state.updatedAt, summary.generatedAt, summary.classificationFingerprint, summary.aggregateEligiblePostCount].join('|');
     },
     invalidateFilteredCache(reason = '') {
       CreatorIndexUI.filteredCache = null;
@@ -5836,7 +5899,11 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         if (!record) continue;
         if (patch.directory) record.directory = CreatorDirectory.merge(record.directory, patch.directory);
         if (patch.meta !== undefined) record.meta = patch.meta;
-        if (patch.summary !== undefined) record.summary = patch.summary;
+        if (patch.summary !== undefined) {
+          record.summary = patch.summary;
+          if (patch.summaryStale === undefined) record.summaryStale = false;
+        }
+        if (patch.summaryStale !== undefined) record.summaryStale = Boolean(patch.summaryStale);
         if (patch.state !== undefined) record.state = patch.state;
         changed += 1;
       }
@@ -6519,7 +6586,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       ArtistsPageController.page=page;ArtistsPageController.found=found;ArtistsPageController.controller=new AbortController();const signal=ArtistsPageController.controller.signal;const generation=++ArtistsPageController.generation;try{CreatorIndexUI.mount(found);}catch(error){CreatorIndexUI.cleanup();NativeArtistsVisibility.restore(CreatorIndexUI.nativeSnapshot);throw error;}
       const contextMenu=(event)=>ArtistsPageController.handleContextMenu(event);const keyboardMenu=(event)=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){const card=event.target.closest?.('[data-pmf-creator-key]');if(card&&ArtistsPageController.cardByElement.has(card)){event.preventDefault();ArtistsPageController.openAction(ArtistsPageController.cardByElement.get(card));}}};[CreatorIndexUI.grid,found.grid].forEach((grid)=>{grid.addEventListener('contextmenu',contextMenu,{signal});grid.addEventListener('keydown',keyboardMenu,{signal});});
       const schedule=Util.debounce(()=>{if(generation===ArtistsPageController.generation)ArtistsPageController.requestRefresh('native-mutation');},120);ArtistsPageController.observer=new MutationObserver((mutations)=>{if(ArtistsPageController.renderingOwnedUi)return;if(mutations.some(ArtistsPageController.isRelevantNativeMutation))schedule();});ArtistsPageController.observer.observe(found.grid,{childList:true,subtree:true});window.addEventListener('resize',()=>{CreatorGridGeometry.apply(CreatorIndexUI.grid,CreatorIndexUI.nativeGeometry);CreatorCardBadgeRenderer.refreshReservations(CreatorIndexUI.grid,'window-resize');},{signal});signal.addEventListener('abort',()=>schedule.cancel(),{once:true});
-      ArtistsPageController.unsubscribeJob=CatalogueJobManager.subscribe(()=>ArtistsPageController.renderJobs());ArtistsPageController.unsubscribeSettings=SettingsEvents.subscribe((event)=>{if(!ArtistsPageController.mounted())return;CatalogueJobManager.setConcurrency(event.current.catalogueConcurrentJobs);AttachmentBadgeSizing.applyAll({reason:'settings-event'});ArtistsPageController.renderBadgesFromCurrentState();Logger.info({operation:'creator-badge-settings-applied',enabled:event.current.creatorCardBadges.enabled,enabledTypes:CreatorCardBadgeRenderer.enabledTypes(event.current.creatorCardBadges),visibleCardCount:ArtistsPageController.cards.length,changed:event.changed});});try{await ArtistsPageController.requestRefresh('mount');}catch(error){CreatorIndexUI.setState('error',`Could not load the creator index: ${error.message}`);Logger.error('Could not load the creator index.',error);return guard();}if(!guard()){ArtistsPageController.cleanup();return false;}if(Logger.debug)Logger.info({operation:'artists-page-mounted',pageKey:page.pageKey,creatorCardCount:ArtistsPageController.cards.length});return true;
+      ArtistsPageController.unsubscribeJob=CatalogueJobManager.subscribe(()=>ArtistsPageController.renderJobs());ArtistsPageController.unsubscribeSettings=SettingsEvents.subscribe((event)=>{if(!ArtistsPageController.mounted())return;CatalogueJobManager.setConcurrency(event.current.catalogueConcurrentJobs);AttachmentBadgeSizing.applyAll({reason:'settings-event'});ArtistsPageController.renderBadgesFromCurrentState();if((event.changed||[]).some((key)=>['excludePostsWithMissingAttachments','videoExtensions','imageExtensions','archiveExtensions','projectExtensions','projectEvidence','projectKeywords','externalLinkScope','knownHosts'].includes(key)))ArtistsPageController.requestRefresh('aggregate-settings-change');Logger.info({operation:'creator-badge-settings-applied',enabled:event.current.creatorCardBadges.enabled,enabledTypes:CreatorCardBadgeRenderer.enabledTypes(event.current.creatorCardBadges),visibleCardCount:ArtistsPageController.cards.length,changed:event.changed});});try{await ArtistsPageController.requestRefresh('mount');}catch(error){CreatorIndexUI.setState('error',`Could not load the creator index: ${error.message}`);Logger.error('Could not load the creator index.',error);return guard();}if(!guard()){ArtistsPageController.cleanup();return false;}if(Logger.debug)Logger.info({operation:'artists-page-mounted',pageKey:page.pageKey,creatorCardCount:ArtistsPageController.cards.length});return true;
     },
     requestRefresh(reason='request') {
       ArtistsPageController.refreshReasons.add(reason);if(ArtistsPageController.refreshPromise){ArtistsPageController.refreshPending=true;return ArtistsPageController.refreshPromise;}const run=async()=>{CreatorIndexUI.setRefreshing(true);try{do{ArtistsPageController.refreshPending=false;const reasons=[...ArtistsPageController.refreshReasons];ArtistsPageController.refreshReasons.clear();await ArtistsPageController.refreshNow(reasons);}while(ArtistsPageController.refreshPending&&ArtistsPageController.mounted());}finally{CreatorIndexUI.setRefreshing(false);}};ArtistsPageController.refreshPromise=run().finally(()=>{ArtistsPageController.refreshPromise=null;});return ArtistsPageController.refreshPromise;
@@ -6528,7 +6595,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     async refreshNow(reasons=[]) {
       const generation=ArtistsPageController.generation;const revision=++ArtistsPageController.refreshRevision;if(!ArtistsPageController.mounted())return;const found=ArtistsPageController.found;if(!found?.grid?.isConnected)throw new Error('The saved native creator grid is no longer connected.');
       const cards=ArtistsDOM.creatorCards(found,{nativeOnly:true});const captured=cards.map((info)=>CreatorDirectory.fromCard(info));const priorDirectory=await Cache.getCreatorDirectory(captured.map((record)=>record.creatorKey));const merged=captured.map((record)=>CreatorDirectory.merge(priorDirectory.get(record.creatorKey)||{},record));await Cache.putCreatorDirectory(merged);const allMetas=await Cache.getCreatorMetas();const existingDirectory=await Cache.getCreatorDirectory();const discovered=[];for(const [key,meta] of allMetas){if(existingDirectory.has(key))continue;const [domain,service,creatorId]=String(key).split('|');discovered.push(CreatorDirectory.normalize({creatorKey:key,domain,service,creatorId,creatorName:meta.creatorName||meta.name||creatorId,creatorUrl:`https://${domain}/${service}/user/${creatorId}`,firstSeenAt:meta.createdAt||meta.scannedAt||Date.now()}));}if(discovered.length)await Cache.putCreatorDirectory(discovered);const directory=await Cache.getCreatorDirectory();const keys=[...directory.keys()];let metas;try{metas=await Cache.getCreatorMetas(keys);ArtistsPageController.metaErrors.clear();}catch{metas=new Map();keys.forEach((key)=>ArtistsPageController.metaErrors.add(key));}const states=await Cache.getCreatorStates(keys);if(generation!==ArtistsPageController.generation||revision!==ArtistsPageController.refreshRevision){Logger.info({operation:'artists-refresh-discarded',generation,revision,reasons});return;}ArtistsPageController.metas=metas;ArtistsPageController.states=states;ArtistsPageController.directory=directory;
-      const records=keys.map((key)=>{const meta=metas.get(key);const normalized=CatalogueModel.normalize(meta||{},{restoreTransient:false});const catalogue=normalized.catalogue;const summary=catalogue.creatorCardSummary;const state=states.get(key)||CreatorState.empty(key);return{directory:directory.get(key),meta,state,summary:CreatorCatalogueSummary.valid(summary,catalogue)?summary:null,catalogueState:CatalogueModel.evaluateCoverage(catalogue).coverageComplete?'complete':Number(catalogue.storedPostCount)>0||Object.keys(catalogue.pageCoverage||{}).length>0?'partial':'unscanned',scanned:Number(catalogue.storedPostCount)>0||Object.keys(catalogue.pageCoverage||{}).length>0,favorite:state.favoriteDirectValue};});
+      const records=keys.map((key)=>{const meta=metas.get(key);const normalized=CatalogueModel.normalize(meta||{},{restoreTransient:false});const catalogue=normalized.catalogue;const summary=catalogue.creatorCardSummary;const state=states.get(key)||CreatorState.empty(key);return{directory:directory.get(key),meta,state,summary:CreatorCatalogueSummary.compatible(summary,catalogue)?summary:null,summaryStale:Boolean(summary&&!CreatorCatalogueSummary.valid(summary,catalogue)),catalogueState:CatalogueModel.evaluateCoverage(catalogue).coverageComplete?'complete':Number(catalogue.storedPostCount)>0||Object.keys(catalogue.pageCoverage||{}).length>0?'partial':'unscanned',scanned:Number(catalogue.storedPostCount)>0||Object.keys(catalogue.pageCoverage||{}).length>0,favorite:state.favoriteDirectValue};});
       await ArtistsPageController.hydrateDynamicAggregates(records);if(generation!==ArtistsPageController.generation||revision!==ArtistsPageController.refreshRevision)return;
       records.forEach((record)=>ArtistsPageController.scheduleBackfill({
         context:{
@@ -6553,7 +6620,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       ArtistsPageController.backfillKeys.add(info.context.creatorKey);ArtistsPageController.backfillQueue.push({context:info.context,creatorName:info.creatorName,generation:ArtistsPageController.generation});ArtistsPageController.pumpBackfills();
     },
     pumpBackfills() {
-      while(ArtistsPageController.backfillActive<2&&ArtistsPageController.backfillQueue.length){const task=ArtistsPageController.backfillQueue.shift();ArtistsPageController.backfillActive+=1;const run=async()=>{const started=Date.now();try{const summary=await CreatorCatalogueSummary.recomputeAndPersist(task.context);if(Logger.debug)Logger.info({operation:'creator-summary-backfill',creatorKey:task.context.creatorKey,postCount:summary.sourcePostCount,counts:summary.counts,fingerprint:summary.classificationFingerprint,elapsedMs:Date.now()-started});if(task.generation===ArtistsPageController.generation&&ArtistsPageController.mounted()){const meta=await Cache.getMeta(task.context.creatorKey);CreatorIndexUI.patchRecord(task.context.creatorKey,{summary,meta});}}catch(error){Logger.warn('Creator summary backfill failed.',error);}finally{ArtistsPageController.backfillActive-=1;ArtistsPageController.pumpBackfills();}};if(typeof requestIdleCallback==='function')requestIdleCallback(()=>run(),{timeout:800});else setTimeout(run,0);}
+      while(ArtistsPageController.backfillActive<2&&ArtistsPageController.backfillQueue.length){const task=ArtistsPageController.backfillQueue.shift();ArtistsPageController.backfillActive+=1;const run=async()=>{const started=Date.now();try{const summary=await CreatorCatalogueSummary.recomputeAndPersist(task.context);if(Logger.debug)Logger.info({operation:'creator-summary-backfill',creatorKey:task.context.creatorKey,postCount:summary.sourcePostCount,counts:summary.counts,fingerprint:summary.classificationFingerprint,elapsedMs:Date.now()-started});if(task.generation===ArtistsPageController.generation&&ArtistsPageController.mounted()){const meta=await Cache.getMeta(task.context.creatorKey);CreatorIndexUI.patchRecord(task.context.creatorKey,{summary,meta});}}catch(error){Logger.warn('Creator summary backfill failed.',error);}finally{ArtistsPageController.backfillKeys.delete(task.context.creatorKey);ArtistsPageController.backfillActive-=1;ArtistsPageController.pumpBackfills();}};if(typeof requestIdleCallback==='function')requestIdleCallback(()=>run(),{timeout:800});else setTimeout(run,0);}
     },
     handleContextMenu(event) {
       const card=event.target.closest?.('[data-pmf-creator-key]');const info=card&&ArtistsPageController.cardByElement.get(card);if(!info)return;event.preventDefault();ArtistsPageController.openAction(info);
