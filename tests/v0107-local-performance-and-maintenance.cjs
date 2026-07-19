@@ -22,8 +22,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     SettingsUI,
   } = api;
 
-  assert.equal(Config.version, '0.10.7');
-  assert.match(originalSource, /\/\/ @version\s+0\.10\.7/);
+  assert.equal(Config.version, '0.10.8');
+  assert.match(originalSource, /\/\/ @version\s+0\.10\.8/);
   assert.ok(!CreatorIndexUI.render.toString().includes('repairVisible'));
   assert.ok(!CreatorIndexUI.renderCatalogue.toString().includes('repairVisible'));
   assert.ok(CreatorIndexUI.renderCatalogue.toString().includes('createDocumentFragment'));
@@ -196,10 +196,14 @@ const { loadUserscript } = require('./test-helper.cjs');
       service: 'patreon',
       creatorId: '1',
       cacheSources: { catalogue: true },
+      scanSchemaVersion: 2,
+      missingStatsKnown: false,
     },
   };
   const taskId = MissingAttachmentMaintenance.taskId(task);
-  MissingAttachmentMaintenance.plan = async () => [task];
+  Cache.countCataloguePosts = async () => 1;
+  Cache.scanCataloguePostChunk = async () => ({ records: [task.post], scanned: 1, done: true, cursor: null });
+  Cache.getPostsByKeys = async () => new Map([[task.post.key, task.post]]);
   MissingAttachmentMaintenance.inspect = async () => {
     const error = new Error('temporary failure');
     error.retryable = true;
@@ -243,7 +247,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.ok(MissingAttachmentMaintenance.openScopeDialog.toString().includes('First N unknown posts'));
   assert.ok(MissingAttachmentMaintenance.openScopeDialog.toString().includes('All unknown posts'));
 
-  console.log('Pawchive Media Filter v0.10.7 Local performance and maintenance runtime tests passed.');
+  console.log('Pawchive Media Filter v0.10.8 Local performance and maintenance runtime tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

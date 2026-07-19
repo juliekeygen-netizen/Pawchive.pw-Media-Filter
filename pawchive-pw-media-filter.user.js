@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.10.7
+// @version      0.10.8
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.10.7',
+    version: '0.10.8',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -1124,6 +1124,223 @@
         };
         request.onerror = () => reject(request.error);
       }).catch((error) => { Logger.warn('Could not read creator cache.', error); return []; });
+    },
+    async getPostsByKeys(keys = []) {
+      const uniqueKeys = [...new Set((keys || []).map(String).filter(Boolean))];
+      const result = new Map();
+      if (!uniqueKeys.length) return result;
+      const db = await Cache.open();
+      if (!db) {
+        uniqueKeys.forEach((key) => {
+          const post = Cache.memory.get(key);
+          if (post?.scanSchemaVersion === Config.schemaVersion && post.cacheSources?.catalogue === true) result.set(key, post);
+        });
+        return result;
+      }
+      await new Promise((resolve, reject) => {
+        const transaction = db.transaction('posts', 'readonly');
+        const store = transaction.objectStore('posts');
+        let pending = uniqueKeys.length;
+        uniqueKeys.forEach((key) => {
+          const request = store.get(key);
+          request.onsuccess = () => {
+            const post = request.result;
+            if (post?.scanSchemaVersion === Config.schemaVersion && post.cacheSources?.catalogue === true) result.set(key, post);
+            pending -= 1;
+            if (!pending) resolve();
+          };
+          request.onerror = () => reject(request.error);
+        });
+        transaction.onabort = () => reject(transaction.error || new Error('Post lookup transaction aborted'));
+      }).catch((error) => {
+        Logger.warn('Could not read stored posts by key.', error);
+      });
+      return result;
+    },
+    async countCataloguePosts({ creatorKeys = [] } = {}) {
+      const keys = [...new Set((creatorKeys || []).map(String).filter(Boolean))];
+      const db = await Cache.open();
+      if (!db) {
+        return [...Cache.memory.values()].filter((post) => post?.scanSchemaVersion === Config.schemaVersion
+          && post?.cacheSources?.catalogue === true
+          && (!keys.length || keys.includes(String(post.creatorKey)))).length;
+      }
+      if (!keys.length) {
+        return new Promise((resolve, reject) => {
+          const request = db.transaction('posts', 'readonly').objectStore('posts').count();
+          request.onsuccess = () => resolve(Math.max(0, Number(request.result) || 0));
+          request.onerror = () => reject(request.error);
+        }).catch((error) => {
+          Logger.warn('Could not count stored Catalogue posts.', error);
+          return 0;
+        });
+      }
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction('posts', 'readonly');
+        const index = transaction.objectStore('posts').index('creatorKey');
+        let pending = keys.length;
+        let total = 0;
+        keys.forEach((creatorKey) => {
+          const request = index.count(creatorKey);
+          request.onsuccess = () => {
+            total += Math.max(0, Number(request.result) || 0);
+            pending -= 1;
+            if (!pending) resolve(total);
+          };
+          request.onerror = () => reject(request.error);
+        });
+        transaction.onabort = () => reject(transaction.error || new Error('Post count transaction aborted'));
+      }).catch((error) => {
+        Logger.warn('Could not count selected Catalogue posts.', error);
+        return 0;
+      });
+    },
+    async scanCataloguePostChunk({ cursor = null, creatorKeys = [], scanLimit = 500, signal } = {}) {
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      const limit = Util.clamp(Number(scanLimit) || 500, 1, 2000);
+      const keys = [...new Set((creatorKeys || []).map(String).filter(Boolean))];
+      const normalizedCursor = cursor && typeof cursor === 'object' ? cursor : {};
+      const mode = keys.length ? 'creators' : 'all';
+      const db = await Cache.open();
+      const valid = (post) => post?.scanSchemaVersion === Config.schemaVersion && post?.cacheSources?.catalogue === true;
+
+      if (!db) {
+        const all = [...Cache.memory.entries()]
+          .filter(([, post]) => valid(post))
+          .sort(([left], [right]) => String(left).localeCompare(String(right), undefined, { numeric: true }));
+        const creatorIndex = mode === 'creators' ? Math.max(0, Number(normalizedCursor.creatorIndex) || 0) : 0;
+        const afterKey = String(normalizedCursor.afterKey || '');
+        const records = [];
+        let scanned = 0;
+        let nextCreatorIndex = creatorIndex;
+        let nextAfterKey = afterKey;
+        let done = true;
+        if (mode === 'all') {
+          for (const [primaryKey, post] of all) {
+            if (afterKey && String(primaryKey) <= afterKey) continue;
+            scanned += 1;
+            nextAfterKey = String(primaryKey);
+            records.push(post);
+            if (scanned >= limit) { done = false; break; }
+          }
+        } else {
+          outer: for (let position = creatorIndex; position < keys.length; position += 1) {
+            const creatorKey = keys[position];
+            const rows = all.filter(([, post]) => String(post.creatorKey) === creatorKey);
+            for (const [primaryKey, post] of rows) {
+              if (position === creatorIndex && afterKey && String(primaryKey) <= afterKey) continue;
+              scanned += 1;
+              nextCreatorIndex = position;
+              nextAfterKey = String(primaryKey);
+              records.push(post);
+              if (scanned >= limit) { done = false; break outer; }
+            }
+            nextCreatorIndex = position + 1;
+            nextAfterKey = '';
+          }
+        }
+        if (mode === 'creators' && done) {
+          nextCreatorIndex = keys.length;
+          nextAfterKey = '';
+        }
+        return {
+          records,
+          scanned,
+          done,
+          cursor: done ? null : { mode, creatorIndex: nextCreatorIndex, afterKey: nextAfterKey },
+        };
+      }
+
+      const KeyRange = globalThis.IDBKeyRange;
+      if (!KeyRange) throw new Error('IndexedDB key ranges are unavailable.');
+      const readRange = ({ lower, upper, lowerOpen = false, max }) => new Promise((resolve, reject) => {
+        const transaction = db.transaction('posts', 'readonly');
+        const store = transaction.objectStore('posts');
+        const range = upper == null ? (lower ? KeyRange.lowerBound(lower, lowerOpen) : null) : KeyRange.bound(lower, upper, lowerOpen, false);
+        const request = store.openCursor(range);
+        const records = [];
+        let scanned = 0;
+        let lastKey = '';
+        let settled = false;
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          resolve(value);
+        };
+        request.onsuccess = () => {
+          if (signal?.aborted) {
+            try { transaction.abort(); } catch {}
+            if (!settled) reject(new DOMException('Aborted', 'AbortError'));
+            return;
+          }
+          const row = request.result;
+          if (!row) {
+            finish({ records, scanned, lastKey, done: true });
+            return;
+          }
+          scanned += 1;
+          lastKey = String(row.primaryKey);
+          if (valid(row.value)) records.push(row.value);
+          if (scanned >= max) {
+            finish({ records, scanned, lastKey, done: false });
+            return;
+          }
+          row.continue();
+        };
+        request.onerror = () => { if (!settled) reject(request.error); };
+        transaction.onabort = () => {
+          if (settled) return;
+          if (signal?.aborted) reject(new DOMException('Aborted', 'AbortError'));
+          else reject(transaction.error || new Error('Post cursor transaction aborted'));
+        };
+      });
+
+      if (mode === 'all') {
+        const afterKey = String(normalizedCursor.afterKey || '');
+        const result = await readRange({ lower: afterKey, lowerOpen: Boolean(afterKey), upper: null, max: limit });
+        return {
+          records: result.records,
+          scanned: result.scanned,
+          done: result.done,
+          cursor: result.done ? null : { mode, creatorIndex: 0, afterKey: result.lastKey },
+        };
+      }
+
+      let creatorIndex = Math.max(0, Number(normalizedCursor.creatorIndex) || 0);
+      let afterKey = String(normalizedCursor.afterKey || '');
+      const records = [];
+      let scanned = 0;
+      while (creatorIndex < keys.length && scanned < limit) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const creatorKey = keys[creatorIndex];
+        const prefix = `${creatorKey}|`;
+        const upper = `${creatorKey}|￿`;
+        const lower = afterKey && afterKey.startsWith(prefix) ? afterKey : prefix;
+        const result = await readRange({
+          lower,
+          upper,
+          lowerOpen: Boolean(afterKey && afterKey.startsWith(prefix)),
+          max: limit - scanned,
+        });
+        records.push(...result.records);
+        scanned += result.scanned;
+        if (!result.done) {
+          return {
+            records,
+            scanned,
+            done: false,
+            cursor: { mode, creatorIndex, afterKey: result.lastKey },
+          };
+        }
+        creatorIndex += 1;
+        afterKey = '';
+      }
+      return {
+        records,
+        scanned,
+        done: creatorIndex >= keys.length,
+        cursor: creatorIndex >= keys.length ? null : { mode, creatorIndex, afterKey: '' },
+      };
     },
     mergePost(existing, incoming) {
       const prior = existing && typeof existing === 'object' ? existing : {};
@@ -3685,32 +3902,75 @@ sync() {
     listeners: new Set(),
     htmlActive: 0,
     htmlWaiters: [],
+    scanChunkSize: 500,
     checkpoint() {
       return GM_getValue(Config.missingAttachmentMaintenanceKey, null);
     },
+    normalizeCheckpoint(value = null) {
+      if (!value || typeof value !== 'object') return null;
+      const pendingIds = [...new Set([...(value.pendingIds || value.remainingIds || []), ...(value.version < 3 ? value.failedIds || [] : [])].map(String).filter(Boolean))];
+      return {
+        ...value,
+        version: Math.max(3, Number(value.version) || 0),
+        scope: String(value.scope || 'all'),
+        limit: Math.max(0, Number(value.limit) || 0),
+        creatorKeys: [...new Set((value.creatorKeys || []).map(String).filter(Boolean))],
+        scanCursor: value.scanCursor && typeof value.scanCursor === 'object' ? value.scanCursor : null,
+        scanDone: value.version < 3 ? true : Boolean(value.scanDone),
+        pendingIds,
+        remainingIds: pendingIds,
+        failedIds: [...new Set((value.failedIds || []).map(String).filter(Boolean))],
+        permanentFailedIds: [...new Set((value.permanentFailedIds || []).map(String).filter(Boolean))],
+        affectedCreators: [...new Set((value.affectedCreators || []).map(String).filter(Boolean))],
+        completed: Math.max(0, Number(value.completed) || 0),
+        attempted: Math.max(0, Number(value.attempted) || 0),
+        discovered: Math.max(0, Number(value.discovered ?? value.total) || 0),
+        total: Math.max(0, Number(value.total ?? value.discovered) || 0),
+        checkedComplete: Math.max(0, Number(value.checkedComplete) || 0),
+        checkedMissing: Math.max(0, Number(value.checkedMissing) || 0),
+        scannedStoredPosts: Math.max(0, Number(value.scannedStoredPosts) || 0),
+        estimatedStoredPosts: Math.max(0, Number(value.estimatedStoredPosts) || 0),
+        recentCompletedAt: (value.recentCompletedAt || []).map(Number).filter(Number.isFinite).slice(-120),
+      };
+    },
     snapshot() {
-      const state = MissingAttachmentMaintenance.active || MissingAttachmentMaintenance.checkpoint();
-      if (!state) return { running: false, stopped: false, total: 0, completed: 0, checkedComplete: 0, checkedMissing: 0, failed: 0, permanentFailed: 0, remaining: 0, rate: 0, etaMs: 0, scope: '', message: '' };
+      const raw = MissingAttachmentMaintenance.active || MissingAttachmentMaintenance.checkpoint();
+      const state = MissingAttachmentMaintenance.active ? raw : MissingAttachmentMaintenance.normalizeCheckpoint(raw);
+      if (!state) return { running: false, stopped: false, total: 0, completed: 0, checkedComplete: 0, checkedMissing: 0, failed: 0, permanentFailed: 0, remaining: 0, remainingEstimated: false, currentRate: 0, averageRate: 0, rate: 0, etaMs: 0, scope: '', message: '' };
       const failedIds = Array.isArray(state.failedIds) ? state.failedIds : [];
       const permanentFailedIds = Array.isArray(state.permanentFailedIds) ? state.permanentFailedIds : [];
-      const remainingIds = Array.isArray(state.remainingIds) ? state.remainingIds : [];
+      const pendingIds = Array.isArray(state.pendingIds) ? state.pendingIds : Array.isArray(state.remainingIds) ? state.remainingIds : [];
       const completed = Number(state.completed) || 0;
       const startedAt = Number(state.startedAt) || 0;
-      const elapsedMs = startedAt ? Math.max(1, Date.now() - startedAt) : 0;
-      const rate = elapsedMs ? completed / (elapsedMs / 1000) : 0;
-      const remaining = new Set([...remainingIds, ...failedIds]).size;
+      const now = Date.now();
+      const elapsedMs = startedAt ? Math.max(1, now - startedAt) : 0;
+      const averageRate = elapsedMs ? completed / (elapsedMs / 1000) : 0;
+      const recentCompletedAt = (state.recentCompletedAt || []).map(Number).filter((stamp) => Number.isFinite(stamp) && stamp >= now - 30000);
+      const currentWindowSeconds = Math.max(1, Math.min(30, elapsedMs / 1000 || 30));
+      const currentRate = recentCompletedAt.length / currentWindowSeconds;
+      const knownRemaining = new Set([...pendingIds, ...failedIds]).size;
+      const estimatedUnscanned = state.scanDone ? 0 : Math.max(0, (Number(state.estimatedStoredPosts) || 0) - (Number(state.scannedStoredPosts) || 0));
+      const remaining = knownRemaining + estimatedUnscanned;
+      const rateForEta = currentRate || averageRate;
       return {
         running: Boolean(MissingAttachmentMaintenance.active && !state.stopped),
         stopped: Boolean(state.stopped),
-        total: Number(state.total) || 0,
+        planning: !state.scanDone,
+        total: Math.max(Number(state.total) || 0, Number(state.discovered) || 0),
         completed,
         checkedComplete: Number(state.checkedComplete) || 0,
         checkedMissing: Number(state.checkedMissing) || 0,
         failed: failedIds.length,
         permanentFailed: permanentFailedIds.length,
         remaining,
-        rate,
-        etaMs: rate > 0 ? Math.round(remaining / rate * 1000) : 0,
+        remainingKnown: knownRemaining,
+        remainingEstimated: !state.scanDone,
+        currentRate,
+        averageRate,
+        rate: averageRate,
+        etaMs: rateForEta > 0 ? Math.round(remaining / rateForEta * 1000) : 0,
+        scannedStoredPosts: Number(state.scannedStoredPosts) || 0,
+        estimatedStoredPosts: Number(state.estimatedStoredPosts) || 0,
         scope: state.scope || '',
         currentCreator: state.currentCreator || '',
         message: state.message || ''
@@ -3735,58 +3995,99 @@ sync() {
       return `${task.creatorKey}::${task.post.id}`;
     },
     taskCreatorKey(id) {
-      return String(id || '').split('::')[0];
+      const value = String(id || '');
+      const marker = value.lastIndexOf('::');
+      return marker >= 0 ? value.slice(0, marker) : '';
+    },
+    taskPostId(id) {
+      const value = String(id || '');
+      const marker = value.lastIndexOf('::');
+      return marker >= 0 ? value.slice(marker + 2) : '';
+    },
+    taskStorageKey(id) {
+      const creatorKey = MissingAttachmentMaintenance.taskCreatorKey(id);
+      const postId = MissingAttachmentMaintenance.taskPostId(id);
+      return creatorKey && postId ? `${creatorKey}|${postId}` : '';
+    },
+    taskFromPost(post) {
+      return post ? { creatorKey: String(post.creatorKey || ''), post } : null;
     },
     scopeCreatorKeys(scope) {
       if (scope === 'current-creator') return App.context?.creatorKey ? [App.context.creatorKey] : [];
       if (scope === 'current-page') return [...new Set(CreatorIndexUI.visibleRecords().map((record) => record.directory?.creatorKey).filter(Boolean))];
       return [];
     },
-    async plan({ ids = null, scope = 'all', limit = 0 } = {}) {
-      const wanted = ids ? new Set(ids) : null;
-      let creatorKeys = wanted ? [...new Set([...wanted].map(MissingAttachmentMaintenance.taskCreatorKey).filter(Boolean))] : MissingAttachmentMaintenance.scopeCreatorKeys(scope);
-      const metas = await Cache.getCreatorMetas(creatorKeys);
-      if (!creatorKeys.length) creatorKeys = [...metas.keys()];
+    async tasksForIds(ids = [], state = null) {
+      const uniqueIds = [...new Set((ids || []).map(String).filter(Boolean))];
+      const idByStorageKey = new Map();
+      uniqueIds.forEach((id) => {
+        const key = MissingAttachmentMaintenance.taskStorageKey(id);
+        if (key) idByStorageKey.set(key, id);
+      });
+      const posts = await Cache.getPostsByKeys([...idByStorageKey.keys()]);
       const tasks = [];
-      const maximum = scope === 'first' ? Util.clamp(Number(limit) || 100, 1, 10000) : Number.MAX_SAFE_INTEGER;
-      for (const creatorKey of creatorKeys) {
-        const posts = await Cache.getCreatorPosts(creatorKey);
-        for (const post of posts) {
-          if (!MissingAttachmentMaintenance.needsCheck(post)) continue;
-          const task = { creatorKey, post };
-          const id = MissingAttachmentMaintenance.taskId(task);
-          if (wanted && !wanted.has(id)) continue;
-          tasks.push(task);
-          if (tasks.length >= maximum) return tasks;
+      for (const [storageKey, id] of idByStorageKey) {
+        const post = posts.get(storageKey);
+        if (post && MissingAttachmentMaintenance.needsCheck(post)) {
+          tasks.push({ creatorKey: post.creatorKey, post });
+          continue;
+        }
+        if (state) {
+          state.pendingIds = state.pendingIds.filter((value) => value !== id);
+          state.failedIds = state.failedIds.filter((value) => value !== id);
         }
       }
       return tasks;
     },
+    async plan({ ids = null, scope = 'all', limit = 0 } = {}) {
+      if (ids) return MissingAttachmentMaintenance.tasksForIds(ids);
+      const creatorKeys = MissingAttachmentMaintenance.scopeCreatorKeys(scope);
+      const maximum = scope === 'first' ? Util.clamp(Number(limit) || 100, 1, 10000) : MissingAttachmentMaintenance.scanChunkSize;
+      const result = await Cache.scanCataloguePostChunk({ creatorKeys, scanLimit: Math.max(MissingAttachmentMaintenance.scanChunkSize, maximum) });
+      return result.records.filter(MissingAttachmentMaintenance.needsCheck).slice(0, maximum).map(MissingAttachmentMaintenance.taskFromPost).filter(Boolean);
+    },
     persist(state) {
+      const pendingIds = [...new Set(state.pendingIds || state.remainingIds || [])];
       const checkpoint = {
-        version: 2,
+        version: 3,
         operation: 'missing-attachment-metadata',
         scope: state.scope || 'all',
         limit: Number(state.limit) || 0,
-        plannedIds: [...new Set(state.plannedIds || [])],
-        remainingIds: [...new Set(state.remainingIds || [])],
+        creatorKeys: [...new Set(state.creatorKeys || [])],
+        scanCursor: state.scanCursor || null,
+        scanDone: Boolean(state.scanDone),
+        pendingIds,
+        remainingIds: pendingIds,
+        plannedIds: pendingIds,
         failedIds: [...new Set(state.failedIds || [])],
         permanentFailedIds: [...new Set(state.permanentFailedIds || [])],
         completed: Number(state.completed) || 0,
         attempted: Number(state.attempted) || 0,
+        discovered: Number(state.discovered) || 0,
         checkedComplete: Number(state.checkedComplete) || 0,
         checkedMissing: Number(state.checkedMissing) || 0,
-        affectedCreators: [...state.affected],
-        total: Number(state.total) || 0,
+        affectedCreators: [...(state.affected || [])],
+        total: Number(state.total) || Number(state.discovered) || 0,
+        scannedStoredPosts: Number(state.scannedStoredPosts) || 0,
+        estimatedStoredPosts: Number(state.estimatedStoredPosts) || 0,
         detailConcurrency: Number(state.detailConcurrency) || 1,
+        recentCompletedAt: (state.recentCompletedAt || []).slice(-120),
         currentCreator: state.currentCreator || '',
         startedAt: Number(state.startedAt) || Date.now(),
         updatedAt: Date.now(),
         stopped: Boolean(state.stopped),
         message: state.message || ''
       };
+      state.lastPersistAt = checkpoint.updatedAt;
+      state.progressSincePersist = 0;
       GM_setValue(Config.missingAttachmentMaintenanceKey, checkpoint);
       return checkpoint;
+    },
+    maybePersist(state, force = false) {
+      state.progressSincePersist = (Number(state.progressSincePersist) || 0) + 1;
+      if (!force && state.progressSincePersist < 10 && Date.now() - (Number(state.lastPersistAt) || 0) < 750) return;
+      MissingAttachmentMaintenance.persist(state);
+      MissingAttachmentMaintenance.notify();
     },
     async fetchStructured(post, signal) {
       const stored = PostMissingStats.fromRaw(post);
@@ -3865,16 +4166,26 @@ sync() {
     async inspect(task, signal) {
       return await MissingAttachmentMaintenance.fetchStructured(task.post, signal) || await MissingAttachmentMaintenance.fetchHtml(task.post, signal);
     },
+    recordCompletion(state) {
+      const now = Date.now();
+      state.recentCompletedAt = [...(state.recentCompletedAt || []), now].filter((stamp) => stamp >= now - 30000).slice(-120);
+    },
     markWriteSuccess(state, entry) {
-      state.completed += 1;
+      const outstanding = state.pendingIds.includes(entry.id) || state.failedIds.includes(entry.id);
+      if (outstanding) {
+        state.completed += 1;
+        MissingAttachmentMaintenance.recordCompletion(state);
+      }
       if (entry.missing.hasMissingStats) state.checkedMissing += 1;
       else state.checkedComplete += 1;
-      state.remainingIds = state.remainingIds.filter((value) => value !== entry.id);
+      state.pendingIds = state.pendingIds.filter((value) => value !== entry.id);
       state.failedIds = state.failedIds.filter((value) => value !== entry.id);
+      state.consecutiveFailures = 0;
     },
     markWriteFailure(state, entry, error) {
       if (!state.failedIds.includes(entry.id)) state.failedIds.push(entry.id);
-      if (!state.remainingIds.includes(entry.id)) state.remainingIds.push(entry.id);
+      if (!state.pendingIds.includes(entry.id)) state.pendingIds.push(entry.id);
+      state.consecutiveFailures = (Number(state.consecutiveFailures) || 0) + 1;
       Logger.warn(`Could not persist missing metadata for post ${entry.post.id}.`, error);
     },
     async flushWrites(state, creatorKey, force = false) {
@@ -3892,119 +4203,208 @@ sync() {
       }
     },
     async recomputeAffected(state) {
+      const patches = [];
       for (const creatorKey of state.affected) {
         const [domain, service, creatorId] = String(creatorKey).split('|');
         const summary = await CreatorCatalogueSummary.recomputeAndPersist({ creatorKey, domain, service, creatorId, creatorUrl: `https://${domain}/${service}/user/${creatorId}` });
-        CreatorIndexUI.patchRecord(creatorKey, { summary });
+        patches.push({ creatorKey, patch: { summary } });
       }
+      if (patches.length) CreatorIndexUI.patchRecords(patches);
     },
-    async run({ resume = false, retryFailed = false, scope = 'all', limit = 0 } = {}) {
-      if (MissingAttachmentMaintenance.active) return MissingAttachmentMaintenance.active.promise;
-      await CatalogueJobManager.acquireMaintenanceSlot();
-      const saved = resume || retryFailed ? MissingAttachmentMaintenance.checkpoint() : null;
-      const resumeIds = saved ? [...new Set([...(retryFailed ? saved.failedIds || [] : saved.remainingIds || []), ...(saved.failedIds || [])])] : null;
-      const effectiveScope = saved?.scope || scope;
-      const effectiveLimit = Number(saved?.limit) || Number(limit) || 0;
-      const tasks = await MissingAttachmentMaintenance.plan({ ids: resumeIds, scope: effectiveScope, limit: effectiveLimit });
-      const controller = new AbortController();
-      const plannedIds = saved?.plannedIds || tasks.map(MissingAttachmentMaintenance.taskId);
-      const taskIds = tasks.map(MissingAttachmentMaintenance.taskId);
-      const taskIdSet = new Set(taskIds);
-      const state = {
-        controller,
-        scope: effectiveScope,
-        limit: effectiveLimit,
-        plannedIds,
-        remainingIds: taskIds,
-        failedIds: [...new Set(saved?.failedIds || [])].filter((id) => taskIdSet.has(id)),
-        permanentFailedIds: [...new Set(saved?.permanentFailedIds || [])],
-        total: Number(saved?.total) || plannedIds.length,
-        completed: Number(saved?.completed) || 0,
-        attempted: Number(saved?.attempted) || 0,
-        checkedComplete: Number(saved?.checkedComplete) || 0,
-        checkedMissing: Number(saved?.checkedMissing) || 0,
-        message: 'Checking missing-attachment metadata…',
-        affected: new Set(saved?.affectedCreators || []),
-        pendingWrites: new Map(),
-        startedAt: Number(saved?.startedAt) || Date.now(),
-        stopped: false,
-        detailConcurrency: Util.clamp(Number(saved?.detailConcurrency) || Math.min(3, Number(Settings.value.concurrency) || 3), 1, Math.max(1, Number(Settings.value.concurrency) || 3)),
-        successfulSinceRateLimit: 0,
-        currentCreator: ''
-      };
-      MissingAttachmentMaintenance.active = state;
-      MissingAttachmentMaintenance.persist(state);
-      MissingAttachmentMaintenance.notify();
-      state.promise = (async () => {
-        let cursor = 0;
-        const worker = async (workerIndex) => {
-          while (true) {
-            if (controller.signal.aborted) { state.stopped = true; return; }
-            while (workerIndex >= state.detailConcurrency) {
-              if (cursor >= tasks.length) return;
-              await new Promise((resolve) => setTimeout(resolve, 150));
-              if (controller.signal.aborted) { state.stopped = true; return; }
-              if (cursor >= tasks.length) return;
-            }
-            const index = cursor++;
-            if (index >= tasks.length) return;
-            const task = tasks[index];
-            const id = MissingAttachmentMaintenance.taskId(task);
-            state.currentCreator = task.creatorKey;
-            state.attempted += 1;
-            try {
-              const missing = await MissingAttachmentMaintenance.inspect(task, controller.signal);
-              const updates = state.pendingWrites.get(task.creatorKey) || [];
-              updates.push({ id, post: { ...task.post, ...missing }, missing });
-              state.pendingWrites.set(task.creatorKey, updates);
-              await MissingAttachmentMaintenance.flushWrites(state, task.creatorKey, false);
-              // An item remains in remainingIds until its batched IndexedDB write
-              // commits successfully, so a crash cannot silently skip buffered work.
-              state.successfulSinceRateLimit += 1;
-              if (state.successfulSinceRateLimit >= 20 && state.detailConcurrency < Math.min(3, Number(Settings.value.concurrency) || 3)) {
-                state.detailConcurrency += 1;
-                state.successfulSinceRateLimit = 0;
-              }
-            } catch (error) {
-              if (error.name === 'AbortError') { state.stopped = true; return; }
-              if (error.permanent) {
-                state.remainingIds = state.remainingIds.filter((value) => value !== id);
-                state.failedIds = state.failedIds.filter((value) => value !== id);
-                if (!state.permanentFailedIds.includes(id)) state.permanentFailedIds.push(id);
-              } else {
-                if (!state.failedIds.includes(id)) state.failedIds.push(id);
-                if (!state.remainingIds.includes(id)) state.remainingIds.push(id);
-              }
-              if (error.rateLimited) {
-                state.detailConcurrency = Math.max(1, state.detailConcurrency - 1);
-                state.successfulSinceRateLimit = 0;
-              }
-              Logger.warn(`Missing metadata check failed for post ${task.post.id}.`, error);
-            }
-            const snapshot = MissingAttachmentMaintenance.snapshot();
-            state.message = `Checked ${state.completed} of ${state.total} · ${snapshot.rate.toFixed(2)}/s`;
-            MissingAttachmentMaintenance.persist(state);
-            MissingAttachmentMaintenance.notify();
-            await new Promise((resolve) => setTimeout(resolve, 0));
-          }
-        };
-        await Promise.all(Array.from({ length: Math.min(3, Math.max(1, tasks.length)) }, (_, index) => worker(index)));
-        for (const creatorKey of [...state.pendingWrites.keys()]) await MissingAttachmentMaintenance.flushWrites(state, creatorKey, true);
-        await MissingAttachmentMaintenance.recomputeAffected(state);
-        if (App.context && state.affected.has(App.context.creatorKey)) {
-          await App.loadCreator(App.context);
-          App.render();
+    async fillChunk(state, signal) {
+      while (!state.scanDone) {
+        const result = await Cache.scanCataloguePostChunk({
+          cursor: state.scanCursor,
+          creatorKeys: state.creatorKeys,
+          scanLimit: MissingAttachmentMaintenance.scanChunkSize,
+          signal,
+        });
+        state.scanCursor = result.cursor;
+        state.scanDone = Boolean(result.done);
+        state.scannedStoredPosts += Math.max(0, Number(result.scanned) || 0);
+        let posts = result.records.filter(MissingAttachmentMaintenance.needsCheck);
+        if (state.scope === 'first') {
+          const remainingLimit = Math.max(0, state.limit - state.discovered);
+          posts = posts.slice(0, remainingLimit);
+          if (posts.length >= remainingLimit) state.scanDone = true;
         }
-        state.currentCreator = '';
-        state.message = state.stopped ? 'Missing-attachment metadata update stopped.' : state.failedIds.length ? 'Missing-attachment metadata update finished with retryable failures.' : 'Missing-attachment metadata update complete.';
+        const tasks = posts.map(MissingAttachmentMaintenance.taskFromPost).filter(Boolean);
+        const known = new Set([...state.pendingIds, ...state.failedIds, ...state.permanentFailedIds]);
+        for (const task of tasks) {
+          const id = MissingAttachmentMaintenance.taskId(task);
+          if (known.has(id)) continue;
+          known.add(id);
+          state.pendingIds.push(id);
+          state.discovered += 1;
+        }
+        state.total = state.discovered;
         MissingAttachmentMaintenance.persist(state);
-        return MissingAttachmentMaintenance.snapshot();
-      })().finally(() => {
-        MissingAttachmentMaintenance.active = null;
-        CatalogueJobManager.releaseMaintenanceSlot();
         MissingAttachmentMaintenance.notify();
-      });
-      return state.promise;
+        if (tasks.length || state.scanDone) return tasks;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      return [];
+    },
+    async processTasks(state, tasks) {
+      if (!tasks.length) return;
+      let cursor = 0;
+      const worker = async (workerIndex) => {
+        while (true) {
+          if (state.controller.signal.aborted) { state.stopped = true; return; }
+          while (workerIndex >= state.detailConcurrency) {
+            if (cursor >= tasks.length) return;
+            await new Promise((resolve) => setTimeout(resolve, 150));
+            if (state.controller.signal.aborted) { state.stopped = true; return; }
+          }
+          const index = cursor++;
+          if (index >= tasks.length) return;
+          const task = tasks[index];
+          const id = MissingAttachmentMaintenance.taskId(task);
+          state.currentCreator = task.creatorKey;
+          state.attempted += 1;
+          try {
+            const missing = await MissingAttachmentMaintenance.inspect(task, state.controller.signal);
+            const updates = state.pendingWrites.get(task.creatorKey) || [];
+            updates.push({ id, post: { ...task.post, ...missing }, missing });
+            state.pendingWrites.set(task.creatorKey, updates);
+            await MissingAttachmentMaintenance.flushWrites(state, task.creatorKey, false);
+            state.successfulSinceRateLimit += 1;
+            state.consecutiveFailures = 0;
+            if (state.successfulSinceRateLimit >= 20 && state.detailConcurrency < Math.min(3, Number(Settings.value.concurrency) || 3)) {
+              state.detailConcurrency += 1;
+              state.successfulSinceRateLimit = 0;
+            }
+          } catch (error) {
+            if (error.name === 'AbortError') { state.stopped = true; return; }
+            if (error.permanent) {
+              state.pendingIds = state.pendingIds.filter((value) => value !== id);
+              state.failedIds = state.failedIds.filter((value) => value !== id);
+              if (!state.permanentFailedIds.includes(id)) state.permanentFailedIds.push(id);
+            } else {
+              if (!state.failedIds.includes(id)) state.failedIds.push(id);
+              if (!state.pendingIds.includes(id)) state.pendingIds.push(id);
+              state.consecutiveFailures = (Number(state.consecutiveFailures) || 0) + 1;
+            }
+            if (error.rateLimited) {
+              state.detailConcurrency = Math.max(1, state.detailConcurrency - 1);
+              state.successfulSinceRateLimit = 0;
+            }
+            Logger.warn(`Missing metadata check failed for post ${task.post.id}.`, error);
+            if (state.consecutiveFailures >= 25 || state.failedIds.length >= 250) {
+              state.stopped = true;
+              state.message = state.failedIds.length >= 250
+                ? 'Metadata update paused after collecting 250 retryable failures.'
+                : 'Metadata update paused after 25 consecutive retryable failures.';
+              state.controller.abort();
+              MissingAttachmentMaintenance.persist(state);
+              MissingAttachmentMaintenance.notify();
+              return;
+            }
+          }
+          const snapshot = MissingAttachmentMaintenance.snapshot();
+          const totalLabel = state.scanDone ? `${state.completed} of ${state.total}` : `${state.completed} checked · ${state.discovered} unknown discovered`;
+          state.message = `${totalLabel} · now ${snapshot.currentRate.toFixed(2)}/s · average ${snapshot.averageRate.toFixed(2)}/s`;
+          MissingAttachmentMaintenance.maybePersist(state);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(3, Math.max(1, tasks.length)) }, (_, index) => worker(index)));
+      for (const creatorKey of [...state.pendingWrites.keys()]) await MissingAttachmentMaintenance.flushWrites(state, creatorKey, true);
+      MissingAttachmentMaintenance.maybePersist(state, true);
+    },
+    async run({ resume = false, retryFailed = false, scope = 'all', limit = 0, estimatedStoredPosts = 0 } = {}) {
+      if (MissingAttachmentMaintenance.active) return MissingAttachmentMaintenance.active.promise;
+      let slotAcquired = false;
+      try {
+        await CatalogueJobManager.acquireMaintenanceSlot();
+        slotAcquired = true;
+        const saved = resume || retryFailed ? MissingAttachmentMaintenance.normalizeCheckpoint(MissingAttachmentMaintenance.checkpoint()) : null;
+        const effectiveScope = saved?.scope || scope;
+        const effectiveLimit = Number(saved?.limit) || Number(limit) || 0;
+        const creatorKeys = saved?.creatorKeys?.length ? saved.creatorKeys : MissingAttachmentMaintenance.scopeCreatorKeys(effectiveScope);
+        const storedEstimate = Number(saved?.estimatedStoredPosts) || Number(estimatedStoredPosts) || await Cache.countCataloguePosts({ creatorKeys });
+        const controller = new AbortController();
+        const state = {
+          controller,
+          scope: effectiveScope,
+          limit: effectiveLimit,
+          creatorKeys,
+          scanCursor: saved?.scanCursor || null,
+          scanDone: Boolean(saved?.scanDone),
+          pendingIds: [...new Set(saved?.pendingIds || [])],
+          failedIds: [...new Set(saved?.failedIds || [])],
+          permanentFailedIds: [...new Set(saved?.permanentFailedIds || [])],
+          completed: Number(saved?.completed) || 0,
+          attempted: Number(saved?.attempted) || 0,
+          discovered: Number(saved?.discovered) || 0,
+          total: Number(saved?.total) || Number(saved?.discovered) || 0,
+          checkedComplete: Number(saved?.checkedComplete) || 0,
+          checkedMissing: Number(saved?.checkedMissing) || 0,
+          scannedStoredPosts: Number(saved?.scannedStoredPosts) || 0,
+          estimatedStoredPosts: effectiveScope === 'first' ? Math.min(storedEstimate, effectiveLimit || storedEstimate) : storedEstimate,
+          message: retryFailed ? 'Retrying failed missing-attachment metadata…' : resume ? 'Resuming missing-attachment metadata…' : 'Checking missing-attachment metadata…',
+          affected: new Set(saved?.affectedCreators || []),
+          pendingWrites: new Map(),
+          recentCompletedAt: [...(saved?.recentCompletedAt || [])],
+          startedAt: Number(saved?.startedAt) || Date.now(),
+          stopped: false,
+          detailConcurrency: Util.clamp(Number(saved?.detailConcurrency) || Math.min(3, Number(Settings.value.concurrency) || 3), 1, Math.max(1, Number(Settings.value.concurrency) || 3)),
+          successfulSinceRateLimit: 0,
+          consecutiveFailures: 0,
+          currentCreator: '',
+          lastPersistAt: 0,
+          progressSincePersist: 0,
+        };
+        MissingAttachmentMaintenance.active = state;
+        MissingAttachmentMaintenance.persist(state);
+        MissingAttachmentMaintenance.notify();
+        slotAcquired = false;
+        state.promise = (async () => {
+          try {
+            const initialIds = retryFailed ? [...state.failedIds] : resume ? [...new Set([...state.pendingIds, ...state.failedIds])] : [];
+            if (initialIds.length) {
+              const pendingTasks = await MissingAttachmentMaintenance.tasksForIds(initialIds, state);
+              await MissingAttachmentMaintenance.processTasks(state, pendingTasks);
+            }
+            if (!retryFailed) {
+              while (!state.scanDone && !state.controller.signal.aborted) {
+                const tasks = await MissingAttachmentMaintenance.fillChunk(state, state.controller.signal);
+                if (tasks.length) await MissingAttachmentMaintenance.processTasks(state, tasks);
+                if (!tasks.length && state.scanDone) break;
+              }
+            }
+            for (const creatorKey of [...state.pendingWrites.keys()]) await MissingAttachmentMaintenance.flushWrites(state, creatorKey, true);
+            await MissingAttachmentMaintenance.recomputeAffected(state);
+            if (App.context && state.affected.has(App.context.creatorKey)) {
+              await App.loadCreator(App.context);
+              App.render();
+            }
+            state.currentCreator = '';
+            if (!state.message.includes('25 consecutive')) {
+              state.message = state.stopped ? 'Missing-attachment metadata update stopped.' : state.failedIds.length ? 'Missing-attachment metadata update finished with retryable failures.' : state.scanDone ? 'Missing-attachment metadata update complete.' : 'Missing-attachment metadata retry complete.';
+            }
+          } catch (error) {
+            if (error.name === 'AbortError') state.stopped = true;
+            else {
+              state.stopped = true;
+              state.message = `Missing-attachment metadata update failed: ${error.message}`;
+              Logger.error('Missing-attachment metadata maintenance failed.', error);
+            }
+          } finally {
+            MissingAttachmentMaintenance.persist(state);
+          }
+          return MissingAttachmentMaintenance.snapshot();
+        })().finally(() => {
+          MissingAttachmentMaintenance.active = null;
+          CatalogueJobManager.releaseMaintenanceSlot();
+          MissingAttachmentMaintenance.notify();
+        });
+        return state.promise;
+      } catch (error) {
+        if (slotAcquired) CatalogueJobManager.releaseMaintenanceSlot();
+        MissingAttachmentMaintenance.active = null;
+        throw error;
+      }
     },
     stop() {
       const state = MissingAttachmentMaintenance.active;
@@ -4034,9 +4434,9 @@ sync() {
       const limitRow = dialog.querySelector('[data-first-limit]');
       const help = dialog.querySelector('[data-scope-help]');
       const sync = () => {
-        const scope = select.value;
-        limitRow.hidden = scope !== 'first';
-        help.textContent = scope === 'all' ? 'All unknown posts may take many hours for a very large library. You will be asked to confirm before it starts.' : 'Structured post details are checked first. HTML is downloaded only when needed.';
+        const selectedScope = select.value;
+        limitRow.hidden = selectedScope !== 'first';
+        help.textContent = selectedScope === 'all' ? 'The updater streams bounded IndexedDB chunks and never loads the complete library into memory. You will confirm a stored-post upper bound before it starts.' : 'Structured post details are checked first. HTML is downloaded only when needed.';
       };
       select.addEventListener('change', sync);
       sync();
@@ -4044,25 +4444,27 @@ sync() {
         const action = event.target.closest('[data-maintenance-scope-action]')?.dataset.maintenanceScopeAction;
         if (action === 'cancel') OverlayManager.close(overlay, 'cancel');
         if (action !== 'start') return;
-        const scope = select.value;
-        const limit = Util.clamp(Number(dialog.querySelector('[name="missingLimit"]')?.value) || 100, 1, 10000);
-        if (scope === 'current-creator' && !App.context?.creatorKey) { GlobalUI.flash('Open a creator page before using Current creator.'); return; }
-        if (scope === 'current-page' && CreatorIndexUI.mode !== 'catalogue') { GlobalUI.flash('Switch to the Local catalogue before using Current Local catalogue page.'); return; }
-        if (scope === 'all') {
+        const selectedScope = select.value;
+        const selectedLimit = Util.clamp(Number(dialog.querySelector('[name="missingLimit"]')?.value) || 100, 1, 10000);
+        if (selectedScope === 'current-creator' && !App.context?.creatorKey) { GlobalUI.flash('Open a creator page before using Current creator.'); return; }
+        if (selectedScope === 'current-page' && CreatorIndexUI.mode !== 'catalogue') { GlobalUI.flash('Switch to the Local catalogue before using Current Local catalogue page.'); return; }
+        const creatorKeys = MissingAttachmentMaintenance.scopeCreatorKeys(selectedScope);
+        let storedEstimate = 0;
+        if (selectedScope === 'all') {
           const startButton = event.target.closest('[data-maintenance-scope-action="start"]');
-          if (startButton) { startButton.disabled = true; startButton.textContent = 'Counting unknown posts…'; }
-          const planned = await MissingAttachmentMaintenance.plan({ scope, limit });
-          if (startButton) { startButton.disabled = false; startButton.textContent = 'Start update'; }
-          const estimateSeconds = planned.length;
-          const estimate = SettingsUI.formatDuration(estimateSeconds * 1000);
-          if (!globalThis.confirm?.(`Update metadata for all ${planned.length} unknown posts? At roughly one request per second this may take about ${estimate}, and HTML fallbacks can take longer.`)) return;
+          if (startButton) { startButton.disabled = true; startButton.textContent = 'Checking stored post count…'; }
+          try { storedEstimate = await Cache.countCataloguePosts({ creatorKeys }); }
+          finally {
+            if (startButton) { startButton.disabled = false; startButton.textContent = 'Start update'; }
+          }
+          const estimate = SettingsUI.formatDuration(storedEstimate * 1000);
+          if (!globalThis.confirm?.(`Stream through up to ${storedEstimate} stored posts and update only those with unknown missing-attachment metadata? Each unknown post needs at least one request and an HTML fallback may add another; the one-request upper-bound baseline is ${estimate}. The operation can be stopped and resumed.`)) return;
         }
         OverlayManager.close(overlay, 'start');
-        MissingAttachmentMaintenance.run({ scope, limit });
+        MissingAttachmentMaintenance.run({ scope: selectedScope, limit: selectedLimit, estimatedStoredPosts: storedEstimate }).catch((error) => GlobalUI.flash(error.message));
       });
     },
   };
-
   const Catalogue = {
     state() { return App.catalogueState.catalogue; },
     storedCount() { return App.cataloguePostCount(); },
@@ -4642,6 +5044,12 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       if (minutes) return `${minutes}m ${seconds % 60}s`;
       return `${seconds}s`;
     },
+    runMaintenance(promise) {
+      Promise.resolve(promise).catch((error) => {
+        Logger.error('Maintenance action failed.', error);
+        GlobalUI.flash(error?.message || 'The maintenance action failed.');
+      });
+    },
     bindMaintenance(root) {
       const update = () => {
         const missing = MissingAttachmentMaintenance.snapshot();
@@ -4656,10 +5064,15 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         root.querySelectorAll('[data-settings-action="resume-creator-profile-repair"]').forEach((button) => button.hidden = repair.running || !repair.stopped || !repair.remaining);
         root.querySelectorAll('[data-settings-action="retry-failed-creator-profile-repair"]').forEach((button) => button.hidden = repair.running || !repair.failed);
         if (status) {
-          const missingRate = missing.rate ? `${missing.rate.toFixed(2)}/s` : 'estimating rate';
+          const currentRate = missing.currentRate ? `${missing.currentRate.toFixed(2)}/s now` : 'estimating current rate';
+          const averageRate = missing.averageRate ? `${missing.averageRate.toFixed(2)}/s average` : 'estimating average';
+          const remainingLabel = missing.remainingEstimated ? `up to ${missing.remaining} remaining` : `${missing.remaining} remaining`;
           const missingEta = missing.remaining ? ` · ETA ${SettingsUI.formatDuration(missing.etaMs)}` : '';
+          const missingProgress = missing.planning
+            ? `${missing.completed} checked · ${missing.total} unknown discovered · ${missing.scannedStoredPosts}/${missing.estimatedStoredPosts || '?'} stored rows streamed`
+            : `${missing.completed}/${missing.total} checked`;
           status.textContent = [
-            missing.total ? `Missing attachments (${MissingAttachmentMaintenance.scopeLabel(missing.scope)}): ${missing.completed}/${missing.total} checked · ${missing.checkedComplete} complete · ${missing.checkedMissing} missing · ${missing.failed} retryable · ${missing.permanentFailed} terminal · ${missing.remaining} remaining · ${missingRate}${missingEta}` : null,
+            missing.total || missing.running || missing.stopped ? `Missing attachments (${MissingAttachmentMaintenance.scopeLabel(missing.scope)}): ${missingProgress} · ${missing.checkedComplete} complete · ${missing.checkedMissing} missing · ${missing.failed} retryable · ${missing.permanentFailed} terminal · ${remainingLabel} · ${currentRate} · ${averageRate}${missingEta}` : null,
             repair.total ? `Creator profiles: ${repair.completed}/${repair.total} repaired · ${repair.failed} retryable · ${repair.remaining} remaining${repair.rate?` · ${repair.rate.toFixed(2)}/s`:''}` : null
           ].filter(Boolean).join(' | ');
         }
@@ -5054,12 +5467,12 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         if (action === 'stop-favorites') FavoriteSyncCoordinator.stop();
         if (action === 'update-missing-attachment-metadata') MissingAttachmentMaintenance.openScopeDialog(event.target);
         if (action === 'stop-missing-attachment-metadata') MissingAttachmentMaintenance.stop();
-        if (action === 'resume-missing-attachment-metadata') MissingAttachmentMaintenance.resume();
-        if (action === 'retry-failed-missing-attachment-metadata') MissingAttachmentMaintenance.retryFailed();
-        if (action === 'repair-creator-profile-metadata') CreatorProfileRepairManager.run();
+        if (action === 'resume-missing-attachment-metadata') SettingsUI.runMaintenance(MissingAttachmentMaintenance.resume());
+        if (action === 'retry-failed-missing-attachment-metadata') SettingsUI.runMaintenance(MissingAttachmentMaintenance.retryFailed());
+        if (action === 'repair-creator-profile-metadata') SettingsUI.runMaintenance(CreatorProfileRepairManager.run());
         if (action === 'stop-creator-profile-repair') CreatorProfileRepairManager.stop();
-        if (action === 'resume-creator-profile-repair') CreatorProfileRepairManager.resume();
-        if (action === 'retry-failed-creator-profile-repair') CreatorProfileRepairManager.retryFailed();
+        if (action === 'resume-creator-profile-repair') SettingsUI.runMaintenance(CreatorProfileRepairManager.resume());
+        if (action === 'retry-failed-creator-profile-repair') SettingsUI.runMaintenance(CreatorProfileRepairManager.retryFailed());
         if (action === 'clear-creator') UI.confirmClear('catalogue-creator');
         if (action === 'clear-all') UI.confirmClear('catalogue-all');
       });
@@ -5100,33 +5513,6 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     },
   };
 
-  const LegacyCreatorIndexUI = {
-    root:null,toolbar:null,grid:null,stateNode:null,paginator:null,queuePanel:null,queueButton:null,nativeGrid:null,nativeSnapshot:null,nativeGeometry:null,searchInput:null,searchController:null,records:[],page:1,pageSize:45,query:'',sort:{mode:'popularity',direction:'desc'},filterState:CreatorFilterEngine.normalizeState(GM_getValue(Config.creatorFilterStateKey,{})),statusFilters:CreatorStatusFilters.load(),unsubscribe:null,
-    mount(found) {
-      CreatorIndexUI.cleanup({restoreNative:false});const root=document.createElement('section');root.id='pmf-artists-root';root.dataset.pmfOwned='true';root.dataset.pmfInstance=INSTANCE_ID;const toolbar=document.createElement('section');toolbar.className='pmf-toolbar pmf-creator-index-toolbar';toolbar.innerHTML=`<div class="pmf-controls"><button class="pmf-filter-button" data-creator-index-action="filter">All creators</button><button class="pmf-sort-button" data-creator-index-action="sort">Sort: Popularity <span aria-hidden="true">▼</span></button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-update">Update</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More bulk operations" title="More bulk operations">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div><div class="pmf-status"><div class="pmf-status-left"><strong data-creator-matches>0 matches</strong></div><div class="pmf-status-actions"><button class="pmf-details-link" data-creator-index-action="queue">Queue empty</button></div><div class="pmf-status-right" data-creator-summary>Creator index</div></div><section class="pmf-catalogue-details pmf-creator-queue-panel" hidden></section>`;
-      const paginator=document.createElement('div');paginator.className='pmf-filtered-paginator pmf-creator-index-paginator';paginator.innerHTML=`<div class="pmf-quick-status-filters" aria-label="Creator status filters"></div><small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>`;const quick=paginator.querySelector('.pmf-quick-status-filters');[['favorite',Icons.star,'Favorite creator filter'],['liked',Icons.heart,'Like creator filter'],['hidden',Icons.eye,'Hidden creator filter']].forEach(([field,icon,label])=>{const button=document.createElement('button');button.type='button';button.dataset.creatorStatusFilter=field;button.innerHTML=`<span class="pmf-quick-status-main">${icon}</span><span class="pmf-quick-status-negate">${Icons.x}</span>`;button.title=label;button.setAttribute('aria-label',label);quick.append(button);});
-      const state=document.createElement('div');state.className='pmf-creator-index-state';state.dataset.pmfOwned='true';state.setAttribute('role','status');state.textContent='Loading creator index…';const grid=document.createElement('div');grid.className='pmf-creator-index-grid';grid.dataset.pmfOwned='true';root.append(toolbar,paginator,state,grid);found.grid.insertAdjacentElement('beforebegin',root);CreatorIndexUI.root=root;CreatorIndexUI.toolbar=toolbar;CreatorIndexUI.grid=grid;CreatorIndexUI.stateNode=state;CreatorIndexUI.paginator=paginator;CreatorIndexUI.queuePanel=toolbar.querySelector('.pmf-creator-queue-panel');CreatorIndexUI.queueButton=toolbar.querySelector('[data-creator-index-action="queue"]');CreatorIndexUI.nativeGrid=found.grid;CreatorIndexUI.nativeGeometry=CreatorGridGeometry.measure(found.grid);CreatorGridGeometry.apply(grid,CreatorIndexUI.nativeGeometry);CreatorIndexUI.searchInput=found.main.querySelector('input[type="search"],input[placeholder*="creator" i],input[placeholder*="artist" i]');CreatorIndexUI.nativeSnapshot=NativeArtistsVisibility.capture(found,CreatorIndexUI.searchInput);NativeArtistsVisibility.hide(CreatorIndexUI.nativeSnapshot);if(CreatorIndexUI.searchInput){CreatorIndexUI.searchController=new AbortController();const update=Util.debounce(()=>{CreatorIndexUI.query=CreatorIndexUI.searchInput.value.trim().toLocaleLowerCase();CreatorIndexUI.page=1;CreatorIndexUI.render();},180);CreatorIndexUI.searchInput.placeholder='Search creators…';CreatorIndexUI.searchInput.addEventListener('input',update,{signal:CreatorIndexUI.searchController.signal});CreatorIndexUI.searchInput.form?.addEventListener('submit',(event)=>{event.preventDefault();CreatorIndexUI.query=CreatorIndexUI.searchInput.value.trim().toLocaleLowerCase();CreatorIndexUI.page=1;CreatorIndexUI.render();},{signal:CreatorIndexUI.searchController.signal});CreatorIndexUI.searchController.signal.addEventListener('abort',()=>update.cancel(),{once:true});}
-      root.addEventListener('click',(event)=>CreatorIndexUI.handle(event));CreatorIndexUI.queuePanel.addEventListener('click',(event)=>CreatorQueuePanel.handle(event));CreatorIndexUI.unsubscribe=CatalogueJobManager.subscribe((snapshot)=>CreatorQueuePanel.render(snapshot));return root;
-    },
-    setState(kind,message){if(!CreatorIndexUI.stateNode)return;CreatorIndexUI.stateNode.dataset.state=kind;CreatorIndexUI.stateNode.textContent=message||'';CreatorIndexUI.stateNode.hidden=!message;},
-    setRecords(records){CreatorIndexUI.records=records;CreatorIndexUI.render();NativeArtistsVisibility.hide(CreatorIndexUI.nativeSnapshot);},
-    filteredRecords() {
-      const query=CreatorIndexUI.query;return CreatorSorter.sort(CreatorIndexUI.records.filter((record)=>{const text=`${record.directory.creatorName} ${record.directory.service} ${record.directory.creatorId}`.toLocaleLowerCase();return(!query||text.includes(query))&&CreatorStatusFilters.matches(record,CreatorIndexUI.statusFilters)&&CreatorFilterEngine.matches(record,CreatorIndexUI.filterState);}),CreatorIndexUI.sort);
-    },
-    render() {
-      if(!CreatorIndexUI.grid)return;const records=CreatorIndexUI.filteredRecords();const totalPages=Math.max(1,Math.ceil(records.length/CreatorIndexUI.pageSize));CreatorIndexUI.page=Util.clamp(CreatorIndexUI.page,1,totalPages);const start=(CreatorIndexUI.page-1)*CreatorIndexUI.pageSize;const visible=records.slice(start,start+CreatorIndexUI.pageSize);CreatorIndexUI.grid.replaceChildren();
-      visible.forEach((record)=>{const {card,link}=CreatorCardReconstructor.build(record);const info={card,link,context:{creatorKey:record.directory.creatorKey,domain:record.directory.domain,service:record.directory.service,creatorId:record.directory.creatorId,creatorUrl:record.directory.creatorUrl},creatorName:record.directory.creatorName,displayName:record.directory.creatorName,serviceLabel:CreatorDisplayName.serviceLabel(record.directory.service)};CreatorIndexUI.grid.append(card);CreatorCardRightRail.render(info,record.meta,record.state);});
-      CreatorIndexUI.setState(records.length?'ready':'empty',records.length?'':'No creators match the current search and filters.');
-      CreatorIndexUI.toolbar.querySelector('[data-creator-matches]').textContent=`✓ ${records.length} matches`;CreatorIndexUI.toolbar.querySelector('[data-creator-summary]').textContent=`Creator index · ${CreatorIndexUI.records.length} known`;CreatorIndexUI.paginator.querySelector('.pmf-filtered-count').textContent=records.length?`Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}`:'Showing 0 of 0';const controls=CreatorIndexUI.paginator.querySelector('.pmf-page-controls');controls.replaceChildren();const add=(label,page,disabled=false)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.dataset.creatorPage=String(page);if(page===CreatorIndexUI.page)button.setAttribute('aria-current','page');controls.append(button);};add('«',1,CreatorIndexUI.page===1);add('‹',CreatorIndexUI.page-1,CreatorIndexUI.page===1);for(const page of Paginator.pageButtons(CreatorIndexUI.page,totalPages,Paginator.windowSize()))add(String(page),page,page===CreatorIndexUI.page);add('›',CreatorIndexUI.page+1,CreatorIndexUI.page===totalPages);add('»',totalPages,CreatorIndexUI.page===totalPages);CreatorIndexUI.updateQuickFilters();
-    },
-    updateQuickFilters(){CreatorIndexUI.paginator?.querySelectorAll('[data-creator-status-filter]').forEach((button)=>{const mode=CreatorIndexUI.statusFilters[button.dataset.creatorStatusFilter];button.classList.toggle('pmf-match',mode==='match');button.classList.toggle('pmf-no-match',mode==='no-match');button.setAttribute('aria-pressed',mode==='off'?'false':mode==='match'?'true':'mixed');button.title=`${button.dataset.creatorStatusFilter} filter: ${mode}`;});},
-    updateQueueLabel(snapshot=CatalogueJobManager.snapshot()){if(!CreatorIndexUI.queueButton)return;const issues=(snapshot.issues||[]).length;CreatorIndexUI.queueButton.textContent=snapshot.active.length||snapshot.pending.length||issues?`Queue · ${snapshot.active.length} active · ${snapshot.pending.length} waiting${issues?` · ${issues} issue${issues===1?'':'s'}`:''}`:'Queue empty';},
-    handle(event) {
-      const status=event.target.closest('[data-creator-status-filter]')?.dataset.creatorStatusFilter;if(status){CreatorIndexUI.statusFilters[status]=CreatorStatusFilters.cycle(CreatorIndexUI.statusFilters[status]);CreatorStatusFilters.save(CreatorIndexUI.statusFilters);CreatorIndexUI.page=1;CreatorIndexUI.render();return;}const page=event.target.closest('[data-creator-page]')?.dataset.creatorPage;if(page){CreatorIndexUI.page=Number(page);CreatorIndexUI.render();return;}const action=event.target.closest('[data-creator-index-action]')?.dataset.creatorIndexAction;
-      if(action==='queue'){CreatorIndexUI.queuePanel.hidden=!CreatorIndexUI.queuePanel.hidden;return;}if(action==='settings'){CreatorSettingsUI.open(event.target);return;}if(action==='filter'){CreatorFilterUI.open(event.target);return;}if(action==='sort'){CreatorSortUI.open(event.target);return;}if(action==='bulk-update'){CreatorBulkUI.open('update',event.target);return;}if(action==='bulk-menu'){CreatorBulkUI.openMenu(event.target);return;}
-    },
-    cleanup({restoreNative=true}={}){CreatorIndexUI.unsubscribe?.();CreatorIndexUI.unsubscribe=null;CreatorIndexUI.searchController?.abort();CreatorIndexUI.searchController=null;if(restoreNative)NativeArtistsVisibility.restore(CreatorIndexUI.nativeSnapshot);CreatorIndexUI.root?.remove();CreatorIndexUI.root=null;CreatorIndexUI.toolbar=null;CreatorIndexUI.grid=null;CreatorIndexUI.stateNode=null;CreatorIndexUI.paginator=null;CreatorIndexUI.queuePanel=null;CreatorIndexUI.queueButton=null;CreatorIndexUI.nativeGrid=null;CreatorIndexUI.nativeSnapshot=null;CreatorIndexUI.nativeGeometry=null;CreatorIndexUI.searchInput=null;CreatorIndexUI.records=[];},
-  };
 
   const CreatorIndexUI = {
     root: null,
@@ -5440,18 +5826,29 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       CreatorIndexUI.retainSession();
       CreatorIndexUI.render();
     },
-    patchRecord(creatorKey, patch = {}) {
-      const record = CreatorIndexUI.records.find((item) => item.directory.creatorKey === creatorKey);
-      if (!record) return false;
-      if (patch.directory) record.directory = CreatorDirectory.merge(record.directory, patch.directory);
-      if (patch.meta !== undefined) record.meta = patch.meta;
-      if (patch.summary !== undefined) record.summary = patch.summary;
-      if (patch.state !== undefined) record.state = patch.state;
+    patchRecords(updates = [], { render = true } = {}) {
+      const recordByKey = new Map(CreatorIndexUI.records.map((record) => [record.directory.creatorKey, record]));
+      let changed = 0;
+      for (const update of updates || []) {
+        const creatorKey = String(update?.creatorKey || '');
+        const patch = update?.patch || update || {};
+        const record = recordByKey.get(creatorKey);
+        if (!record) continue;
+        if (patch.directory) record.directory = CreatorDirectory.merge(record.directory, patch.directory);
+        if (patch.meta !== undefined) record.meta = patch.meta;
+        if (patch.summary !== undefined) record.summary = patch.summary;
+        if (patch.state !== undefined) record.state = patch.state;
+        changed += 1;
+      }
+      if (!changed) return 0;
       CreatorIndexUI.recordsRevision += 1;
-      CreatorIndexUI.invalidateFilteredCache('record-patch');
+      CreatorIndexUI.invalidateFilteredCache(changed === 1 ? 'record-patch' : 'record-batch-patch');
       CreatorIndexUI.retainSession();
-      if (CreatorIndexUI.mode === 'catalogue' && CreatorIndexUI.root?.isConnected) CreatorIndexUI.renderCatalogue();
-      return true;
+      if (render && CreatorIndexUI.mode === 'catalogue' && CreatorIndexUI.root?.isConnected) CreatorIndexUI.renderCatalogue();
+      return changed;
+    },
+    patchRecord(creatorKey, patch = {}) {
+      return CreatorIndexUI.patchRecords([{ creatorKey, patch }]) > 0;
     },
     filteredRecords() {
       if (CreatorIndexUI.mode === 'native') return CreatorIndexUI.nativeRecords.filter((record) => CreatorIndexUI.nativeScannedFilter !== 'no-match' || !record.scanned);
@@ -5694,18 +6091,16 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     open(opener) {
       const draft=Util.clone(Settings.value);const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-settings-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Media Filter settings');const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Media Filter settings'));const close=SettingsUI.action('×','cancel');close.className='pmf-icon-close';header.append(close);const layout=SettingsUI.el('div','pmf-settings-layout');const nav=SettingsUI.el('nav');const content=SettingsUI.el('div','pmf-settings-content');const panels=[SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft)];[['general','General'],['default-detection','Default detection'],['scanning','Scanning'],['data','Data & performance']].forEach(([key,label])=>{const button=SettingsUI.action(label,'tab');button.dataset.creatorSettingsTab=key;nav.append(button);});content.append(...panels);layout.append(nav,content);const footer=SettingsUI.el('footer');footer.append(SettingsUI.action('Reset all settings','reset'),SettingsUI.el('span'),SettingsUI.action('Cancel','cancel'));const save=SettingsUI.action('Save & apply','save');save.className='pmf-primary';footer.append(save);dialog.append(header,layout,footer);backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);
       const show=(name)=>{nav.querySelectorAll('button').forEach((button)=>button.classList.toggle('pmf-active',button.dataset.creatorSettingsTab===name));content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel)=>panel.hidden=panel.dataset.pmfSettingsPanel!==name);};show('general');let committed=false,unsubscribe=null;const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true,onClose:()=>{unsubscribe?.();if(!committed)CreatorIndexUI.render();}});unsubscribe=SettingsUI.bindMaintenance(backdrop);
-      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-creator-settings-tab]')?.dataset.creatorSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)show(tab);if(child)CreatorSettingsUI.openChild(child,draft,event.target);if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='reset'){Object.assign(draft,Util.clone(DefaultSettings));CreatorSettingsUI.preview(draft);}if(action==='save'){const next=SettingsUI.collect(dialog,draft);Settings.save(next);committed=true;OverlayManager.close(overlay,'save');CreatorIndexUI.render();}if(action==='update-missing-attachment-metadata')MissingAttachmentMaintenance.openScopeDialog(event.target);if(action==='stop-missing-attachment-metadata')MissingAttachmentMaintenance.stop();if(action==='resume-missing-attachment-metadata')MissingAttachmentMaintenance.resume();if(action==='retry-failed-missing-attachment-metadata')MissingAttachmentMaintenance.retryFailed();if(action==='repair-creator-profile-metadata')CreatorProfileRepairManager.run();if(action==='stop-creator-profile-repair')CreatorProfileRepairManager.stop();if(action==='resume-creator-profile-repair')CreatorProfileRepairManager.resume();if(action==='retry-failed-creator-profile-repair')CreatorProfileRepairManager.retryFailed();});
+      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-creator-settings-tab]')?.dataset.creatorSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)show(tab);if(child)CreatorSettingsUI.openChild(child,draft,event.target);if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='reset'){Object.assign(draft,Util.clone(DefaultSettings));CreatorSettingsUI.preview(draft);}if(action==='save'){const next=SettingsUI.collect(dialog,draft);Settings.save(next);committed=true;OverlayManager.close(overlay,'save');CreatorIndexUI.render();}if(action==='update-missing-attachment-metadata')MissingAttachmentMaintenance.openScopeDialog(event.target);if(action==='stop-missing-attachment-metadata')MissingAttachmentMaintenance.stop();if(action==='resume-missing-attachment-metadata')SettingsUI.runMaintenance(MissingAttachmentMaintenance.resume());if(action==='retry-failed-missing-attachment-metadata')SettingsUI.runMaintenance(MissingAttachmentMaintenance.retryFailed());if(action==='repair-creator-profile-metadata')SettingsUI.runMaintenance(CreatorProfileRepairManager.run());if(action==='stop-creator-profile-repair')CreatorProfileRepairManager.stop();if(action==='resume-creator-profile-repair')SettingsUI.runMaintenance(CreatorProfileRepairManager.resume());if(action==='retry-failed-creator-profile-repair')SettingsUI.runMaintenance(CreatorProfileRepairManager.retryFailed());});
       backdrop.addEventListener('change',()=>{Object.assign(draft,SettingsUI.collect(dialog,draft));CreatorSettingsUI.preview(draft);});
     },
     openChild(name,draft,opener) {
       const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-small-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');const creatorStatus=name==='creator-status-badges',hidden=name==='hidden-creator-dim',attachment=name==='creator-attachment-badges';const title=creatorStatus?'Creator-card status badges':hidden?'Hidden creator-card appearance':attachment?'Creator card attachment badges':name==='seen-dim'?'Dim seen post cards':'Badge settings';dialog.innerHTML=`<header><strong>${title}</strong><button class="pmf-icon-close" data-child-action="cancel">×</button></header><div class="pmf-editor-body"></div><footer><span></span><button data-child-action="cancel">Cancel</button><button class="pmf-primary" data-child-action="apply">Apply</button></footer>`;const body=dialog.querySelector('.pmf-editor-body');
-      if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Dim strength</span>${SettingsUI.select('strength',draft[key].strength,[['low','Low'],['medium','Medium'],['high','High']]).outerHTML}</div></section>`;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';const fields=creatorStatus?['favorited','liked','hidden']:attachment?['videos','images','archives','projectFiles','externalLinks']:['favorited','liked','seen'];body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Badge size</span>${SettingsUI.select('size',draft[sizeKey],[['small','Small'],['medium','Medium'],['big','Big']]).outerHTML}</div>${attachment?`<div class="pmf-settings-row"><span>Count method</span>${SettingsUI.select('countMethod',draft.creatorCardBadgeCountMode,[['posts','Posts containing media'],['attachments','Total attachments/links from every post']]).outerHTML}</div>`:''}</section><section class="pmf-settings-section"><h3>Visible badges</h3>${fields.map((field)=>`<label class="pmf-check"><input type="checkbox" name="${field}" ${draft[key].types[field]?'checked':''}> ${field[0].toUpperCase()+field.slice(1)}</label>`).join('')}</section>`;}
-      backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-child-action]')?.dataset.childAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';draft[key].strength=dialog.querySelector('[name="strength"]').value;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';draft[sizeKey]=dialog.querySelector('[name="size"]').value;if(attachment)draft.creatorCardBadgeCountMode=dialog.querySelector('[name="countMethod"]').value;dialog.querySelectorAll('input[type="checkbox"]').forEach((input)=>{draft[key].types[input.name]=input.checked;});}CreatorSettingsUI.preview(draft);OverlayManager.close(overlay,'apply');}});
+      if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Dim strength</span>${SettingsUI.select('strength',draft[key].strength,[['low','Low'],['medium','Medium'],['high','High']]).outerHTML}</div></section>`;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';const fields=creatorStatus?['favorited','liked','hidden']:attachment?['videos','images','archives','projectFiles','externalLinks']:['favorited','liked','seen'];body.innerHTML=`<section class="pmf-settings-section"><h3>Appearance</h3><div class="pmf-settings-row"><span>Badge size</span>${SettingsUI.select('size',draft[sizeKey],[['small','Small'],['medium','Medium'],['big','Big']]).outerHTML}</div>${attachment?`<div class="pmf-settings-row"><span>Count method</span>${SettingsUI.select('countMethod',draft.creatorCardBadgeCountMode,[['posts','Posts containing media'],['attachments','Total attachments/links from every post']]).outerHTML}</div><label class="pmf-check"><input type="checkbox" name="excludePostsWithMissingAttachments" ${draft.excludePostsWithMissingAttachments?'checked':''}> Hide and don’t count posts with missing attachments</label>`:''}</section><section class="pmf-settings-section"><h3>Visible badges</h3>${fields.map((field)=>`<label class="pmf-check"><input type="checkbox" name="${field}" ${draft[key].types[field]?'checked':''}> ${field[0].toUpperCase()+field.slice(1)}</label>`).join('')}</section>`;}
+      backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-child-action]')?.dataset.childAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){if(hidden||name==='seen-dim'){const key=hidden?'hiddenCreatorTreatment':'seenCardTreatment';draft[key].strength=dialog.querySelector('[name="strength"]').value;}else{const key=creatorStatus?'creatorStatusBadges':attachment?'creatorCardBadges':'postStatusBadges';const sizeKey=creatorStatus?'creatorStatusBadgeSize':attachment?'creatorAttachmentBadgeSize':'postStatusBadgeSize';draft[sizeKey]=dialog.querySelector('[name="size"]').value;if(attachment){draft.creatorCardBadgeCountMode=dialog.querySelector('[name="countMethod"]').value;draft.excludePostsWithMissingAttachments=dialog.querySelector('[name="excludePostsWithMissingAttachments"]')?.checked===true;}dialog.querySelectorAll('input[type="checkbox"]').forEach((input)=>{if(fields.includes(input.name))draft[key].types[input.name]=input.checked;});}CreatorSettingsUI.preview(draft);OverlayManager.close(overlay,'apply');}});
     },
   };
 
-  const creatorOpenChildBase=CreatorSettingsUI.openChild.bind(CreatorSettingsUI);
-  CreatorSettingsUI.openChild=function openCreatorSettingsChild(name,draft,opener){creatorOpenChildBase(name,draft,opener);if(name!=='creator-attachment-badges')return;const backdrop=[...CreatorIndexUI.root.querySelectorAll('.pmf-modal-backdrop')].at(-1),dialog=backdrop?.querySelector('.pmf-small-dialog'),appearance=dialog?.querySelector('.pmf-settings-section');if(!backdrop||!dialog||!appearance)return;appearance.insertAdjacentHTML('beforeend',`<label class="pmf-check"><input type="checkbox" name="excludePostsWithMissingAttachments" ${draft.excludePostsWithMissingAttachments?'checked':''}> Hide and don’t count posts with missing attachments</label>`);backdrop.addEventListener('click',(event)=>{if(event.target.closest('[data-child-action="apply"]'))draft.excludePostsWithMissingAttachments=dialog.querySelector('[name="excludePostsWithMissingAttachments"]')?.checked===true;},{capture:true});};
 
   const CreatorFilterUI = {
     open(opener) {
@@ -5994,57 +6389,74 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     },
     async run({ resume = false, retryFailed = false } = {}) {
       if (CreatorProfileRepairManager.active) return CreatorProfileRepairManager.active.promise;
-      await CatalogueJobManager.acquireMaintenanceSlot();
-      const checkpoint = resume || retryFailed ? CreatorProfileRepairManager.checkpoint() : null;
-      const records = await CreatorProfileRepairManager.records();
-      const recordByKey = new Map(records.map((record) => [record.directory.creatorKey, record]));
-      const requestedKeys = checkpoint ? [...new Set([...(retryFailed ? checkpoint.failedKeys || [] : checkpoint.remainingKeys || []), ...(checkpoint.failedKeys || [])])] : [...recordByKey.keys()];
-      const tasks = requestedKeys.map((key) => recordByKey.get(key)).filter(Boolean);
-      const taskKeySet = new Set(tasks.map((record) => record.directory.creatorKey));
-      const controller = new AbortController();
-      const state = {
-        controller,
-        plannedKeys: checkpoint?.plannedKeys || tasks.map((record) => record.directory.creatorKey),
-        remainingKeys: tasks.map((record) => record.directory.creatorKey),
-        failedKeys: [...new Set(checkpoint?.failedKeys || [])].filter((key) => taskKeySet.has(key)),
-        total: Number(checkpoint?.total) || tasks.length,
-        completed: Number(checkpoint?.completed) || 0,
-        stopped: false,
-        message: 'Repairing creator profile metadata…',
-        startedAt: Number(checkpoint?.startedAt) || Date.now()
-      };
-      CreatorProfileRepairManager.active = state;
-      CreatorProfileRepairManager.persist(state);
-      CreatorProfileRepairManager.notify();
-      state.promise = (async () => {
-        for (const record of tasks) {
-          if (controller.signal.aborted) { state.stopped = true; break; }
-          const key = record.directory.creatorKey;
-          try {
-            await CreatorProfileRepairManager.repair(record, { signal: controller.signal, force: true });
-            state.completed += 1;
-            state.remainingKeys = state.remainingKeys.filter((value) => value !== key);
-            state.failedKeys = state.failedKeys.filter((value) => value !== key);
-          } catch (error) {
-            if (error.name === 'AbortError') { state.stopped = true; break; }
-            if (!state.failedKeys.includes(key)) state.failedKeys.push(key);
-            if (!state.remainingKeys.includes(key)) state.remainingKeys.push(key);
-            Logger.warn(`Creator profile repair failed for ${key}.`, error);
-          }
-          state.message = `Repaired ${state.completed} of ${state.total}`;
-          CreatorProfileRepairManager.persist(state);
-          CreatorProfileRepairManager.notify();
-        }
-        state.message = state.stopped ? 'Creator profile repair stopped.' : state.failedKeys.length ? 'Creator profile repair finished with retryable failures.' : 'Creator profile repair complete.';
+      let slotAcquired = false;
+      try {
+        await CatalogueJobManager.acquireMaintenanceSlot();
+        slotAcquired = true;
+        const checkpoint = resume || retryFailed ? CreatorProfileRepairManager.checkpoint() : null;
+        const records = await CreatorProfileRepairManager.records();
+        const recordByKey = new Map(records.map((record) => [record.directory.creatorKey, record]));
+        const requestedKeys = checkpoint ? [...new Set([...(retryFailed ? checkpoint.failedKeys || [] : checkpoint.remainingKeys || []), ...(checkpoint.failedKeys || [])])] : [...recordByKey.keys()];
+        const tasks = requestedKeys.map((key) => recordByKey.get(key)).filter(Boolean);
+        const taskKeySet = new Set(tasks.map((record) => record.directory.creatorKey));
+        const controller = new AbortController();
+        const state = {
+          controller,
+          plannedKeys: checkpoint?.plannedKeys || tasks.map((record) => record.directory.creatorKey),
+          remainingKeys: tasks.map((record) => record.directory.creatorKey),
+          failedKeys: [...new Set(checkpoint?.failedKeys || [])].filter((key) => taskKeySet.has(key)),
+          total: Number(checkpoint?.total) || tasks.length,
+          completed: Number(checkpoint?.completed) || 0,
+          stopped: false,
+          message: 'Repairing creator profile metadata…',
+          startedAt: Number(checkpoint?.startedAt) || Date.now()
+        };
+        CreatorProfileRepairManager.active = state;
         CreatorProfileRepairManager.persist(state);
-        return CreatorProfileRepairManager.snapshot();
-      })().finally(() => {
-        CreatorProfileRepairManager.active = null;
-        CatalogueJobManager.releaseMaintenanceSlot();
         CreatorProfileRepairManager.notify();
-      });
-      return state.promise;
+        slotAcquired = false;
+        state.promise = (async () => {
+          try {
+            for (const record of tasks) {
+              if (controller.signal.aborted) { state.stopped = true; break; }
+              const key = record.directory.creatorKey;
+              try {
+                await CreatorProfileRepairManager.repair(record, { signal: controller.signal, force: true });
+                state.completed += 1;
+                state.remainingKeys = state.remainingKeys.filter((value) => value !== key);
+                state.failedKeys = state.failedKeys.filter((value) => value !== key);
+              } catch (error) {
+                if (error.name === 'AbortError') { state.stopped = true; break; }
+                if (!state.failedKeys.includes(key)) state.failedKeys.push(key);
+                if (!state.remainingKeys.includes(key)) state.remainingKeys.push(key);
+                Logger.warn(`Creator profile repair failed for ${key}.`, error);
+              }
+              state.message = `Repaired ${state.completed} of ${state.total}`;
+              CreatorProfileRepairManager.persist(state);
+              CreatorProfileRepairManager.notify();
+            }
+            state.message = state.stopped ? 'Creator profile repair stopped.' : state.failedKeys.length ? 'Creator profile repair finished with retryable failures.' : 'Creator profile repair complete.';
+            CreatorProfileRepairManager.persist(state);
+            return CreatorProfileRepairManager.snapshot();
+          } catch (error) {
+            state.stopped = true;
+            state.message = `Creator profile repair failed: ${error.message}`;
+            CreatorProfileRepairManager.persist(state);
+            throw error;
+          }
+        })().finally(() => {
+          CreatorProfileRepairManager.active = null;
+          CatalogueJobManager.releaseMaintenanceSlot();
+          CreatorProfileRepairManager.notify();
+        });
+        return state.promise;
+      } catch (error) {
+        if (slotAcquired) CatalogueJobManager.releaseMaintenanceSlot();
+        CreatorProfileRepairManager.active = null;
+        throw error;
+      }
     },
+
     stop() {
       const state = CreatorProfileRepairManager.active;
       if (!state) return;

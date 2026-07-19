@@ -11,8 +11,8 @@ const {
   CatalogueJobManager, NativeActionAlignment,
 } = api;
 
-assert.equal(Config.version, '0.10.7');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.7/);
+assert.equal(Config.version, '0.10.8');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.8/);
 assert.equal(Config.databaseVersion, 5);
 assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
 assert.match(originalSource, /createObjectStore\('creatorStates'/);
@@ -150,7 +150,7 @@ assert.equal(CatalogueJobManager.batchCounts('batch').remaining, 2);
 CatalogueJobManager.shutdown();
 CatalogueJobManager.maintenanceActive = false;
 
-assert.match(originalSource, /id='pmf-artists-root'|root\.id='pmf-artists-root'/);
+assert.match(originalSource, /root\.id\s*=\s*'pmf-artists-root'/);
 assert.match(originalSource, /CreatorCardRightRail/);
 assert.match(originalSource, /CreatorQueuePanel/);
 assert.match(originalSource, /pmf-field-availability/);

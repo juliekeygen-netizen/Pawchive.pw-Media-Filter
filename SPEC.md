@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.7 specification
+# Pawchive.pw Media Filter v0.10.8 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.7`
+- Userscript and `Config.version`: `0.10.8`
 - Settings: `pmf-settings-v5`
 - Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -18,9 +18,30 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Native Favorites sync state: `pmf-favorite-sync-v1`
 - Global quick-status filters: `pmf-post-status-filters-v1`
 - Queue session: authoritative schema 4 with explicit migration from schemas 1-3
-- Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 2
+- Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.10.8 contracts
+
+### Bounded stored-post traversal
+
+- Missing-attachment maintenance must traverse the `posts` object store through `openCursor` in bounded raw-record chunks of at most 500. The All and First-N scopes must not call `getAll()` or build an array containing the complete library.
+- A cursor checkpoint stores scope, selected creator keys when applicable, cursor position, scan-complete state, a bounded current pending set, retryable failures, terminal failures, counters, and affected creators. Cursor advancement and the newly discovered pending IDs are persisted before requests begin, so a crash cannot skip the current chunk.
+- Current creator and Current Local catalogue page use creator-key-bounded cursor ranges. First N stops discovery after N unknown posts. All uses a cheap stored-row upper bound only for warning/ETA; it does not perform a separate exact unknown-post planning pass.
+- Schema-2 checkpoints migrate as already-planned work with `scanDone=true`; their remaining and failed IDs remain resumable.
+
+### Maintenance execution and reporting
+
+- Structured post detail requests use adaptive concurrency up to three. HTML fallback has a separate single-request slot. Successful records remain pending until their batched IndexedDB write commits.
+- Progress exposes current and average completion rates separately. Before discovery finishes, remaining work and ETA are explicitly upper-bound estimates derived from unscanned stored rows; after discovery, they become exact for known pending and failed work.
+- The worker pauses after 25 consecutive retryable failures or 250 collected retryable failures. Stop, reload, Resume, and Retry failed preserve the bounded checkpoint.
+- Acquiring the shared maintenance slot and all planning/setup work are enclosed by release-on-error handling for both missing-attachment maintenance and creator-profile repair.
+
+### Batched Local updates and authoritative UI
+
+- Creator summaries are recomputed once per affected creator, accumulated, and applied through one `CreatorIndexUI.patchRecords()` call. One maintenance completion causes at most one Local filter-cache invalidation and one Local render for those summary patches.
+- `LegacyCreatorIndexUI` does not exist. Creator-card Count method and missing-attachment exclusion controls are integrated directly into the authoritative Settings builders and Creator Settings child implementation; no post-definition wrapper mutates the child dialog.
 
 ## v0.10.7 contracts
 
@@ -45,7 +66,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ### Missing-attachment maintenance
 
-- Supported scopes are Current creator, Current Local catalogue page, First N unknown posts (1–10000), and All unknown posts. All requires an exact count, duration warning, and confirmation.
+- Supported scopes are Current creator, Current Local catalogue page, First N unknown posts (1–10000), and All unknown posts. v0.10.8 supersedes the prior exact-count requirement with a cheap stored-row upper-bound warning and one cursor-streaming work pass.
 - Stored structured metadata is checked before the detail API; HTML is a separately limited fallback. Detail concurrency starts at up to three, decreases after rate limiting, and cautiously recovers after sustained success.
 - Post updates are written in batches. A task remains in `remainingIds` until its IndexedDB write commits. Retryable failures remain in both the retryable set and future work; HTTP 404/410 terminal records are reported separately.
 - Progress includes scope, completed/total, complete/missing results, retryable and terminal failures, remaining count, current creator, rate, and ETA. Closing Settings does not stop or duplicate a worker.

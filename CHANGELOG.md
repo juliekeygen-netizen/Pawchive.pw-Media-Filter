@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.10.8
+
+- Replaced whole-library missing-metadata planning with resumable IndexedDB cursor streaming in bounded 500-row chunks.
+- Added schema-3 checkpoints that persist cursor position, the current bounded pending set, failures, counters, rates, and affected creators without storing every planned post ID.
+- Changed All-scope confirmation to use one cheap stored-row upper-bound count and one streaming work pass instead of materializing the unknown-post plan twice.
+- Added separate current and average rates, discovery-aware upper-bound ETA/remaining reporting, and failure circuit breakers.
+- Batched affected creator summary patches into one Local cache invalidation and render.
+- Released the shared maintenance slot when metadata or creator-repair setup fails.
+- Removed the unused legacy creator-index implementation and integrated the Creator-card exclusion control directly into the authoritative child Settings UI.
+- Added bounded-cursor, setup-failure, batch-render, and source-cleanup regression tests; 43 executable tests now pass.
+
 ## 0.10.7
 
 - Retained Local catalogue records and view state across creator navigation, with immediate cached restoration and non-blocking background refresh.

@@ -10,8 +10,8 @@ const {
   ArtistsDOM, CreatorGridGeometry, CreatorBulkSelection, CatalogueJobManager, CatalogueModel,
 } = api;
 
-assert.equal(Config.version, '0.10.7');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.7/);
+assert.equal(Config.version, '0.10.8');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.8/);
 assert.equal(Config.databaseVersion, 5);
 assert.equal(Settings.schema.version, 4);
 const migrated = Settings.migrate({ settingsSchemaVersion:3 });
@@ -129,7 +129,7 @@ CatalogueJobManager.maintenanceActive = false;
 
 assert.doesNotMatch(originalSource, /grid\.className=`\$\{found\.grid\.className\}/);
 assert.doesNotMatch(originalSource, /template:templates\.get\(key\)\|\|fallback/);
-assert.match(originalSource, /NativeArtistsVisibility\.hide/);
+assert.match(originalSource, /NativeArtistsVisibility\.apply/);
 assert.match(originalSource, /--pmf-native-creator-card-width/);
 assert.match(originalSource, /creator-dynamic-aggregates-hydrated/);
 assert.match(originalSource, /requestRefresh\(reason='request'\)/);

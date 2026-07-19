@@ -2,11 +2,19 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.7**
+Current version: **0.10.8**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.8 bounded streaming maintenance and cleanup
+
+The missing-attachment updater now streams stored posts through resumable IndexedDB cursor chunks instead of loading every unknown post into one task array. Its schema-3 checkpoint stores only the current bounded chunk, retryable failures, the cursor position, scope, and progress. **All unknown posts** uses a cheap stored-post upper bound for confirmation and then makes one streaming pass; it no longer constructs the entire plan twice before work begins.
+
+Progress now reports current and average completion rates, an upper-bound ETA while the cursor is still discovering unknown records, stored rows streamed, and known retryable or terminal work. Structured requests remain adaptive, HTML fallback remains limited to one request at a time, writes remain batched, and the worker pauses after 25 consecutive retryable failures or 250 collected retryable failures instead of growing an unbounded checkpoint.
+
+Affected creator summaries are recomputed after maintenance and patched into the retained Local catalogue in one batch with one cache invalidation and one render. Setup failures for both metadata maintenance and creator-profile repair now release the shared maintenance slot. The obsolete `LegacyCreatorIndexUI` implementation and the post-definition Creator Settings wrapper were removed; the missing-attachment exclusion is integrated directly into the authoritative Creator-card settings child.
 
 ## v0.10.7 Local catalogue performance and scalable maintenance
 

@@ -1,4 +1,17 @@
-# Pawchive.pw Media Filter v0.10.7 testing
+# Pawchive.pw Media Filter v0.10.8 testing
+
+## v0.10.8 streaming maintenance matrix
+
+1. Run `node tests/v0108-streaming-maintenance.cjs`, `node tests/v0107-local-performance-and-maintenance.cjs`, the complete executable suite, and `node --check pawchive-pw-media-filter.user.js`.
+2. With at least 100,000 stored posts, open **All unknown posts**. Confirmation must appear after a quick stored-row count; it must not freeze while constructing an exact unknown-post array. After confirmation, watch memory and IndexedDB: work must advance in bounded cursor chunks and the checkpoint must contain only the current pending chunk plus failures.
+3. Stop during a chunk, reload, and Resume. Confirm the pending IDs from the advanced cursor chunk run before the next cursor read, then discovery continues without gaps or duplicate committed writes.
+4. Run First N with 1, 100, and 10,000. It must stop discovery at the requested number of unknown posts even when known posts are interspersed. Current creator and Current Local catalogue page must stay within their captured creator-key scope.
+5. Confirm progress separately shows a current rate and an average rate. While discovery is incomplete, remaining work and ETA must be described as an upper bound; after discovery, known pending/failure counts must be exact.
+6. Force repeated API failures. The worker must reduce concurrency after 429 responses and pause after 25 consecutive retryable failures or 250 collected retryable failures. Resume and Retry failed must retain those IDs without creating an unbounded checkpoint.
+7. Force IndexedDB count/cursor setup failure and creator-repair planning failure. Confirm the shared maintenance slot is released and a later Queue or maintenance operation can start normally.
+8. Update metadata across many creators while Local catalogue is visible. At completion, creator summaries may recompute once each, but the Local record set must be patched with one cache invalidation and one render rather than one render per creator.
+9. Search the source for `LegacyCreatorIndexUI` and `creatorOpenChildBase`; neither may exist. Open the Creator-card child Settings dialog and verify Count method plus the missing-attachment exclusion are present and save correctly without a wrapper-created duplicate.
+10. Repeat the authenticated v0.10.7 navigation, paginator, avatar/banner, settings, Stop/Resume, and Network-panel matrix. Automated cursor fixtures do not replace live Pawchive verification.
 
 ## v0.10.7 Local performance and maintenance matrix
 
@@ -8,9 +21,9 @@
 4. While Local catalogue is visible, start creator-profile repair. Continue paging and confirm navigation remains responsive. Stop it, close/reopen Settings, Resume it, induce one retryable failure, and use Retry failed. A missing banner or favorite count alone must not trigger urgent automatic repair.
 5. Inspect repaired Patreon/Fanbox-style cards. Confirm avatar and backdrop remain distinct, known-good artwork is preserved, and a post preview or one `og:image` is not copied into both fields.
 6. Open Settings from a creator page and `/artists`. In both, confirm the main Creator cards section visibly contains **Count method**, **Posts containing media**, **Total attachments/links from every post**, and **Hide and don’t count posts with missing attachments**.
-7. Open **Update missing-attachment metadata** and test Current creator, Current Local catalogue page, First 100, and All. All must count first and warn before starting. Confirm structured requests precede HTML fallback, HTML concurrency is separately bounded, and rate/ETA/current creator update live.
+7. Open **Update missing-attachment metadata** and test Current creator, Current Local catalogue page, First 100, and All. All must show a stored-row upper-bound warning before starting. Confirm structured requests precede HTML fallback, HTML concurrency is separately bounded, and current/average rate, ETA, and current creator update live.
 8. Stop maintenance with buffered work, reload, and Resume. Induce an API/write failure and confirm the task remains retryable. Retry failed must clear it only after a successful committed write. Confirm affected creator summaries refresh once per creator and Local paging stays responsive throughout.
-9. For a library near 100,000 posts, confirm the UI presents the exact planned count and a many-hours estimate rather than implying a quick operation. Monitor 429 handling: global cooldown and lower detail concurrency must occur without losing the task.
+9. For a library near 100,000 posts, confirm the UI presents a stored-row upper bound and clearly labels discovery-time remaining/ETA as estimated rather than implying an exact quick plan. Monitor 429 handling: global cooldown and lower detail concurrency must occur without losing the task.
 10. Live authenticated Pawchive checks must be reported separately from automated tests; do not treat helper/source assertions as proof of browser performance.
 
 ## v0.10.6 corrective matrix
