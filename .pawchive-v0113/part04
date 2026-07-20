@@ -1,0 +1,328 @@
+-assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
++assert.equal(Config.version, '0.11.3');
++assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+ assert.equal(Config.databaseVersion, 5);
+ assert.equal(Settings.schema.version, 5);
+ const migrated = Settings.migrate({ settingsSchemaVersion:3 });
+diff --git a/tests/dynamic-full-row-page-size-v082.cjs b/tests/dynamic-full-row-page-size-v082.cjs
+index aa698f2..336d732 100644
+--- a/tests/dynamic-full-row-page-size-v082.cjs
++++ b/tests/dynamic-full-row-page-size-v082.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+ const { api } = loadUserscript();
+ const { Config, Settings, CompactGridScale } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ assert.equal(Config.filteredPageSize, 50);
+ assert.equal(CompactGridScale.pageSizeForColumns(1), 50);
+ assert.equal(CompactGridScale.pageSizeForColumns(2), 50);
+diff --git a/tests/lifecycle-soft-bfcache-v082.cjs b/tests/lifecycle-soft-bfcache-v082.cjs
+index d8f611f..adf0e1c 100644
+--- a/tests/lifecycle-soft-bfcache-v082.cjs
++++ b/tests/lifecycle-soft-bfcache-v082.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+ const { api } = loadUserscript();
+ const { Config, CreatorPageController, Lifecycle } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ 
+ assert.match(CreatorPageController.cleanup.toString(), /retainSession&&App\.context/);
+ assert.match(CreatorPageController.cleanup.toString(), /App\.persistUIState\(\);App\.detachPage\(\);return/);
+diff --git a/tests/native-stylesheet-settings-v084.cjs b/tests/native-stylesheet-settings-v084.cjs
+index d60e9ed..2b5d2a7 100644
+--- a/tests/native-stylesheet-settings-v084.cjs
++++ b/tests/native-stylesheet-settings-v084.cjs
+@@ -9,7 +9,7 @@ const {
+   SettingsUI, PostPageController, Lifecycle,
+ } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ assert.equal(Config.schemaVersion, 2);
+ assert.equal(Config.databaseVersion, 5);
+ assert.equal(Config.settingsKey, 'pmf-settings-v5');
+diff --git a/tests/native-ui-bulk-queue-v0103.cjs b/tests/native-ui-bulk-queue-v0103.cjs
+index f373725..c70f6a8 100644
+--- a/tests/native-ui-bulk-queue-v0103.cjs
++++ b/tests/native-ui-bulk-queue-v0103.cjs
+@@ -8,8 +8,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+ const { api, originalSource } = loadUserscript();
+ const { Config, Util, CatalogueJobManager, CreatorBulkSelection, NativeArtistsProxy } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
+-assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
++assert.equal(Config.version, '0.11.3');
++assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+ for (const [name, source] of [
+   ['userscript', originalSource],
+   ...['README.md', 'SPEC.md', 'TESTING.md'].map((name) => [
+diff --git a/tests/post-action-native-metrics-v082.cjs b/tests/post-action-native-metrics-v082.cjs
+index 610bf2b..b93c320 100644
+--- a/tests/post-action-native-metrics-v082.cjs
++++ b/tests/post-action-native-metrics-v082.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+ const { api, context } = loadUserscript();
+ const { Config, NativeActionAlignment, PostPageController } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ 
+ function styleStore() {
+   const values = new Map();
+diff --git a/tests/post-status-corrective-v081.cjs b/tests/post-status-corrective-v081.cjs
+index 3eb4595..e3ba4b3 100644
+--- a/tests/post-status-corrective-v081.cjs
++++ b/tests/post-status-corrective-v081.cjs
+@@ -10,7 +10,7 @@ const {
+ } = api;
+ const json = (value) => JSON.parse(JSON.stringify(value));
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ assert.equal(Config.databaseVersion, 5);
+ assert.equal(Config.postStatusFiltersKey, 'pmf-post-status-filters-v1');
+ assert.match(originalSource, /favoriteSnapshotEntries/);
+diff --git a/tests/seen-card-treatment-v082.cjs b/tests/seen-card-treatment-v082.cjs
+index 5cdc55d..77afa11 100644
+--- a/tests/seen-card-treatment-v082.cjs
++++ b/tests/seen-card-treatment-v082.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript, makeClassList } = require('./test-helper.cjs');
+ const { api } = loadUserscript();
+ const { Config, Settings, SeenCardTreatment } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ 
+ const classList = makeClassList();
+ const card = { classList };
+diff --git a/tests/settings-order-v082.cjs b/tests/settings-order-v082.cjs
+index 14d742d..66718af 100644
+--- a/tests/settings-order-v082.cjs
++++ b/tests/settings-order-v082.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+ const { api, originalSource } = loadUserscript();
+ const { Config } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ 
+ const settingsMethod = originalSource.slice(
+   originalSource.lastIndexOf('    openSettings() {'),
+diff --git a/tests/sizing-preview-and-details-actions.cjs b/tests/sizing-preview-and-details-actions.cjs
+index 9ba3fdc..92254a0 100644
+--- a/tests/sizing-preview-and-details-actions.cjs
++++ b/tests/sizing-preview-and-details-actions.cjs
+@@ -8,7 +8,7 @@ const {
+   Config, Settings, CompactGridScale, CompactThumbnailRatio, CatalogueModel, CatalogueJobManager, Catalogue, UI, App,
+ } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ assert.equal(Config.settingsKey, 'pmf-settings-v5');
+ 
+ Settings.load();
+diff --git a/tests/static-smoke.cjs b/tests/static-smoke.cjs
+index fd3a99d..dc18fcd 100644
+--- a/tests/static-smoke.cjs
++++ b/tests/static-smoke.cjs
+@@ -12,7 +12,7 @@ const {
+ const json = (value) => JSON.parse(JSON.stringify(value));
+ const creator = Route.parse('https://pawchive.pw/fanbox/user/12345?o=50&q=cat');
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ assert.equal(Config.schemaVersion, 2);
+ assert.equal(Config.databaseVersion, 5);
+ assert.equal(Config.settingsKey, 'pmf-settings-v5');
+diff --git a/tests/status-filter-polish-v082.cjs b/tests/status-filter-polish-v082.cjs
+index 181011e..47da76f 100644
+--- a/tests/status-filter-polish-v082.cjs
++++ b/tests/status-filter-polish-v082.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+ const { api, originalSource } = loadUserscript();
+ const { Config } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ 
+ assert.match(originalSource, /--pmf-status-summary-gap:7px;gap:var\(--pmf-status-summary-gap\)!important/);
+ assert.match(originalSource, /\.pmf-page-controls\{gap:5px!important;min-height:27px!important\}/);
+diff --git a/tests/test-helper.cjs b/tests/test-helper.cjs
+index 508db2e..dd273df 100644
+--- a/tests/test-helper.cjs
++++ b/tests/test-helper.cjs
+@@ -33,7 +33,7 @@ function loadUserscript() {
+   const originalSource = fs.readFileSync(userscriptPath, 'utf8');
+   const source = originalSource.replace(
+     '  Lifecycle.start();',
+-    '  globalThis.__pmfTest = { Config, Util, SettingsEvents, Settings, Route, PawchiveData, MediaClassifier, PostClassification, ExternalLinkDetector, ProjectDetector, CatalogueMetadataPolicy, PostMissingStats, PostNormalizer, CatalogueOnlyMigration, Cache, CatalogueRequestScheduler, PostStatusEvents, PostStatus, FavoriteStateResolver, PostStatusFilters, FavoriteSyncCoordinator, PawchiveAPI, FilterEngine, PostSorter, FilterSummary, CatalogueModel, CreatorDirectory, CreatorState, CreatorStatusFilters, CreatorDirectoryMode, CreatorPresets, CreatorAggregateCondition, CreatorCustomRule, CreatorFilterEngine, CreatorSorter, CreatorCatalogueSummary, ArtistCatalogueAction, CreatorDisplayName, ArtistsDOM, CreatorArtworkFailureCache, CreatorCardReconstructor, CreatorGridGeometry, NativeArtistsVisibility, NativePaginatorMirror, NativeArtistsProxy, NativeArtistsPageCoordinator, AttachmentBadgeSizing, CreatorCardBadgeRenderer, CreatorCardRightRail, CatalogueRunner, CatalogueJobManager, Presets, OverlayManager, PawchiveDOM, BadgeRenderer, CompactGridScale, CompactThumbnailRatio, CompactLayoutEngine, CreatorSessionCache, PostStatusStateCoordinator, CardDimTreatment, SeenCardTreatment, HiddenCreatorTreatment, PostStatusBadgeRenderer, StatusBadgeRenderer, CardRenderer, Paginator, OperationIssues, MetadataDetailPool, MissingAttachmentMaintenance, Catalogue, BaseUI, UI, SettingsUI, CreatorQueuePanel, CreatorIndexUI, CreatorSettingsUI, CreatorFilterUI, CreatorSortUI, CreatorBulkSelection, NativeCreatorDirectorySource, CreatorProfileRepairManager, CreatorBulkUI, ArtistsPageController, App, NativeActionAlignment, PostPageController, CreatorActionController, CreatorEarlyTakeover, CreatorPageController, isPmfOwnedNode, PmfDomMutationGuard, NativeStylesheetHealth, Lifecycle };',
++    '  globalThis.__pmfTest = { Config, Util, SettingsEvents, Settings, Route, PawchiveData, MediaClassifier, PostClassification, ExternalLinkDetector, ProjectDetector, CatalogueMetadataPolicy, PostMissingStats, PostNormalizer, CatalogueOnlyMigration, Cache, CatalogueRequestScheduler, PostStatusEvents, PostStatus, FavoriteStateResolver, PostStatusFilters, FavoriteSyncCoordinator, PawchiveAPI, FilterEngine, PostSorter, FilterSummary, CatalogueModel, CreatorDirectory, CreatorState, CreatorStatusFilters, CreatorDirectoryMode, CreatorPresets, CreatorAggregateCondition, CreatorCustomRule, CreatorFilterEngine, CreatorSorter, CreatorCatalogueSummary, ArtistCatalogueAction, CreatorDisplayName, ArtistsDOM, CreatorArtworkFailureCache, CreatorCardReconstructor, CreatorGridGeometry, NativeArtistsVisibility, NativePaginatorMirror, NativeArtistsProxy, NativeArtistsPageCoordinator, AttachmentBadgeSizing, CreatorCardBadgeRenderer, CreatorCardRightRail, CatalogueRunner, CatalogueJobManager, Presets, DataPortability, DataPortabilityUI, OverlayManager, PawchiveDOM, BadgeRenderer, CompactGridScale, CompactThumbnailRatio, CompactLayoutEngine, CreatorSessionCache, PostStatusStateCoordinator, CardDimTreatment, SeenCardTreatment, HiddenCreatorTreatment, PostStatusBadgeRenderer, StatusBadgeRenderer, CardRenderer, Paginator, OperationIssues, MetadataDetailPool, MissingAttachmentMaintenance, Catalogue, BaseUI, UI, SettingsUI, CreatorQueuePanel, CreatorIndexUI, CreatorSettingsUI, CreatorFilterUI, CreatorSortUI, CreatorBulkSelection, NativeCreatorDirectorySource, CreatorProfileRepairManager, CreatorBulkUI, ArtistsPageController, App, NativeActionAlignment, PostPageController, CreatorActionController, CreatorEarlyTakeover, CreatorPageController, isPmfOwnedNode, PmfDomMutationGuard, NativeStylesheetHealth, Lifecycle };',
+   );
+   const stored = new Map();
+   let uuidCount = 0;
+diff --git a/tests/thumbnail-crop-position.cjs b/tests/thumbnail-crop-position.cjs
+index 7b18e63..dfe271f 100644
+--- a/tests/thumbnail-crop-position.cjs
++++ b/tests/thumbnail-crop-position.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript, makeClassList } = require('./test-helper.cjs');
+ const { api, context, originalSource } = loadUserscript();
+ const { Config, CardRenderer, CompactGridScale, CompactThumbnailRatio, App } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ 
+ function makeStyle(initial = {}) {
+   const values = new Map(Object.entries(initial).map(([name, value]) => [name, { value, priority:'' }]));
+diff --git a/tests/unified-creator-index-queue-v010.cjs b/tests/unified-creator-index-queue-v010.cjs
+index a37713c..044b61f 100644
+--- a/tests/unified-creator-index-queue-v010.cjs
++++ b/tests/unified-creator-index-queue-v010.cjs
+@@ -11,8 +11,8 @@ const {
+   CatalogueJobManager, NativeActionAlignment,
+ } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
+-assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
++assert.equal(Config.version, '0.11.3');
++assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+ assert.equal(Config.databaseVersion, 5);
+ assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
+ assert.match(originalSource, /createObjectStore\('creatorStates'/);
+@@ -162,4 +162,4 @@ assert.match(originalSource, /CreatorPresets\.apply/);
+ assert.match(originalSource, /records\.forEach\(\(record\)=>ArtistsPageController\.scheduleBackfill/);
+ assert.doesNotMatch(originalSource, /width:\s*100vw/);
+ 
+-console.log('Pawchive Media Filter v0.11.2 unified creator index and queue tests passed.');
++console.log('Pawchive Media Filter v0.11.3 unified creator index and queue tests passed.');
+diff --git a/tests/v01010-consistency-navigation-defaults.cjs b/tests/v01010-consistency-navigation-defaults.cjs
+index 99cfa84..80a7a92 100644
+--- a/tests/v01010-consistency-navigation-defaults.cjs
++++ b/tests/v01010-consistency-navigation-defaults.cjs
+@@ -24,8 +24,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+     App,
+   } = api;
+ 
+-  assert.equal(Config.version, '0.11.2');
+-  assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
++  assert.equal(Config.version, '0.11.3');
++  assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+   assert.equal(Settings.value.settingsSchemaVersion, 5);
+ 
+   const expectedHosts = [
+@@ -242,7 +242,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+   assert.match(originalSource, /CreatorSessionCache\.clear\(\)/);
+   assert.match(originalSource, /requestRefresh\('catalogue-clear'\)/);
+ 
+-  console.log('Pawchive Media Filter v0.11.2 consistency, defaults, inventory, navigation, and clear-safety tests passed.');
++  console.log('Pawchive Media Filter v0.11.3 consistency, defaults, inventory, navigation, and clear-safety tests passed.');
+ })().catch((error) => {
+   console.error(error);
+   process.exitCode = 1;
+diff --git a/tests/v01011-artists-navigation-layout.cjs b/tests/v01011-artists-navigation-layout.cjs
+index ee551c8..b588c57 100644
+--- a/tests/v01011-artists-navigation-layout.cjs
++++ b/tests/v01011-artists-navigation-layout.cjs
+@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+     Lifecycle,
+   } = api;
+ 
+-  assert.equal(Config.version, '0.11.2');
+-  assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
++  assert.equal(Config.version, '0.11.3');
++  assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+ 
+   // Local grid visibility must be authoritative even against display:grid!important.
+   const localGrid = makeElement('section');
+@@ -114,7 +114,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+   assert.match(originalSource, /…and \$\{remaining\.toLocaleString\(\)\} more/);
+   assert.match(originalSource, /action==='resume'\?'Resume scan'/);
+ 
+-  console.log('Pawchive Media Filter v0.11.2 artists navigation and responsive layout tests passed.');
++  console.log('Pawchive Media Filter v0.11.3 artists navigation and responsive layout tests passed.');
+ })().catch((error) => {
+   console.error(error);
+   process.exitCode = 1;
+diff --git a/tests/v01012-creator-native-visibility.cjs b/tests/v01012-creator-native-visibility.cjs
+index ca27843..1b0bb4c 100644
+--- a/tests/v01012-creator-native-visibility.cjs
++++ b/tests/v01012-creator-native-visibility.cjs
+@@ -13,8 +13,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+     PawchiveDOM,
+   } = api;
+ 
+-  assert.equal(Config.version, '0.11.2');
+-  assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
++  assert.equal(Config.version, '0.11.3');
++  assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+ 
+   // An actually unscanned creator must never enter early takeover.
+   App.context = { creatorKey:'pawchive.pw|patreon|unscanned' };
+@@ -61,7 +61,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+   assert.equal(nativeGrid.dataset.pmfEarlyConcealed, undefined);
+ 
+   PawchiveDOM.find = originalFind;
+-  console.log('Pawchive Media Filter v0.11.2 creator native-visibility regression tests passed.');
++  console.log('Pawchive Media Filter v0.11.3 creator native-visibility regression tests passed.');
+ })().catch((error) => {
+   console.error(error);
+   process.exitCode = 1;
+diff --git a/tests/v0105-missing-metadata-and-paginator.cjs b/tests/v0105-missing-metadata-and-paginator.cjs
+index d16ff7a..92f2c82 100644
+--- a/tests/v0105-missing-metadata-and-paginator.cjs
++++ b/tests/v0105-missing-metadata-and-paginator.cjs
+@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
+ const { loadUserscript } = require('./test-helper.cjs');
+ 
+ const { api: { Config, Settings, PostMissingStats, CreatorCatalogueSummary, Paginator } } = loadUserscript();
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ 
+ const parsed = PostMissingStats.parse(' Missing 1 full-res photo, 2 videos and 3 archives. ');
+ assert.equal(parsed.missingStatsKnown, true);
+@@ -35,4 +35,4 @@ assert.equal(summary.excludedMissingAttachmentPostCount, 20);
+ assert.equal(summary.media.videos.posts, 480);
+ assert.equal(summary.completeness, 'complete');
+ 
+-console.log('Pawchive Media Filter v0.11.2 missing metadata and paginator tests passed.');
++console.log('Pawchive Media Filter v0.11.3 missing metadata and paginator tests passed.');
+diff --git a/tests/v0106-authoritative-runtime.cjs b/tests/v0106-authoritative-runtime.cjs
+index 520aa5d..36adf5a 100644
+--- a/tests/v0106-authoritative-runtime.cjs
++++ b/tests/v0106-authoritative-runtime.cjs
+@@ -8,7 +8,7 @@ const {
+   CatalogueJobManager, Paginator, MissingAttachmentMaintenance,
+ } = loaded.api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ assert.equal((originalSource.match(/const CreatorBulkUI =/g) || []).length, 1);
+ assert.equal((originalSource.match(/CreatorBulkUI\.open\s*=/g) || []).length, 0);
+ assert.equal((originalSource.match(/SettingsUI\.open\s*=/g) || []).length, 0);
+@@ -74,4 +74,4 @@ assert.match(MissingAttachmentMaintenance.fetchStructured.toString(), /PostMissi
+ assert.match(MissingAttachmentMaintenance.run.toString(), /remainingIds|failedIds/);
+ assert.equal(typeof MissingAttachmentMaintenance.resume, 'function');
+ 
+-console.log('Pawchive Media Filter v0.11.2 authoritative runtime tests passed.');
++console.log('Pawchive Media Filter v0.11.3 authoritative runtime tests passed.');
+diff --git a/tests/v0107-local-performance-and-maintenance.cjs b/tests/v0107-local-performance-and-maintenance.cjs
+index 9b3bd43..7d08943 100644
+--- a/tests/v0107-local-performance-and-maintenance.cjs
++++ b/tests/v0107-local-performance-and-maintenance.cjs
+@@ -22,8 +22,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+     SettingsUI,
+   } = api;
+ 
+-  assert.equal(Config.version, '0.11.2');
+-  assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
++  assert.equal(Config.version, '0.11.3');
++  assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+   assert.ok(!CreatorIndexUI.render.toString().includes('repairVisible'));
+   assert.ok(!CreatorIndexUI.renderCatalogue.toString().includes('repairVisible'));
+   assert.ok(CreatorIndexUI.renderCatalogue.toString().includes('createDocumentFragment'));
+@@ -247,7 +247,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+   assert.ok(MissingAttachmentMaintenance.openScopeDialog.toString().includes('First N unknown posts'));
+   assert.ok(MissingAttachmentMaintenance.openScopeDialog.toString().includes('All unknown posts'));
+ 
+-  console.log('Pawchive Media Filter v0.11.2 Local performance and maintenance runtime tests passed.');
