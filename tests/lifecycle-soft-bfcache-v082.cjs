@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api } = loadUserscript();
 const { Config, CreatorPageController, Lifecycle } = api;
 
-assert.equal(Config.version, '0.10.11');
+assert.equal(Config.version, '0.10.12');
 
 assert.match(CreatorPageController.cleanup.toString(), /retainSession&&App\.context/);
 assert.match(CreatorPageController.cleanup.toString(), /App\.persistUIState\(\);App\.detachPage\(\);return/);

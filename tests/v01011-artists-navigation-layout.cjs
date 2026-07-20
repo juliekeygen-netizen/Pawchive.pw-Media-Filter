@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Lifecycle,
   } = api;
 
-  assert.equal(Config.version, '0.10.11');
-  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+  assert.equal(Config.version, '0.10.12');
+  assert.match(originalSource, /\/\/ @version\s+0\.10\.12/);
 
   // Local grid visibility must be authoritative even against display:grid!important.
   const localGrid = makeElement('section');
@@ -81,7 +81,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   Lifecycle.schedule = originalSchedule;
   NativeArtistsPageCoordinator.reset();
 
-  // Retained creator sessions can conceal the native post grid before PMF rebinding.
+  // Retained creator sessions conceal pixels without removing native layout geometry.
   const nativeGrid = makeElement('div');
   const originalFind = PawchiveDOM.find;
   context.location.href = 'https://pawchive.pw/patreon/user/123';
@@ -89,11 +89,16 @@ const { loadUserscript } = require('./test-helper.cjs');
   PawchiveDOM.find = () => ({ grid:nativeGrid });
   const takeover = CreatorEarlyTakeover.begin({ creatorKey:'pawchive.pw|patreon|123' }, { knownCatalogue:true });
   assert.ok(takeover);
-  assert.equal(nativeGrid.hidden, true);
-  assert.equal(nativeGrid.style.getPropertyPriority('display'), 'important');
+  assert.equal(nativeGrid.hidden, false);
+  assert.equal(nativeGrid.style.getPropertyValue('display'), '');
+  assert.equal(nativeGrid.style.getPropertyValue('visibility'), 'hidden');
+  assert.equal(nativeGrid.style.getPropertyPriority('visibility'), 'important');
+  assert.equal(nativeGrid.dataset.pmfEarlyConcealed, 'true');
   assert.equal(CreatorEarlyTakeover.active.shell?.id, 'pmf-creator-early-shell');
   CreatorEarlyTakeover.cleanup({ restore:true });
   assert.equal(nativeGrid.hidden, false);
+  assert.equal(nativeGrid.style.getPropertyValue('visibility'), '');
+  assert.equal(nativeGrid.dataset.pmfEarlyConcealed, undefined);
   PawchiveDOM.find = originalFind;
 
   // Native-grid replacement is watched from a stable parent and rebound before refresh work.
@@ -109,7 +114,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(originalSource, /…and \$\{remaining\.toLocaleString\(\)\} more/);
   assert.match(originalSource, /action==='resume'\?'Resume scan'/);
 
-  console.log('Pawchive Media Filter v0.10.11 artists navigation and responsive layout tests passed.');
+  console.log('Pawchive Media Filter v0.10.12 artists navigation and responsive layout tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.11 specification
+# Pawchive.pw Media Filter v0.10.12 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.11`
+- Userscript and `Config.version`: `0.10.12`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -21,6 +21,13 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.10.12 creator-page visibility contracts
+
+- Early PMF takeover for a known Catalogue must not remove the native post grid from layout before compact geometry is captured. Temporary concealment uses visibility/pointer-event ownership rather than `display: none` or `hidden`.
+- An actually unscanned creator must not enter early takeover. Its Pawchive native post cards remain visible and usable.
+- After PMF rendering decides between compact and native modes, cleanup removes temporary takeover styles without undoing that final visibility decision.
+- If native card geometry is unavailable during a known-Catalogue rebind, compact layout uses a bounded non-zero fallback so toolbar and paginators can never appear above an empty zero-sized card grid.
 
 ## v0.10.11 artists navigation and display contracts
 

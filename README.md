@@ -2,11 +2,17 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.11**
+Current version: **0.10.12**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.12 creator native-card visibility repair
+
+The v0.10.11 early creator-page handoff hid Pawchive's native post grid with `display: none` before compact-card geometry was captured. On affected creators, PMF could load the Catalogue, toolbar, and paginators while the compact cards had no usable sizing geometry and appeared blank.
+
+Early handoff now conceals native pixels with `visibility: hidden` while retaining measurable layout. PMF then captures native geometry, renders the compact grid, and removes only the temporary concealment. Unscanned creators never enter early takeover, and failed takeover restores Pawchive's native cards. A bounded fallback geometry keeps compact posts visible if native measurements are temporarily unavailable.
 
 ## v0.10.11 artists navigation, responsive layout, and creator-page handoff
 

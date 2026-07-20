@@ -24,8 +24,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     App,
   } = api;
 
-  assert.equal(Config.version, '0.10.11');
-  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+  assert.equal(Config.version, '0.10.12');
+  assert.match(originalSource, /\/\/ @version\s+0\.10\.12/);
   assert.equal(Settings.value.settingsSchemaVersion, 5);
 
   const expectedHosts = [
@@ -242,7 +242,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(originalSource, /CreatorSessionCache\.clear\(\)/);
   assert.match(originalSource, /requestRefresh\('catalogue-clear'\)/);
 
-  console.log('Pawchive Media Filter v0.10.11 consistency, defaults, inventory, navigation, and clear-safety tests passed.');
+  console.log('Pawchive Media Filter v0.10.12 consistency, defaults, inventory, navigation, and clear-safety tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

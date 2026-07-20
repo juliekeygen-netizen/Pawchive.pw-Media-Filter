@@ -22,8 +22,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     SettingsUI,
   } = api;
 
-  assert.equal(Config.version, '0.10.11');
-  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+  assert.equal(Config.version, '0.10.12');
+  assert.match(originalSource, /\/\/ @version\s+0\.10\.12/);
   assert.ok(!CreatorIndexUI.render.toString().includes('repairVisible'));
   assert.ok(!CreatorIndexUI.renderCatalogue.toString().includes('repairVisible'));
   assert.ok(CreatorIndexUI.renderCatalogue.toString().includes('createDocumentFragment'));
@@ -247,7 +247,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.ok(MissingAttachmentMaintenance.openScopeDialog.toString().includes('First N unknown posts'));
   assert.ok(MissingAttachmentMaintenance.openScopeDialog.toString().includes('All unknown posts'));
 
-  console.log('Pawchive Media Filter v0.10.11 Local performance and maintenance runtime tests passed.');
+  console.log('Pawchive Media Filter v0.10.12 Local performance and maintenance runtime tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

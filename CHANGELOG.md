@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.12
+
+- Fixed the creator-page early-takeover regression that concealed native post geometry before the compact grid could measure it, which could leave a scanned creator with toolbar and paginators but no visible post cards.
+- Early takeover now hides native pixels with `visibility` while preserving layout measurements until PMF rendering owns the page, and restores native content safely for unscanned creators or failed takeover.
+- Added a defensive non-zero compact-layout fallback when Pawchive native card geometry is temporarily unavailable.
+- Added focused v0.10.12 regression coverage; 47 executable tests now pass.
+
 ## 0.10.11
 
 - Enforced a strict one-grid visibility contract between Native directory and Local catalogue, including an authoritative hidden override for the PMF grid.

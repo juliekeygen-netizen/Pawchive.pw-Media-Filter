@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.10.11
+// @version      0.10.12
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.10.11',
+    version: '0.10.12',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -3482,6 +3482,16 @@ sync() {
         nativeCardHeight,nativeVisibleCardRatio,nativeThumbnailWidth,nativeThumbnailHeight,nativeThumbnailRatio,measuredAt:Date.now(),
       });
     },
+    fallbackMeasurement() {
+      if(!App.context)return null;
+      CompactGridScale.resetForCreator(App.context.creatorKey);
+      const grid=App.dom?.grid;const parent=grid?.parentElement;const style=globalThis.getComputedStyle?.(grid);
+      const gridWidth=Number(parent?.getBoundingClientRect?.().width)||Number(parent?.clientWidth)||Number(grid?.clientWidth)||960;
+      const containerWidth=gridWidth;const columnGap=Math.max(0,parseFloat(style?.columnGap)||8);const rowGap=Math.max(0,parseFloat(style?.rowGap)||columnGap);
+      const targetWidth=300;const columnCount=Math.max(1,Math.min(6,Math.floor((gridWidth+columnGap)/(targetWidth+columnGap))));
+      const cardWidth=Math.max(180,Math.floor((gridWidth-columnGap*Math.max(0,columnCount-1))/columnCount));const nativeVisibleCardRatio=16/9;const nativeCardHeight=Math.max(72,cardWidth/nativeVisibleCardRatio);
+      return CompactGridScale.commitMeasurement({creatorKey:App.context.creatorKey,containerWidth,gridWidth,cardWidth,columnCount,columnGap,rowGap,nativeCardHeight,nativeVisibleCardRatio,nativeThumbnailWidth:cardWidth,nativeThumbnailHeight:nativeCardHeight,nativeThumbnailRatio:nativeVisibleCardRatio,measuredAt:Date.now(),fallback:true});
+    },
     availableWidth(grid=App.ui?.grid,parent=grid?.parentElement,fallback=CompactGridScale.measurement?.gridWidth||1) {
       if(grid&&!grid.hidden&&grid.isConnected!==false){const width=Number(grid.getBoundingClientRect?.().width)||Number(grid.clientWidth)||0;if(width>0)return width;}
       const parentWidth=Number(parent?.getBoundingClientRect?.().width)||Number(parent?.clientWidth)||0;
@@ -3525,7 +3535,7 @@ sync() {
     },
     applyScale(scale=CompactGridScale.currentScale(),{reason='render',corrective=false,ratioOverride=null}={}) {
       if(!App.ui?.grid)return null;
-      const base=CompactGridScale.measurement||CompactGridScale.captureNativeGeometry();
+      const base=CompactGridScale.measurement||CompactGridScale.captureNativeGeometry()||CompactGridScale.fallbackMeasurement();
       if(!base)return null;
       const grid=App.ui.grid;grid.style.setProperty('display','grid','important');grid.style.setProperty('width','100%','important');grid.style.setProperty('max-width','none','important');grid.style.setProperty('box-sizing','border-box','important');const width=CompactGridScale.availableWidth(grid,grid.parentElement,base.gridWidth);
       const ratioSetting=ratioOverride==null?CompactThumbnailRatio.currentAspectRatio():CompactThumbnailRatio.normalizeAspectRatio(ratioOverride);const ratio=CompactThumbnailRatio.numericRatio(ratioSetting,base.nativeVisibleCardRatio);
@@ -3595,7 +3605,7 @@ sync() {
       return null;
     },
     connect() {
-      CompactGridScale.disconnect();CompactGridScale.resetForCreator(App.context?.creatorKey||'');CompactGridScale.captureNativeGeometry();CompactGridScale.pendingReason='creator-rebind';const generation=++CompactGridScale.generation;const sessionToken=App.sessionToken;const creatorKey=App.context?.creatorKey;const target=App.dom?.grid?.parentElement;if(!target)return;
+      CompactGridScale.disconnect();CompactGridScale.resetForCreator(App.context?.creatorKey||'');CompactGridScale.captureNativeGeometry()||CompactGridScale.fallbackMeasurement();CompactGridScale.pendingReason='creator-rebind';const generation=++CompactGridScale.generation;const sessionToken=App.sessionToken;const creatorKey=App.context?.creatorKey;const target=App.dom?.grid?.parentElement;if(!target)return;
       let lastWidth=CompactGridScale.availableWidth(null,target,CompactGridScale.measurement?.gridWidth||1);
       const schedule=Util.debounce(()=>{if(generation!==CompactGridScale.generation||sessionToken!==App.sessionToken||creatorKey!==App.context?.creatorKey||!App.ui)return;const width=CompactGridScale.availableWidth(App.ui.grid,target,lastWidth);if(Math.abs(width-lastWidth)<2)return;lastWidth=width;if(!App.dom.grid.hidden)CompactGridScale.captureNativeGeometry();const priorSize=App.filteredPageSize();const matches=App.matchingPosts();App.filteredFirstResultIndex=Math.max(0,(App.filteredPage-1)*priorSize);App.filteredAnchorId=matches[App.filteredFirstResultIndex]?.id||App.filteredAnchorId;CompactLayoutEngine.apply({reason:'resize'});const nextSize=App.filteredPageSize();if(nextSize!==priorSize){App.restoreFirstResultPage(matches.length);App.render();}},120);
       if(typeof ResizeObserver==='function'){CompactGridScale.observer=new ResizeObserver(()=>schedule());CompactGridScale.observer.observe(target);}
@@ -7240,13 +7250,17 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
 
   const CreatorEarlyTakeover = {
     active:null,
+    remember(state,grid){if(!grid||state.originals.has(grid))return;state.originals.set(grid,{hidden:Boolean(grid.hidden),ariaHidden:grid.getAttribute?.('aria-hidden'),display:grid.style.getPropertyValue?.('display')||'',displayPriority:grid.style.getPropertyPriority?.('display')||'',visibility:grid.style.getPropertyValue?.('visibility')||'',visibilityPriority:grid.style.getPropertyPriority?.('visibility')||'',pointerEvents:grid.style.getPropertyValue?.('pointer-events')||'',pointerPriority:grid.style.getPropertyPriority?.('pointer-events')||''});},
+    restoreStyle(grid,property,value,priority=''){if(!grid?.style)return;if(value)grid.style.setProperty(property,value,priority);else grid.style.removeProperty(property);},
+    release(state,grid,{restoreLayout=false}={}){if(!grid)return;const original=state.originals.get(grid)||{};CreatorEarlyTakeover.restoreStyle(grid,'visibility',original.visibility,original.visibilityPriority);CreatorEarlyTakeover.restoreStyle(grid,'pointer-events',original.pointerEvents,original.pointerPriority);delete grid.dataset.pmfEarlyConcealed;if(restoreLayout){grid.hidden=Boolean(original.hidden);CreatorEarlyTakeover.restoreStyle(grid,'display',original.display,original.displayPriority);if(original.ariaHidden==null)grid.removeAttribute?.('aria-hidden');else grid.setAttribute?.('aria-hidden',original.ariaHidden);}},
+    conceal(state,grid){if(!grid?.isConnected)return;CreatorEarlyTakeover.remember(state,grid);if(state.grid&&state.grid!==grid)CreatorEarlyTakeover.release(state,state.grid,{restoreLayout:true});state.grid=grid;grid.hidden=false;grid.style.removeProperty('display');grid.style.setProperty('visibility','hidden','important');grid.style.setProperty('pointer-events','none','important');grid.setAttribute('aria-hidden','true');grid.dataset.pmfEarlyConcealed='true';},
     begin(context,{signal,knownCatalogue=false}={}){
-      CreatorEarlyTakeover.cleanup({restore:true});if(!knownCatalogue&&!App.cataloguePostCount())return null;const state={context,grid:null,shell:null,timer:null,handedOff:false};CreatorEarlyTakeover.active=state;
-      const conceal=()=>{const page=Route.parsePage(location.href);if(signal?.aborted||page.kind!=='creator'||page.context.creatorKey!==context.creatorKey)return;const dom=PawchiveDOM.find(context);if(!dom?.grid?.isConnected)return;if(state.grid&&state.grid!==dom.grid){state.grid.hidden=false;state.grid.style.removeProperty('display');}state.grid=dom.grid;state.grid.hidden=true;state.grid.style.setProperty('display','none','important');state.grid.setAttribute('aria-hidden','true');if(!state.shell?.isConnected){const shell=document.createElement('section');shell.id='pmf-creator-early-shell';shell.dataset.pmfOwned='true';shell.setAttribute('role','status');shell.innerHTML='<strong>Loading local catalogue…</strong><span>Restoring filters, sorting, and scanned posts.</span>';dom.grid.insertAdjacentElement('beforebegin',shell);state.shell=shell;}};
+      CreatorEarlyTakeover.cleanup({restore:true});if(!knownCatalogue&&!App.cataloguePostCount())return null;const state={context,grid:null,shell:null,timer:null,handedOff:false,originals:new WeakMap()};CreatorEarlyTakeover.active=state;
+      const conceal=()=>{const page=Route.parsePage(location.href);if(signal?.aborted||page.kind!=='creator'||page.context.creatorKey!==context.creatorKey)return;const dom=PawchiveDOM.find(context);if(!dom?.grid?.isConnected)return;CreatorEarlyTakeover.conceal(state,dom.grid);if(!state.shell?.isConnected){const shell=document.createElement('section');shell.id='pmf-creator-early-shell';shell.dataset.pmfOwned='true';shell.setAttribute('role','status');shell.innerHTML='<strong>Loading local catalogue…</strong><span>Restoring filters, sorting, and scanned posts.</span>';dom.grid.insertAdjacentElement('beforebegin',shell);state.shell=shell;}};
       state.timer=setInterval(conceal,25);conceal();signal?.addEventListener('abort',()=>CreatorEarlyTakeover.cleanup({restore:true}),{once:true});return state;
     },
-    handoff(dom){const state=CreatorEarlyTakeover.active;if(!state)return;if(dom?.grid){state.grid=dom.grid;state.grid.hidden=true;state.grid.style.setProperty('display','none','important');state.grid.setAttribute('aria-hidden','true');}state.handedOff=true;clearInterval(state.timer);state.timer=null;},
-    cleanup({restore=false}={}){const state=CreatorEarlyTakeover.active;if(!state)return;clearInterval(state.timer);state.shell?.remove();if(restore&&state.grid?.isConnected){state.grid.hidden=false;state.grid.style.removeProperty('display');state.grid.removeAttribute('aria-hidden');}CreatorEarlyTakeover.active=null;},
+    handoff(dom){const state=CreatorEarlyTakeover.active;if(!state)return;if(dom?.grid)CreatorEarlyTakeover.conceal(state,dom.grid);state.handedOff=true;clearInterval(state.timer);state.timer=null;},
+    cleanup({restore=false}={}){const state=CreatorEarlyTakeover.active;if(!state)return;clearInterval(state.timer);state.shell?.remove();CreatorEarlyTakeover.release(state,state.grid,{restoreLayout:restore});CreatorEarlyTakeover.active=null;},
   };
 
   const CreatorPageController = {

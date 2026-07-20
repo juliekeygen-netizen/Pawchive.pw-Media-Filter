@@ -15,8 +15,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Cache,
   } = api;
 
-  assert.equal(Config.version, '0.10.11');
-  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+  assert.equal(Config.version, '0.10.12');
+  assert.match(originalSource, /\/\/ @version\s+0\.10\.12/);
 
   // Aggregate-affecting settings may invalidate a fingerprint, but a structurally
   // compatible summary must remain renderable until its replacement is committed.
@@ -155,7 +155,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(originalSource, /aggregate-settings-change/);
   assert.match(originalSource, /backfillKeys\.delete\(task\.context\.creatorKey\)/);
 
-  console.log('Pawchive Media Filter v0.10.11 live-finding regression tests passed.');
+  console.log('Pawchive Media Filter v0.10.12 live-finding regression tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

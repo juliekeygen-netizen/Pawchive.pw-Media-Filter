@@ -1,4 +1,14 @@
-# Pawchive.pw Media Filter v0.10.11 testing
+# Pawchive.pw Media Filter v0.10.12 testing
+
+## v0.10.12 creator native-card visibility matrix
+
+Run `node tests/v01012-creator-native-visibility.cjs`, `node --check pawchive-pw-media-filter.user.js`, and the complete suite; 47 executable tests must pass.
+
+1. Open a genuinely unscanned creator. Pawchive's native post cards must remain visible; PMF must not show a Local-catalogue loading shell or hide the native grid.
+2. Open a scanned creator with a retained Catalogue. A short `Loading local catalogue…` shell is acceptable, but the final compact grid must contain visible cards rather than only toolbar and paginators.
+3. Hard-refresh the same scanned creator and repeat creator → Back → creator navigation. Compact cards must keep non-zero width/height on every mount.
+4. Temporarily disable or clear the creator Catalogue, then reload. Native cards must return immediately and no stale `visibility:hidden`, `display:none`, or `aria-hidden` ownership may remain.
+5. Confirm 1080p and 1440p compact card sizing still matches v0.10.11 after the visibility repair.
 
 ## v0.10.11 artists navigation and layout matrix
 
