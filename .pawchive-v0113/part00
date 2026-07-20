@@ -1,0 +1,103 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index d2df9f3..e5d4add 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,15 @@
+ # Changelog
+ 
++## 0.11.3
++
++- Compacted Native directory pagination on phones to First, Previous, current page, Next, and Last so the creator list no longer gains an oversized multi-row page strip.
++- Bounded mobile Bulk Scan, Update, and Resume previews inside a short scrolling region while keeping Cancel and Queue actions permanently reachable in the dialog footer.
++- Moved **Reset all settings** out of the main modal footer and into **Data & performance → Backup and reset**.
++- Added portable JSON Export / Import for the complete local IndexedDB catalogue, creator and post statuses, creator-directory snapshots, UI state, settings, saved filter state, post presets, and creator presets.
++- Import supports file picking and drag-and-drop, selectable Catalogue / Settings / Presets groups, and Catalogue **Merge** or **Replace** conflict handling; active creator queues must finish or stop before importing.
++- Confirmed settings and both preset systems continue using their stable persisted storage keys across userscript updates, with focused import/persistence regression coverage.
++- Added focused v0.11.3 portability and mobile-correction coverage; 52 executable tests now pass.
++
+ ## 0.11.2
+ 
+ - Added a dedicated responsive mobile layout for post and creator Settings: setting names stack above controls, toggle/chevron rows remain compact, textareas/selects use the available width, and labels no longer collapse into vertical letter columns.
+diff --git a/README.md b/README.md
+index c53ade5..48735da 100644
+--- a/README.md
++++ b/README.md
+@@ -2,12 +2,19 @@
+ 
+ Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
+ 
+-Current version: **0.11.2**
++Current version: **0.11.3**
+ 
+ ## Installation
+ 
+ [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+ 
++## v0.11.3 backup and mobile corrections
++
++- Native directory pagination uses a compact five-button mobile layout.
++- Bulk creator previews are scroll-bounded so Queue and Cancel remain reachable.
++- Reset all settings lives under **Data & performance → Backup and reset**.
++- **Export / Import catalogue** creates or restores a portable JSON backup containing local catalogue records, statuses, settings, and both preset systems. Imports may merge with the current catalogue or replace it.
++
+ ## v0.11.2 mobile-responsive interface
+ 
+ The PMF interface now has a dedicated phone and small-tablet layout. Settings rows stack the setting name above its select, input, or textarea instead of squeezing labels into a narrow desktop column. Checkbox rows retain a compact checkbox-and-chevron layout. Settings tabs scroll horizontally without wrapping, automatically center the selected tab, and the modal uses the dynamic viewport plus safe-area padding so its content and Save/Cancel actions remain reachable above mobile browser controls.
+diff --git a/SPEC.md b/SPEC.md
+index 7a9b1eb..5feaea9 100644
+--- a/SPEC.md
++++ b/SPEC.md
+@@ -1,4 +1,4 @@
+-# Pawchive.pw Media Filter v0.11.2 specification
++# Pawchive.pw Media Filter v0.11.3 specification
+ 
+ ## Scope
+ 
+@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`.
+ 
+ ## Persistent identifiers
+ 
+-- Userscript and `Config.version`: `0.11.2`
++- Userscript and `Config.version`: `0.11.3`
+ - Settings: `pmf-settings-v5`
+ - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
+ - Presets: existing key, schema 1
+@@ -23,6 +23,15 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`.
+ - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
+ - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+ 
++## v0.11.3 portability and compact-mobile contracts
++
++- At phone widths the Native directory mirror renders only First, Previous, the current numbered page, Next, and Last.
++- Bulk creator dialogs keep their footer visible and constrain the preview to an internal scrolling region.
++- Reset all settings is a Data & performance action, not a primary modal-footer action.
++- Backups use format `pawchive-media-filter-backup`, format version 1, and include all IndexedDB stores used by the local catalogue plus persisted settings/filter state and both post/creator preset records.
++- Catalogue import offers merge (retain existing keys and upsert imported records) and replace (clear included catalogue stores before import). Settings and presets are independently selectable.
++- Import is rejected while creator jobs are active or waiting, then reloads the page after a successful restore so every controller reads the imported state cleanly.
++
+ ## v0.11.2 mobile UI contracts
+ 
+ - At CSS viewport widths of 760 px or less, Settings field rows must stack the setting title above the control. Labels must wrap by words rather than collapsing into one-character columns.
+diff --git a/TESTING.md b/TESTING.md
+index d4df59f..549d345 100644
+--- a/TESTING.md
++++ b/TESTING.md
+@@ -1,4 +1,17 @@
+-# Pawchive.pw Media Filter v0.11.2 testing
++# Pawchive.pw Media Filter v0.11.3 testing
++
++## v0.11.3 portability and compact-mobile matrix
++
++Run `node tests/v0113-portability-and-mobile-corrections.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 52 executable tests.
++
++Live checks:
++
++1. On a phone, Native directory pagination shows only five controls and still changes pages from both paginator positions.
++2. Open Bulk Scan, Update, and Resume with 50+ selected creators; scroll the preview while Cancel and Queue remain visible.
++3. Verify Reset all settings appears only inside Data & performance and updates the visible draft values.
++4. Export a backup, inspect that a `.json` file downloads, then import it by file picker and by drag-and-drop.
++5. Test merge against an existing catalogue and replace against disposable data. Confirm creator cards, posts, statuses, settings, post presets, and creator presets survive the reload.
++6. Start or queue a creator scan and verify import refuses to run until the queue is stopped or completed.
+ 
+ ## v0.11.2 mobile responsive matrix
+ 
