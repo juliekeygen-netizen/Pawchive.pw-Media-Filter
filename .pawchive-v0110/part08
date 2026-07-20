@@ -1,0 +1,41 @@
++        help.textContent = selectedScope === 'all' ? 'The updater streams bounded IndexedDB chunks and never loads the complete library into memory. You will confirm a stored-post upper bound before it starts.' : 'Structured post details are checked first. After repeated unsupported responses for a service, the updater skips that redundant request and goes directly to HTML. HTML fallback uses up to two adaptive workers.';
+       };
+       select.addEventListener('change', sync);
+       sync();
+@@ -4689,7 +4810,8 @@ sync() {
+       for(const field of ['favorite','liked','seen']){const button=document.createElement('button');button.type='button';button.dataset.pmfQuickStatus=field;button.setAttribute('aria-pressed','false');button.innerHTML=`<span class="pmf-quick-status-main">${PostStatus.icon(field)}</span><span class="pmf-quick-status-negate">${Icons.x}</span>`;statusFilters.append(button);}
+       const filteredControls=document.createElement('div');filteredControls.className='pmf-page-controls';paginator.append(statusFilters,filteredCount,filteredControls);App.dom.grid.insertAdjacentElement('beforebegin',paginator);
+       const grid=UI.own(document.createElement('div'));grid.className=`${App.dom.grid.className} pmf-filter-grid`;grid.hidden=true;App.dom.grid.insertAdjacentElement('afterend',grid);
+-      App.ui={root,toolbar,controls,filterButton,sortButton,scanButton,settingsButton,statusLeft,statusActions,statusRight,progress,progressBar,details,paginator,filteredCount,statusFilters,filteredControls,grid,filterPopover:null,editor:null,settings:null,sortMenu:null};UI.bind();UI.updateFilterButton();UI.updateSortButton();UI.updateQuickStatusFilters();
++      const paginatorBottom=UI.own(document.createElement('div'));paginatorBottom.className='pmf-filtered-paginator pmf-bottom-paginator';paginatorBottom.hidden=true;const filteredCountBottom=document.createElement('small');filteredCountBottom.className='pmf-filtered-count';const filteredControlsBottom=document.createElement('div');filteredControlsBottom.className='pmf-page-controls';paginatorBottom.append(filteredCountBottom,filteredControlsBottom);grid.insertAdjacentElement('afterend',paginatorBottom);
++      App.ui={root,toolbar,controls,filterButton,sortButton,scanButton,settingsButton,statusLeft,statusActions,statusRight,progress,progressBar,details,paginator,filteredCount,statusFilters,filteredControls,paginatorBottom,filteredCountBottom,filteredControlsBottom,grid,filterPopover:null,editor:null,settings:null,sortMenu:null};UI.bind();UI.updateFilterButton();UI.updateSortButton();UI.updateQuickStatusFilters();
+     },
+     updateFilterButton(){if(!App.ui)return;App.ui.filterButton.textContent=UI.filterLabel();App.ui.filterButton.setAttribute('aria-label',`Media filters: ${UI.filterLabel()}`);},
+     selectSettingsTab(name){App.ui.settings.querySelectorAll('[data-pmf-settings-tab]').forEach(button=>button.classList.toggle('pmf-active',button.dataset.pmfSettingsTab===name));App.ui.settings.querySelectorAll('[data-pmf-settings-panel]').forEach(panel=>{panel.hidden=panel.dataset.pmfSettingsPanel!==name;});queueMicrotask(()=>App.ui?.settings?.querySelectorAll(`[data-pmf-settings-panel="${name}"] textarea`).forEach(UI.autoSizeTextarea));},
+@@ -4788,10 +4910,17 @@ sync() {
+       App.ui.scanButton.addEventListener('click', () => Catalogue.primaryAction(), { signal });
+       App.ui.settingsButton.addEventListener('click', () => UI.openSettings(), { signal });
+       App.ui.details.addEventListener('click',(event)=>{const retry=event.target.closest('[data-pmf-retry-incomplete]');if(!retry||retry.disabled)return;Catalogue.retryIncompleteMetadata();},{signal});
+-      App.ui.filteredControls.addEventListener('click', (event) => {
+-        const button=event.target.closest('button[data-pmf-page-action]');if(!button||button.disabled)return;
+-        Paginator.activate(button.dataset.pmfPageAction,button.dataset.pmfPage);
+-      }, { signal });
++      const activateFilteredPage=(event)=>{const button=event.target.closest('button[data-pmf-page-action]');if(!button||button.disabled)return;Paginator.activate(button.dataset.pmfPageAction,button.dataset.pmfPage);};
++      App.ui.filteredControls.addEventListener('click',activateFilteredPage,{signal});
++      App.ui.filteredControlsBottom.addEventListener('click',activateFilteredPage,{signal});
++      App.ui.paginatorBottom.addEventListener('click',(event)=>{const index=event.target.closest('[data-native-paginator-index]')?.dataset.nativePaginatorIndex;if(index!==undefined)NativePaginatorMirror.activate(App.dom.topPaginator,index);},{signal});
++      document.addEventListener('keydown',(event)=>{
++        if(!['ArrowLeft','ArrowRight'].includes(event.key)||event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||OverlayManager.top())return;
++        const target=event.target;if(target?.closest?.('input,textarea,select,button,[contenteditable="true"],[role="textbox"]'))return;
++        const role=event.key==='ArrowRight'?'next':'previous';
++        const changed=App.cataloguePostCount()?Paginator.activate(role):NativePaginatorMirror.activateRole(App.dom.topPaginator,role);
++        if(changed){event.preventDefault();event.stopImmediatePropagation();}
++      },{capture:true,signal});
+       App.ui.statusFilters.addEventListener('click',(event)=>{
+         const button=event.target.closest('[data-pmf-quick-status]');if(!button)return;const field=button.dataset.pmfQuickStatus;
+         PostStatusFilters.cycle(field);App.filteredPage=1;App.filteredFirstResultIndex=0;App.filteredAnchorId='';App.render();UI.updateQuickStatusFilters();
+@@ -4983,8 +5112,28 @@ sync() {
+       App.creatorMeta=meta;App.catalogueState=CatalogueModel.normalize(meta||{});App.catalog=new Map(posts.map((post)=>[String(post.id),post]));App.totalPosts=Math.max(0,Number(meta?.totalPosts)||posts.length);App.totalPages=Math.max(0,Number(meta?.totalPages)||Math.ceil(App.totalPosts/Config.pageSize));App.addNativeStubs();App.persistUIState();App.render();
+     },
+     confirmClear(kind) {
+-      const configs={'catalogue-creator':{title:"Clear this creator's full catalogue scan?",paragraphs:["This deletes this creator's locally stored posts, page coverage, summary, retry state, and update timestamps. Presets and other creators are not affected."],label:'Clear creator scan',creator:true},'catalogue-all':{title:'Clear all full catalogue scans?',paragraphs:['This deletes every locally stored creator catalogue. Presets and global settings are not affected.'],label:'Clear all scans',creator:false}};const config=configs[kind];if(!config)return;
