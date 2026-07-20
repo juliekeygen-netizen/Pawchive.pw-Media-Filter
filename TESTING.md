@@ -1,4 +1,11 @@
-# Pawchive.pw Media Filter v0.11.5 testing
+# Pawchive.pw Media Filter v0.11.6 testing
+
+## v0.11.6 import-dialog cleanup matrix
+
+Run `node tests/v0116-import-dialog-actions.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 55 executable tests.
+
+1. Open **Export / Import catalogue**, choose **Import backup**, and confirm neither a top Back control nor a footer Back button appears.
+2. Confirm **Cancel**, **Import backup**, and the header close button remain usable.
 
 ## v0.11.4 backup-integrity audit matrix
 

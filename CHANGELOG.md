@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.6
+
+- Removed both redundant Back controls from the Import backup view; the dialog now keeps only Cancel, Import backup, and the header close button.
+- Added focused v0.11.6 import-dialog regression coverage; 55 executable tests now pass.
+
 ## 0.11.5
 
 - Replaced whole-backup `JSON.stringify` with bounded JSON-Lines serialization so very large catalogues no longer fail export with `Invalid string length`.

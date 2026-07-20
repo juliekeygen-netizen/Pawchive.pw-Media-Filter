@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.11.5 specification
+# Pawchive.pw Media Filter v0.11.6 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.11.5`
+- Userscript and `Config.version`: `0.11.6`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -22,6 +22,10 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.11.6 import-dialog action contract
+
+- The Import backup view has one dismissal action in its footer: **Cancel**. It has no Back control above the form or in the footer. The header close button remains available.
 
 ## v0.11.4 backup-integrity contracts
 
