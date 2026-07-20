@@ -1,4 +1,17 @@
-# Pawchive.pw Media Filter v0.11.2 testing
+# Pawchive.pw Media Filter v0.11.3 testing
+
+## v0.11.3 portability and compact-mobile matrix
+
+Run `node tests/v0113-portability-and-mobile-corrections.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 52 executable tests.
+
+Live checks:
+
+1. On a phone, Native directory pagination shows only five controls and still changes pages from both paginator positions.
+2. Open Bulk Scan, Update, and Resume with 50+ selected creators; scroll the preview while Cancel and Queue remain visible.
+3. Verify Reset all settings appears only inside Data & performance and updates the visible draft values.
+4. Export a backup, inspect that a `.json` file downloads, then import it by file picker and by drag-and-drop.
+5. Test merge against an existing catalogue and replace against disposable data. Confirm creator cards, posts, statuses, settings, post presets, and creator presets survive the reload.
+6. Start or queue a creator scan and verify import refuses to run until the queue is stopped or completed.
 
 ## v0.11.2 mobile responsive matrix
 

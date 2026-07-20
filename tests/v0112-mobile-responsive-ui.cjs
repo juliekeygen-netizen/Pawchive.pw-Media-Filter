@@ -6,8 +6,8 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config, SettingsUI } = api;
 
-assert.equal(Config.version, '0.11.2');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
+assert.equal(Config.version, '0.11.3');
+assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
 
 // Settings rows expose stable semantic classes so mobile CSS can stack
 // title and control without guessing from child order.
@@ -65,4 +65,4 @@ assert.ok(originalSource.includes('preferredWidth=mobile?Math.max(rect.width,Mat
 assert.ok(originalSource.includes('const spaceBelow=viewportHeight-rect.bottom-8'));
 assert.ok(originalSource.includes("menu.style.maxWidth='calc(100vw - 16px)'"));
 
-console.log('Pawchive Media Filter v0.11.2 mobile responsive UI tests passed.');
+console.log('Pawchive Media Filter v0.11.3 mobile responsive UI tests passed.');

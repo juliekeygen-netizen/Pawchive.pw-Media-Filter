@@ -2,11 +2,18 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.11.2**
+Current version: **0.11.3**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.11.3 backup and mobile corrections
+
+- Native directory pagination uses a compact five-button mobile layout.
+- Bulk creator previews are scroll-bounded so Queue and Cancel remain reachable.
+- Reset all settings lives under **Data & performance → Backup and reset**.
+- **Export / Import catalogue** creates or restores a portable JSON backup containing local catalogue records, statuses, settings, and both preset systems. Imports may merge with the current catalogue or replace it.
 
 ## v0.11.2 mobile-responsive interface
 

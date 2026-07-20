@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.11.3
+
+- Compacted Native directory pagination on phones to First, Previous, current page, Next, and Last so the creator list no longer gains an oversized multi-row page strip.
+- Bounded mobile Bulk Scan, Update, and Resume previews inside a short scrolling region while keeping Cancel and Queue actions permanently reachable in the dialog footer.
+- Moved **Reset all settings** out of the main modal footer and into **Data & performance → Backup and reset**.
+- Added portable JSON Export / Import for the complete local IndexedDB catalogue, creator and post statuses, creator-directory snapshots, UI state, settings, saved filter state, post presets, and creator presets.
+- Import supports file picking and drag-and-drop, selectable Catalogue / Settings / Presets groups, and Catalogue **Merge** or **Replace** conflict handling; active creator queues must finish or stop before importing.
+- Confirmed settings and both preset systems continue using their stable persisted storage keys across userscript updates, with focused import/persistence regression coverage.
+- Added focused v0.11.3 portability and mobile-correction coverage; 52 executable tests now pass.
+
 ## 0.11.2
 
 - Added a dedicated responsive mobile layout for post and creator Settings: setting names stack above controls, toggle/chevron rows remain compact, textareas/selects use the available width, and labels no longer collapse into vertical letter columns.

@@ -11,8 +11,8 @@ const {
   CatalogueJobManager, NativeActionAlignment,
 } = api;
 
-assert.equal(Config.version, '0.11.2');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
+assert.equal(Config.version, '0.11.3');
+assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
 assert.equal(Config.databaseVersion, 5);
 assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
 assert.match(originalSource, /createObjectStore\('creatorStates'/);
@@ -162,4 +162,4 @@ assert.match(originalSource, /CreatorPresets\.apply/);
 assert.match(originalSource, /records\.forEach\(\(record\)=>ArtistsPageController\.scheduleBackfill/);
 assert.doesNotMatch(originalSource, /width:\s*100vw/);
 
-console.log('Pawchive Media Filter v0.11.2 unified creator index and queue tests passed.');
+console.log('Pawchive Media Filter v0.11.3 unified creator index and queue tests passed.');

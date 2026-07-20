@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.11.2 specification
+# Pawchive.pw Media Filter v0.11.3 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.11.2`
+- Userscript and `Config.version`: `0.11.3`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -22,6 +22,15 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.11.3 portability and compact-mobile contracts
+
+- At phone widths the Native directory mirror renders only First, Previous, the current numbered page, Next, and Last.
+- Bulk creator dialogs keep their footer visible and constrain the preview to an internal scrolling region.
+- Reset all settings is a Data & performance action, not a primary modal-footer action.
+- Backups use format `pawchive-media-filter-backup`, format version 1, and include all IndexedDB stores used by the local catalogue plus persisted settings/filter state and both post/creator preset records.
+- Catalogue import offers merge (retain existing keys and upsert imported records) and replace (clear included catalogue stores before import). Settings and presets are independently selectable.
+- Import is rejected while creator jobs are active or waiting, then reloads the page after a successful restore so every controller reads the imported state cleanly.
 
 ## v0.11.2 mobile UI contracts
 
