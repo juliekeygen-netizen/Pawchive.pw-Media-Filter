@@ -1,0 +1,72 @@
+     aggregate(snapshot=CatalogueJobManager.snapshot()){const batches=snapshot.batches||[];if(batches.length){const counts=batches.map((batch)=>CatalogueJobManager.batchCounts(batch.id));return counts.reduce((sum,item)=>({total:sum.total+item.total,active:sum.active+item.active,waiting:sum.waiting+item.waiting,completed:sum.completed+item.completed,failed:sum.failed+item.failed,stopped:sum.stopped+item.stopped,removed:sum.removed+item.removed,finished:sum.finished+item.finished,remaining:sum.remaining+item.remaining}),{total:0,active:0,waiting:0,completed:0,failed:0,stopped:0,removed:0,finished:0,remaining:0});}const recent=snapshot.recent||[],completed=recent.filter((job)=>job.status==='complete').length,failed=recent.filter((job)=>job.status==='failed').length,stopped=recent.filter((job)=>['stopped','interrupted'].includes(job.status)).length,active=(snapshot.active||[]).length,waiting=(snapshot.pending||[]).length,finished=completed+failed+stopped;return{total:finished+active+waiting,active,waiting,completed,failed,stopped,removed:0,finished,remaining:active+waiting};},
+@@ -3221,7 +3324,7 @@ sync() {
+         const extensions = (post.fileExtensions || []).filter((ext) => App.filterState.customExtensions.values.includes(ext));
+         return { present: count > 0, count, icon: Icons.file, noun: 'custom-extension attachment', extensions: Util.unique(extensions) };
+       }
+-      const count = App.filterState.externalLinks.scope === 'any' ? post.externalLinkCount : post.mediaDownloadLinkCount;
++      const count = ExternalLinkDetector.countForScope(post,App.filterState.externalLinks.scope);
+       return { present: count > 0, count, icon: Icons.link, noun: App.filterState.externalLinks.scope === 'any' ? 'external link' : 'media/download link', extensions: [] };
+     },
+     create(post, category, { allowKeywordProject = true } = {}) {
+@@ -3892,24 +3995,16 @@ sync() {
+       if (rememberedPage !== App.filteredPage) App.persistUIState();
+       const start = count ? (App.filteredPage - 1) * pageSize + 1 : 0;
+       const end = Math.min(count, App.filteredPage * pageSize);
+-      App.ui.filteredCount.textContent = count ? `Showing ${start}–${end} of ${count}` : 'Showing 0 of 0';
+-      const controls = App.ui.filteredControls;
+-      controls.replaceChildren();
+-      const add = (label, action, page, disabled, aria) => {
+-        const button = document.createElement('button');
+-        button.type = 'button'; button.textContent = label; button.disabled = disabled;
+-        button.setAttribute('aria-label', aria);button.dataset.pmfPageAction=action;
+-        if(action==='page')button.dataset.pmfPage=String(page);
+-        controls.append(button);
++      const renderInto=(countNode,controls,host)=>{
++        if(!countNode||!controls)return;
++        countNode.textContent=count?`Showing ${start}–${end} of ${count}`:'Showing 0 of 0';controls.replaceChildren();
++        const add=(label,action,page,disabled,aria)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.setAttribute('aria-label',aria);button.dataset.pmfPageAction=action;if(action==='page')button.dataset.pmfPage=String(page);controls.append(button);};
++        add('«','first',1,App.filteredPage===1,'First filtered page');add('‹','previous',0,App.filteredPage===1,'Previous filtered page');
++        for(const page of Paginator.pageButtons(App.filteredPage,totalPages,Paginator.windowSize(Number(host?.clientWidth)||800))){add(String(page),'page',page,page===App.filteredPage,`Filtered page ${page}`);controls.lastElementChild.classList.toggle('pmf-current-page',page===App.filteredPage);}
++        add('›','next',0,App.filteredPage===totalPages,'Next filtered page');add('»','last',totalPages,App.filteredPage===totalPages,'Last filtered page');
+       };
+-      add('«','first',1,App.filteredPage===1,'First filtered page');
+-      add('‹','previous',0,App.filteredPage===1,'Previous filtered page');
+-      for (const page of Paginator.pageButtons(App.filteredPage,totalPages,Paginator.windowSize())) {
+-        add(String(page),'page',page,page===App.filteredPage,`Filtered page ${page}`);
+-        controls.lastElementChild.classList.toggle('pmf-current-page', page === App.filteredPage);
+-      }
+-      add('›','next',0,App.filteredPage===totalPages,'Next filtered page');
+-      add('»','last',totalPages,App.filteredPage===totalPages,'Last filtered page');
++      renderInto(App.ui.filteredCount,App.ui.filteredControls,App.ui.paginator);
++      if(App.ui.paginatorBottom){if(!App.ui.filteredCountBottom.isConnected||!App.ui.paginatorBottom.contains(App.ui.filteredCountBottom))App.ui.paginatorBottom.replaceChildren(App.ui.filteredCountBottom,App.ui.filteredControlsBottom);renderInto(App.ui.filteredCountBottom,App.ui.filteredControlsBottom,App.ui.paginatorBottom);}
+     },
+   };
+ 
+@@ -3945,7 +4040,17 @@ sync() {
+     listeners: new Set(),
+     htmlActive: 0,
+     htmlWaiters: [],
++    structuredCapabilities: new Map(),
+     scanChunkSize: 500,
++    maxConcurrency(){return Util.clamp(Number(Settings.value.concurrency)||3,1,5);},
++    htmlConcurrency(){return Math.min(2,MissingAttachmentMaintenance.maxConcurrency());},
++    capabilityKey(post){return `${location.hostname}|${String(post?.service||'')}`;},
++    noteStructuredCapability(post,known,{unsupported=false}={}){
++      const key=MissingAttachmentMaintenance.capabilityKey(post);const prior=MissingAttachmentMaintenance.structuredCapabilities.get(key)||{samples:0,hits:0,misses:0,unsupported:false};
++      const next={...prior,samples:prior.samples+1,hits:prior.hits+(known?1:0),misses:prior.misses+(known?0:1),unsupported:prior.unsupported||unsupported};
++      if(!next.unsupported&&next.samples>=8&&next.hits===0)next.unsupported=true;
++      MissingAttachmentMaintenance.structuredCapabilities.set(key,next);return next;
++    },
+     checkpoint() {
+       return GM_getValue(Config.missingAttachmentMaintenanceKey, null);
+     },
+@@ -4148,10 +4253,13 @@ sync() {
+     async fetchStructured(post, signal) {
+       const stored = PostMissingStats.fromRaw(post);
+       if (stored.missingStatsKnown && (Number(stored.missingStatsParserVersion) || 0) >= PostMissingStats.parserVersion) return stored;
++      const capability=MissingAttachmentMaintenance.structuredCapabilities.get(MissingAttachmentMaintenance.capabilityKey(post));
++      if(capability?.unsupported)return null;
+       const url = new URL(`/api/v1/${post.service}/user/${post.creatorId}/post/${post.id}`, location.origin).href;
+       await CatalogueRequestScheduler.waitTurn({ signal, operation: 'missing-attachment-maintenance', creatorKey: post.creatorKey, requestKind: 'post-detail-api' });
+       const response = await fetch(url, { credentials: 'same-origin', signal, headers: { Accept: 'application/json' } });
+-      if (response.status === 404 || response.status === 405) return null;
