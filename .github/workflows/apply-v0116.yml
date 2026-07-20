@@ -33,7 +33,7 @@ jobs:
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "04ad0aec7a42e3b7344c7fc65e15c35192616ab6"
           grep -q '@version      0.11.5' pawchive-pw-media-filter.user.js
           git show "origin/$GITHUB_HEAD_REF:.pawchive-v0116/patch.b64" | base64 -d | gzip -d > /tmp/pawchive-v0116.patch
-          test "$(sha256sum /tmp/pawchive-v0116.patch | awk '{print $1}')" = "68c9a0a45b25df7f094638fdb24f238934eb418c1df0bac008919dbb6b6f33ef"
+          test "$(sha256sum /tmp/pawchive-v0116.patch | awk '{print $1}')" = "32c1d723d0d52fd6bbe1eca2ae0c2c9d44da03ddd632a386998fcec0ec7187c0"
           git apply --check /tmp/pawchive-v0116.patch
           git apply /tmp/pawchive-v0116.patch
 
