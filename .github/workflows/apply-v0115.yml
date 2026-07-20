@@ -32,7 +32,13 @@ jobs:
           git checkout -B master origin/master
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c4eb74eb378cab66c8ef669b98ec0377a6cd3af7"
           grep -q '@version      0.11.4' pawchive-pw-media-filter.user.js
-          git show "origin/$GITHUB_HEAD_REF:.pawchive-v0115/patch.b64" | base64 -d | gzip -d > /tmp/pawchive-v0115.patch
+          : > /tmp/pawchive-v0115.patch.gz.b64
+          for part in 00 01 02 03 04 05; do
+            git show "origin/$GITHUB_HEAD_REF:.pawchive-v0115/part${part}" >> /tmp/pawchive-v0115.patch.gz.b64
+          done
+          test "$(wc -c < /tmp/pawchive-v0115.patch.gz.b64 | tr -d ' ')" = "16212"
+          test "$(git hash-object /tmp/pawchive-v0115.patch.gz.b64)" = "9237fde015f41e9718de2e0fcefde3b1bb59b33f"
+          base64 -d /tmp/pawchive-v0115.patch.gz.b64 | gzip -d > /tmp/pawchive-v0115.patch
           test "$(sha256sum /tmp/pawchive-v0115.patch | awk '{print $1}')" = "60213c721fd946bc45082fda9c0623bfdde905c3f9c9d6d2df2195c70d5d43fa"
           git apply --check /tmp/pawchive-v0115.patch
           git apply /tmp/pawchive-v0115.patch
@@ -58,6 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf .pawchive-v0115
           rm -f .github/workflows/apply-v0115.yml
           rmdir .github/workflows 2>/dev/null || true
           rmdir .github 2>/dev/null || true
