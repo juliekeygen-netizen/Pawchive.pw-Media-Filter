@@ -1,4 +1,17 @@
-# Pawchive.pw Media Filter v0.10.10 testing
+# Pawchive.pw Media Filter v0.10.11 testing
+
+## v0.10.11 artists navigation and layout matrix
+
+Run `node tests/v01011-artists-navigation-layout.cjs`, `node --check pawchive-pw-media-filter.user.js`, and the complete suite; 46 executable tests must pass. Automated DOM fixtures do not replace the following authenticated browser checks.
+
+1. At 1920×1080, compare Local catalogue against v0.10.10 and confirm its useful width/card size has not been enlarged unnecessarily. At 2560×1440, confirm the Local catalogue expands substantially, cards are visibly larger, text remains readable, no card overlaps its right rail, and the grid does not remain capped as a narrow 1540-pixel island.
+2. In Native directory, click page numbers and First/Previous/Next/Last from the top and bottom mirrors. Both mirrors must show the same pending/current page immediately; rapid repeated clicks must produce one native navigation, not two competing generations.
+3. During Native page changes, service changes, sorting, search, Back/Forward, and hard refresh, confirm Native mode never displays PMF reconstructed Local cards beneath Pawchive's native cards. Switch repeatedly to Local catalogue and confirm the native grid is hidden there. Exactly one creator grid may be visible.
+4. While a Native page is loading, inspect the DOM and Console. The controller must reacquire the newly connected native grid, search field, and paginator; top and bottom mirrors must settle on Pawchive's current page, and no stale mirror/root/grid may remain.
+5. Open a creator with a retained scanned Catalogue, return to `/artists`, then repeat creator → Back and creator → another creator. The native creator-post layout should not visibly flash before the PMF filtered/sorted view; a contained “Loading local catalogue…” shell is acceptable. Confirm failures restore Pawchive's native grid instead of leaving a blank page.
+6. Open an unscanned creator. Its native post grid must remain available and PMF must not conceal it merely because the userscript is installed.
+7. Open Bulk Scan, Update, and Retry/Resume. Scan First N must enforce a 1000 maximum. Update and Retry/Resume must accept values above 1000. A preview with more than 100 selected creators must render 100 rows plus `…and N more`, and rows must say Scan, Resume scan, or Update rather than internal `build`/`resume` names.
+8. Recheck multilingual Native alphabetical sorting after the paginator/rebind changes. Japanese, Chinese, numeric, emoji-prefixed, and Latin names must remain Pawchive-authoritative and the selected direction must not change unexpectedly.
 
 ## v0.10.10 consistency and navigation matrix
 

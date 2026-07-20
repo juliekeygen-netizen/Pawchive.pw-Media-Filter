@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config } = api;
 
-assert.equal(Config.version, '0.10.10');
+assert.equal(Config.version, '0.10.11');
 
 const settingsMethod = originalSource.slice(
   originalSource.lastIndexOf('    openSettings() {'),

@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     CreatorState,
   } = api;
 
-  assert.equal(Config.version, '0.10.10');
-  assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
+  assert.equal(Config.version, '0.10.11');
+  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
   assert.doesNotMatch(originalSource, /const LegacyCreatorIndexUI/);
   assert.doesNotMatch(originalSource, /creatorOpenChildBase/);
   assert.match(Cache.scanCataloguePostChunk.toString(), /openCursor/);
@@ -167,7 +167,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(renders, 1);
   assert.deepEqual(CreatorIndexUI.records.map((record) => record.summary.generatedAt), [1, 2, 3]);
 
-  console.log('Pawchive Media Filter v0.10.10 streaming maintenance tests passed.');
+  console.log('Pawchive Media Filter v0.10.11 streaming maintenance tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

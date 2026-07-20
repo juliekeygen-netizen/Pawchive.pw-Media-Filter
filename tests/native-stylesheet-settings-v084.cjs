@@ -9,7 +9,7 @@ const {
   SettingsUI, PostPageController, Lifecycle,
 } = api;
 
-assert.equal(Config.version, '0.10.10');
+assert.equal(Config.version, '0.10.11');
 assert.equal(Config.schemaVersion, 2);
 assert.equal(Config.databaseVersion, 5);
 assert.equal(Config.settingsKey, 'pmf-settings-v5');

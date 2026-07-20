@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.10 specification
+# Pawchive.pw Media Filter v0.10.11 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.10`
+- Userscript and `Config.version`: `0.10.11`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -21,6 +21,15 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.10.11 artists navigation and display contracts
+
+- `/artists` has exactly one visible creator grid. Native mode shows Pawchive's connected native grid and hides the PMF Local grid with an authoritative hidden/display contract; Local catalogue mode does the inverse. A disconnected or replaced native grid must be reacquired before rendering or navigation continues.
+- The artists observer attaches to a stable native result container rather than only the replaceable grid node. PMF-owned mutations are ignored, native replacements trigger one debounced rebind, and stale asynchronous refreshes cannot overwrite newer DOM references.
+- Top and bottom Native paginator mirrors share one pending navigation state. A click updates both mirrors immediately, starts exactly one native action, blocks duplicate clicks while pending, and reconciles from Pawchive's new current-page control after DOM replacement.
+- Local catalogue retains the current 1080p dimensions. At desktop widths of at least 2200 CSS pixels, the root may expand to approximately 1980 pixels and reconstructed creator cards use at least a 108-pixel height so 2560×1440 does not render the catalogue as a narrow, undersized island.
+- When a creator route already has a retained or loaded Catalogue, PMF may hide the native post grid early and show a contained restoration shell until PMF card/template binding completes. If takeover fails, native visibility is restored. A creator with no known Catalogue remains native.
+- Bulk Scan First N remains clamped to 1–1000. Update and Retry/Resume First N have no artificial 1000 maximum. Preview rendering is bounded to 100 rows, followed by a visible `…and N more` summary, and action labels are user-facing rather than internal runner names.
 
 ## v0.10.10 consistency and navigation contracts
 

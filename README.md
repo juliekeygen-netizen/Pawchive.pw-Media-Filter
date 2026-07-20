@@ -2,11 +2,21 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.10**
+Current version: **0.10.11**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.11 artists navigation, responsive layout, and creator-page handoff
+
+Native directory and Local catalogue now have an explicit one-grid visibility contract, including a `display: none !important` override for the PMF Local grid while Native mode is active. The artists controller observes a stable native result container, reacquires replaced Pawchive grid/search/paginator nodes, and discards stale references instead of allowing Native and PMF grids from different generations to remain visible together.
+
+Top and bottom Native paginator mirrors now share one navigation coordinator. Clicking either mirror immediately gives both controls the same pending target, suppresses duplicate navigation while Pawchive is replacing the native DOM, and reconciles both mirrors after the new native page becomes authoritative.
+
+Local catalogue keeps its existing 1080p geometry but uses a wider desktop canvas and a larger minimum reconstructed-card height at 2560-pixel-wide layouts. Creator pages with a known retained or loaded Catalogue conceal the transient native post grid behind a contained PMF restoration shell until the filtered/sorted PMF view takes ownership. Unscanned creator pages continue to use Pawchive's native posts normally.
+
+Bulk creator previews now show `…and N more` after the first 100 rows, use readable Scan/Resume scan/Update labels, retain the 1,000-creator First-N maximum only for Scan, and leave Update/Retry-Resume First-N unrestricted by that artificial UI maximum.
 
 ## v0.10.10 filter consistency, navigation, defaults, and maintenance visibility
 

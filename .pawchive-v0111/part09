@@ -1,2 +1,0 @@
- assert.equal(CompactThumbnailRatio.expectedHeight(320, 4 / 3), 240);
- assert.equal(CompactThumbnailRatio.expectedHeight(320, 16 / 9), 180);

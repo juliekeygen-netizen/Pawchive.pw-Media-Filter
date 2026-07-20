@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.10.11
+
+- Enforced a strict one-grid visibility contract between Native directory and Local catalogue, including an authoritative hidden override for the PMF grid.
+- Added stable-parent native DOM observation and rebind logic so replaced Pawchive grids, search controls, and paginators do not leave stale references or duplicate card generations.
+- Coordinated top and bottom Native paginator mirrors through one immediate pending state with duplicate-navigation protection and post-navigation reconciliation.
+- Added responsive 2560×1440 Local catalogue width/card scaling while preserving the existing 1920×1080 layout.
+- Added an early creator-page PMF restoration shell for known Catalogues to reduce the native-post-layout flash during retained navigation, with native restoration on failure.
+- Added bounded bulk-preview overflow text, readable operation labels, and operation-specific First-N limits: Scan remains capped at 1000 while Update and Retry/Resume are not artificially capped.
+- Added focused v0.10.11 regression coverage; 46 executable tests now pass.
+
 ## 0.10.10
 
 - Unified external-link creator summaries and badges with the same scope and known-host rules used by post filtering and post badges.
