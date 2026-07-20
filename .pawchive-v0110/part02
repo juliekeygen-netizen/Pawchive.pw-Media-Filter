@@ -1,0 +1,132 @@
++          'pixeldrain.com','pixeldrain.net','gofile.io','mediafire.com','streamable.com','redgifs.com'
++        ];
++        const previousKeywords=[
++          'PSD','Photoshop','PSB','CLIP','Clip Studio','CSP','SAI','Krita',
++          'source file','project file','Blender','BLEND','Maya','C4D','Cinema 4D','ZBrush'
++        ];
++        const sameList=(left,right,{lower=false,split=false}={})=>{
++          const normalize=(values)=>(values||[]).flatMap((value)=>split?String(value).split(/[\n,]+/):[value]).map((value)=>String(value).trim()).filter(Boolean).map((value)=>lower?value.toLocaleLowerCase():value);
++          return JSON.stringify(normalize(left))===JSON.stringify(normalize(right));
++        };
++        // Migrate only untouched old defaults. Customized lists remain exactly as saved.
++        if(sameList(source.knownHosts,previousHosts,{lower:true}))next.knownHosts=[...DefaultSettings.knownHosts];
++        if(sameList(source.projectKeywords,previousKeywords,{split:true}))next.projectKeywords=[...DefaultSettings.projectKeywords];
++        next.settingsSchemaVersion=5;
++      }
+       return next;
+     },
+     normalize(source = {}) {
+@@ -291,7 +316,7 @@
+         imageExtensions: extensions(safe.imageExtensions, DefaultSettings.imageExtensions),
+         archiveExtensions: extensions(safe.archiveExtensions, DefaultSettings.archiveExtensions),
+         projectExtensions: extensions(safe.projectExtensions, DefaultSettings.projectExtensions, true),
+-        projectKeywords: Util.unique((safe.projectKeywords || DefaultSettings.projectKeywords).map((value) => String(value).trim()).filter(Boolean)),
++        projectKeywords: Util.unique((safe.projectKeywords || DefaultSettings.projectKeywords).flatMap((value) => String(value).split(/[\n,]+/)).map((value) => value.trim()).filter(Boolean)),
+         projectEvidence: {
+           attachmentFilenames: safe.projectEvidence?.attachmentFilenames !== false,
+           title: safe.projectEvidence?.title !== false,
+@@ -667,6 +692,23 @@
+     },
+   };
+ 
++  const PostClassification = {
++    fingerprint(settings=Settings.value) {
++      const normalized=(values)=>Util.unique((values||[]).map((value)=>String(value).trim().toLocaleLowerCase()).filter(Boolean)).sort();
++      return JSON.stringify({
++        schemaVersion:Config.schemaVersion,
++        videoExtensions:normalized(settings.videoExtensions),
++        imageExtensions:normalized(settings.imageExtensions),
++        archiveExtensions:normalized(settings.archiveExtensions),
++        projectExtensions:normalized(settings.projectExtensions),
++        projectKeywords:normalized(settings.projectKeywords),
++        projectEvidence:{...settings.projectEvidence},
++        knownHosts:normalized(settings.knownHosts),
++        logicVersion:3,
++      });
++    },
++  };
++
+   const ExternalLinkDetector = {
+     normalize(raw, baseUrl) {
+       try {
+@@ -714,6 +756,13 @@
+         likelyMediaLinks: mediaDownloadLinks,
+       };
+     },
++    countForScope(post, scope=Settings.value.externalLinkScope) {
++      if(scope==='any')return Math.max(0,Number(post?.externalLinkCount ?? post?.externalLinks?.length)||0);
++      return Math.max(0,Number(post?.mediaDownloadLinkCount ?? post?.likelyMediaLinkCount ?? post?.mediaDownloadLinks?.length ?? post?.likelyMediaLinks?.length)||0);
++    },
++    matchesScope(post, scope=Settings.value.externalLinkScope) {
++      return ExternalLinkDetector.countForScope(post,scope)>0;
++    },
+   };
+ 
+   const ProjectDetector = {
+@@ -721,7 +770,11 @@
+       return PawchiveData.normalizeTags(raw, { provided:raw !== undefined }).tags;
+     },
+     keywordRegex(keyword) {
+-      const escaped = String(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++      const raw=String(keyword||'');
++      const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++      // CJK text is commonly followed immediately by particles or other Han/Kana.
++      // Word-boundary guards would miss phrases such as プロジェクトファイルを配布.
++      if(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(raw))return new RegExp(escaped,'iu');
+       return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, 'iu');
+     },
+     matches(text, keywords = Settings.value.projectKeywords) {
+@@ -903,6 +956,7 @@
+       return {
+         key: `${context.creatorKey}|${id}`,
+         creatorKey: context.creatorKey,
++        classificationFingerprint: PostClassification.fingerprint(),
+         id,
+         service,
+         creatorId,
+@@ -1195,6 +1249,26 @@
+         return 0;
+       });
+     },
++    async countMissingAttachmentStats({ creatorKeys = [] } = {}) {
++      const totals={total:0,known:0,unknown:0,missing:0,complete:0};
++      let cursor=null;
++      let rounds=0;
++      do{
++        const result=await Cache.scanCataloguePostChunk({cursor,creatorKeys,scanLimit:2000});
++        for(const post of result.records){
++          totals.total+=1;
++          const known=post?.missingStatsKnown===true&&(Number(post.missingStatsParserVersion)||0)>=PostMissingStats.parserVersion;
++          if(!known){totals.unknown+=1;continue;}
++          totals.known+=1;
++          if(post.hasMissingStats===true)totals.missing+=1;else totals.complete+=1;
++        }
++        cursor=result.cursor;
++        rounds+=1;
++        if(result.done)break;
++        if(rounds%10===0)await new Promise((resolve)=>setTimeout(resolve,0));
++      }while(cursor);
++      return totals;
++    },
+     async scanCataloguePostChunk({ cursor = null, creatorKeys = [], scanLimit = 500, signal } = {}) {
+       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+       const limit = Util.clamp(Number(scanLimit) || 500, 1, 2000);
+@@ -1984,7 +2058,7 @@
+       const results = categories.map((category) => ({
+         videos: Boolean(post.hasVideo), images: Boolean(post.hasImages), archives: Boolean(post.hasArchives),
+         projectFiles: Boolean(post.hasProjectFiles),
+-        externalLinks: state.externalLinks.scope === 'any' ? Boolean(post.hasExternalLinks) : Boolean(post.mediaDownloadLinkCount || post.hasLikelyExternalMedia),
++        externalLinks: ExternalLinkDetector.matchesScope(post,state.externalLinks.scope),
+         customExtensions: FilterEngine.customExtensionCount(post, state) > 0,
+       })[category]);
+       return state.media.matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
+@@ -2532,14 +2606,8 @@
+       return JSON.stringify({
+         version:CreatorCatalogueSummary.version,
+         schemaVersion:Config.schemaVersion,
+-        videoExtensions:normalized(settings.videoExtensions),
+-        imageExtensions:normalized(settings.imageExtensions),
+-        archiveExtensions:normalized(settings.archiveExtensions),
+-        projectExtensions:normalized(settings.projectExtensions),
+-        projectKeywords:Util.unique((settings.projectKeywords||[]).map((value)=>String(value).trim().toLocaleLowerCase())).sort(),
+-        projectEvidence:{...settings.projectEvidence},
