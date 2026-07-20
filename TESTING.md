@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.11.4 testing
+# Pawchive.pw Media Filter v0.11.5 testing
 
 ## v0.11.4 backup-integrity audit matrix
 
@@ -9,6 +9,18 @@ Run `node tests/v0114-portability-audit.cjs`, `node --check pawchive-pw-media-fi
 3. Attempt to import a deliberately incomplete backup in Replace mode. Confirm PMF rejects it before any existing catalogue data is removed.
 4. Import a valid backup whose empty stores should replace non-empty local stores. Confirm Replace clears those old records; confirm Merge keeps unmatched local records.
 5. With IndexedDB unavailable, verify creator-page UI state and Favorite snapshot membership are included in the exported JSON and restored into the memory fallback.
+
+## v0.11.5 large-backup streaming matrix
+
+Run `node tests/v0115-large-streaming-backup.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 54 executable tests.
+
+Live checks:
+
+1. Export the same large catalogue that previously displayed `Export failed: Invalid string length`; a `.pmfbackup` download must begin successfully.
+2. Confirm the export status reports the expected creator and post totals after the download starts.
+3. Reopen Import, select or drag the `.pmfbackup`, and confirm the summary appears without loading the whole file as one text string.
+4. Import Settings or Presets only, then test Catalogue Merge on normal data and Replace only after retaining a safe backup.
+5. Select an older `.json` backup and confirm backward-compatible import remains available.
 
 ## v0.11.3 portability and compact-mobile matrix
 

@@ -2,11 +2,17 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.11.4**
+Current version: **0.11.5**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.11.5 large-backup streaming repair
+
+- Export no longer converts the complete catalogue into one giant JavaScript string. It writes a chunked JSON-Lines `.pmfbackup` file, preventing `Invalid string length` on large local catalogues.
+- Import reads `.pmfbackup` files incrementally from the browser file stream, while retaining compatibility with older single-file `.json` backups.
+- Each store record remains ordinary JSON inside the portable backup; Catalogue, Settings, Presets, Merge/Replace, hostname remapping, and validation behavior are unchanged.
 
 ## v0.11.4 backup integrity audit
 
@@ -20,7 +26,7 @@ Current version: **0.11.4**
 - Native directory pagination uses a compact five-button mobile layout.
 - Bulk creator previews are scroll-bounded so Queue and Cancel remain reachable.
 - Reset all settings lives under **Data & performance → Backup and reset**.
-- **Export / Import catalogue** creates or restores a portable JSON backup containing local catalogue records, statuses, settings, and both preset systems. Imports may merge with the current catalogue or replace it.
+- **Export / Import catalogue** creates or restores a portable backup containing local catalogue records, statuses, settings, and both preset systems. Imports may merge with the current catalogue or replace it.
 
 ## v0.11.2 mobile-responsive interface
 

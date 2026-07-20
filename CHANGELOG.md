@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.5
+
+- Replaced whole-backup `JSON.stringify` with bounded JSON-Lines serialization so very large catalogues no longer fail export with `Invalid string length`.
+- New exports download as `.pmfbackup` and are assembled from approximately 1 MiB Blob parts rather than one browser-sized string.
+- Added incremental file-stream parsing for `.pmfbackup` imports while preserving compatibility with existing `.json` backups.
+- Added focused v0.11.5 large-backup regression coverage; 54 executable tests now pass.
+
 ## 0.11.4
 
 - Audited v0.11.3 backup/restore and changed IndexedDB export to one read-only transaction spanning every catalogue store, preventing scans or status writes from producing a cross-store half-snapshot.

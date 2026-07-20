@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.11.4
+// @version      0.11.5
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.11.4',
+    version: '0.11.5',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -3387,10 +3387,13 @@
   const DataPortability = {
     format:'pawchive-media-filter-backup',
     version:1,
+    streamFormat:'pawchive-media-filter-backup-jsonl',
+    streamVersion:1,
+    streamChunkChars:1024*1024,
     catalogueStores:['posts','creators','uiStates','postStatuses','favoriteSnapshotEntries','favoriteSyncMeta','creatorDirectory','creatorStates'],
     keyPaths:{posts:'key',creators:'creatorKey',uiStates:'creatorKey',postStatuses:'key',favoriteSnapshotEntries:'key',favoriteSyncMeta:'host',creatorDirectory:'creatorKey',creatorStates:'creatorKey'},
     auxiliarySettingKeys:[Config.postStatusFiltersKey,Config.creatorFilterStateKey,Config.creatorStatusFiltersKey,Config.creatorDirectoryModeKey],
-    filename(){const stamp=new Date().toISOString().replace(/[:.]/g,'-');return`pawchive-media-filter-backup-${stamp}.json`;},
+    filename(){const stamp=new Date().toISOString().replace(/[:.]/g,'-');return`pawchive-media-filter-backup-${stamp}.pmfbackup`;},
     canonicalHost(value){const host=String(value||'').trim().toLowerCase();return Config.allowedHosts.has(host)?host:'';},
     replaceKeyHost(value,fromHost,toHost){const text=String(value||'');return fromHost&&toHost&&fromHost!==toHost&&text.startsWith(`${fromHost}|`)?`${toHost}${text.slice(fromHost.length)}`:text;},
     replaceUrlHost(value,fromHost,toHost){const text=String(value||'');if(!text||!fromHost||!toHost||fromHost===toHost)return text;try{const url=new URL(text,location.origin);if(url.hostname.toLowerCase()!==fromHost)return text;url.hostname=toHost;return url.href;}catch{return text;}},
@@ -3486,6 +3489,44 @@
     },
     exportPresets(){return{post:Util.clone(GM_getValue(Config.presetsKey,Presets.record||null)),creator:Util.clone(GM_getValue(Config.creatorPresetsKey,CreatorPresets.load()))};},
     async buildBackup(){return{format:DataPortability.format,formatVersion:DataPortability.version,appVersion:Config.version,exportedAt:new Date().toISOString(),sourceHost:DataPortability.canonicalHost(location.hostname)||String(location.hostname||''),catalogue:await DataPortability.exportCatalogue(),settings:DataPortability.exportSettings(),presets:DataPortability.exportPresets()};},
+    stringify(value){return JSON.stringify(value);},
+    serializeBackupParts(payload,{chunkChars=DataPortability.streamChunkChars}={}){
+      const data=DataPortability.validate(payload),parts=[];let buffer='';const limit=Math.max(16384,Number(chunkChars)||DataPortability.streamChunkChars);
+      const flush=()=>{if(buffer){parts.push(buffer);buffer='';}};
+      const write=(value)=>{const line=`${DataPortability.stringify(value)}\n`;if(line.length>=limit){flush();parts.push(line);return;}if(buffer.length+line.length>limit)flush();buffer+=line;};
+      write({kind:'header',streamFormat:DataPortability.streamFormat,streamVersion:DataPortability.streamVersion,format:data.format,formatVersion:data.formatVersion,appVersion:data.appVersion,exportedAt:data.exportedAt,sourceHost:data.sourceHost});
+      write({kind:'catalogue',databaseVersion:data.catalogue?.databaseVersion,auxiliary:data.catalogue?.auxiliary||{}});
+      const stores=data.catalogue?.stores||{};DataPortability.catalogueStores.forEach((store)=>{for(const record of stores[store]||[])write({kind:'record',store,value:record});});
+      write({kind:'settings',value:data.settings});write({kind:'presets',value:data.presets});write({kind:'end'});flush();return parts;
+    },
+    createStreamPayload(header){
+      return{format:header.format,formatVersion:header.formatVersion,appVersion:header.appVersion,exportedAt:header.exportedAt,sourceHost:header.sourceHost,catalogue:{databaseVersion:Config.databaseVersion,stores:Object.fromEntries(DataPortability.catalogueStores.map((store)=>[store,[]])),auxiliary:{}},settings:null,presets:null};
+    },
+    applyStreamEntry(state,entry,lineNumber=0){
+      if(!entry||typeof entry!=='object'||Array.isArray(entry))throw new Error(`Invalid backup entry${lineNumber?` on line ${lineNumber}`:''}.`);
+      if(!state.payload){if(entry.kind!=='header'||entry.streamFormat!==DataPortability.streamFormat||Number(entry.streamVersion)!==DataPortability.streamVersion)throw new Error('This is not a streamed Pawchive Media Filter backup.');state.payload=DataPortability.createStreamPayload(entry);return;}
+      if(entry.kind==='catalogue'){state.payload.catalogue.databaseVersion=Number(entry.databaseVersion)||Config.databaseVersion;state.payload.catalogue.auxiliary=entry.auxiliary&&typeof entry.auxiliary==='object'&&!Array.isArray(entry.auxiliary)?entry.auxiliary:{};return;}
+      if(entry.kind==='record'){if(!DataPortability.catalogueStores.includes(entry.store))throw new Error(`Unknown Catalogue store ${entry.store}.`);state.payload.catalogue.stores[entry.store].push(entry.value);return;}
+      if(entry.kind==='settings'){state.payload.settings=entry.value;return;}
+      if(entry.kind==='presets'){state.payload.presets=entry.value;return;}
+      if(entry.kind==='end'){state.ended=true;return;}
+      throw new Error(`Unknown backup entry ${entry.kind||'without a kind'}.`);
+    },
+    parseStreamText(text){
+      const state={payload:null,ended:false};String(text||'').split(/\r?\n/).forEach((line,index)=>{if(!line.trim())return;let entry;try{entry=JSON.parse(line);}catch(error){throw new Error(`Invalid backup JSON on line ${index+1}: ${error.message}`);}DataPortability.applyStreamEntry(state,entry,index+1);});if(!state.payload||!state.ended)throw new Error('The streamed backup is incomplete.');return DataPortability.validate(state.payload);
+    },
+    async readStreamFile(file){
+      if(!file?.stream||typeof TextDecoder==='undefined')return DataPortability.parseStreamText(await file.text());
+      const state={payload:null,ended:false},reader=file.stream().getReader(),decoder=new TextDecoder();let carry='',lineNumber=0;
+      const consume=(line)=>{lineNumber+=1;if(!line.trim())return;let entry;try{entry=JSON.parse(line);}catch(error){throw new Error(`Invalid backup JSON on line ${lineNumber}: ${error.message}`);}DataPortability.applyStreamEntry(state,entry,lineNumber);};
+      while(true){const {value,done}=await reader.read();carry+=decoder.decode(value||new Uint8Array(),{stream:!done});let newline;while((newline=carry.indexOf('\n'))>=0){const line=carry.slice(0,newline).replace(/\r$/,'');carry=carry.slice(newline+1);consume(line);}if(done)break;}
+      if(carry.trim())consume(carry.replace(/\r$/,''));if(!state.payload||!state.ended)throw new Error('The streamed backup is incomplete.');return DataPortability.validate(state.payload);
+    },
+    async readBackupFile(file){
+      if(!file)throw new Error('Choose a backup file first.');const prefix=await file.slice(0,65536).text();const firstLine=prefix.split(/\r?\n/,1)[0].trim();let first=null;try{first=JSON.parse(firstLine);}catch{}
+      if(first?.streamFormat===DataPortability.streamFormat)return DataPortability.readStreamFile(file);
+      return DataPortability.validate(JSON.parse(await file.text()));
+    },
     validate(payload){
       if(!payload||typeof payload!=='object'||Array.isArray(payload)||payload.format!==DataPortability.format)throw new Error('This is not a Pawchive Media Filter backup.');
       const version=Number(payload.formatVersion)||0;if(version<1||version>DataPortability.version)throw new Error(`Unsupported backup format version: ${version||'unknown'}.`);
@@ -3521,7 +3562,7 @@
       return{posts:Array.isArray(stores.posts)?stores.posts.length:0,creators:Array.isArray(stores.creators)?stores.creators.length:0,directory:Array.isArray(stores.creatorDirectory)?stores.creatorDirectory.length:0,hasSettings:Boolean(data.settings?.value),postPresets:Array.isArray(data.presets?.post?.presets)?data.presets.post.presets.length:0,creatorPresets:Array.isArray(data.presets?.creator?.presets)?data.presets.creator.presets.length:0};
     },
     async download(){
-      const payload=await DataPortability.buildBackup();const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=DataPortability.filename();anchor.hidden=true;document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);return payload;
+      const payload=await DataPortability.buildBackup(),parts=DataPortability.serializeBackupParts(payload);const blob=new Blob(parts,{type:'application/x-pawchive-backup+jsonl'});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=DataPortability.filename();anchor.hidden=true;document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);return payload;
     },
     clearMemoryCatalogue(){Cache.memory.clear();Cache.metaMemory.clear();Cache.uiStateMemory.clear();Cache.statusMemory.clear();Cache.favoriteSnapshotMemory.clear();Cache.creatorDirectoryMemory.clear();Cache.creatorStateMemory.clear();Cache.staleCreators.clear();},
     writeMemoryStore(store,records=[]){
@@ -3580,9 +3621,9 @@
     open(opener){
       const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-data-transfer-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Export or import catalogue data');const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Export / Import catalogue'));const close=SettingsUI.action('×','cancel');close.className='pmf-icon-close';header.append(close);const body=SettingsUI.el('div','pmf-data-transfer-body');const footer=SettingsUI.el('footer');dialog.append(header,body,footer);backdrop.append(dialog);document.body.append(backdrop);let selectedFile=null,parsed=null,busy=false;
       const status=(message,error=false)=>{const node=body.querySelector('[data-transfer-status]');if(node){node.textContent=message||'';node.classList.toggle('pmf-error',error);}};
-      const renderChoice=()=>{body.innerHTML='<p>Export a portable JSON backup, or import one on this device.</p><div class="pmf-transfer-choice"><button type="button" data-transfer-action="export">Export catalogue, settings, and presets</button><button type="button" data-transfer-action="show-import">Import backup</button></div><p class="pmf-help" data-transfer-status></p>';footer.innerHTML='<span></span><button type="button" data-transfer-action="cancel">Close</button>';};
-      const renderImport=()=>{body.innerHTML='<button type="button" class="pmf-settings-back" data-transfer-action="choice">‹ Back</button><section class="pmf-settings-section"><h3>Backup file</h3><div class="pmf-import-file-row"><input type="text" readonly data-import-file-name placeholder="Choose or drop a backup file"><button type="button" data-transfer-action="choose-file">Choose file</button><input type="file" accept="application/json,.json" data-import-file hidden></div><div class="pmf-import-dropzone" data-import-dropzone tabindex="0">Drop a Pawchive backup here</div><p class="pmf-help" data-import-summary>No backup selected.</p></section><section class="pmf-settings-section"><h3>Import contents</h3><label class="pmf-check"><input type="checkbox" name="importCatalogue" checked> Catalogue, creators, posts, statuses, and local scan data</label><label class="pmf-check"><input type="checkbox" name="importSettings" checked> Settings and saved filter state</label><label class="pmf-check"><input type="checkbox" name="importPresets" checked> Post and creator presets</label></section><section class="pmf-settings-section" data-import-catalogue-mode><h3>Catalogue conflict handling</h3><label class="pmf-check"><input type="radio" name="importMode" value="merge" checked> Merge with existing data; imported records update matching entries</label><label class="pmf-check"><input type="radio" name="importMode" value="replace"> Delete the current local catalogue and replace it with the backup</label></section><p class="pmf-help" data-transfer-status></p>';footer.innerHTML='<button type="button" data-transfer-action="choice">Back</button><span></span><button type="button" data-transfer-action="cancel">Cancel</button><button type="button" class="pmf-primary" data-transfer-action="import" disabled>Import backup</button>';};
-      const loadFile=async(file)=>{selectedFile=file||null;parsed=null;const name=body.querySelector('[data-import-file-name]'),summary=body.querySelector('[data-import-summary]'),confirm=footer.querySelector('[data-transfer-action="import"]');if(name)name.value=file?.name||'';if(confirm)confirm.disabled=true;if(!file){if(summary)summary.textContent='No backup selected.';return;}try{parsed=DataPortability.validate(JSON.parse(await file.text()));const info=DataPortability.summary(parsed);if(summary)summary.textContent=`${info.creators.toLocaleString()} creator catalogues · ${info.posts.toLocaleString()} posts · ${info.directory.toLocaleString()} creator-directory records · ${info.postPresets} post presets · ${info.creatorPresets} creator presets`;if(confirm)confirm.disabled=false;status('Backup is ready to import.');}catch(error){if(summary)summary.textContent='The selected file could not be read.';status(error.message,true);}};
+      const renderChoice=()=>{body.innerHTML='<p>Export a portable Pawchive backup, or import one on this device.</p><div class="pmf-transfer-choice"><button type="button" data-transfer-action="export">Export catalogue, settings, and presets</button><button type="button" data-transfer-action="show-import">Import backup</button></div><p class="pmf-help" data-transfer-status></p>';footer.innerHTML='<span></span><button type="button" data-transfer-action="cancel">Close</button>';};
+      const renderImport=()=>{body.innerHTML='<button type="button" class="pmf-settings-back" data-transfer-action="choice">‹ Back</button><section class="pmf-settings-section"><h3>Backup file</h3><div class="pmf-import-file-row"><input type="text" readonly data-import-file-name placeholder="Choose or drop a backup file"><button type="button" data-transfer-action="choose-file">Choose file</button><input type="file" accept=".pmfbackup,.json,.jsonl,application/json,application/x-pawchive-backup+jsonl" data-import-file hidden></div><div class="pmf-import-dropzone" data-import-dropzone tabindex="0">Drop a Pawchive backup here</div><p class="pmf-help" data-import-summary>No backup selected.</p></section><section class="pmf-settings-section"><h3>Import contents</h3><label class="pmf-check"><input type="checkbox" name="importCatalogue" checked> Catalogue, creators, posts, statuses, and local scan data</label><label class="pmf-check"><input type="checkbox" name="importSettings" checked> Settings and saved filter state</label><label class="pmf-check"><input type="checkbox" name="importPresets" checked> Post and creator presets</label></section><section class="pmf-settings-section" data-import-catalogue-mode><h3>Catalogue conflict handling</h3><label class="pmf-check"><input type="radio" name="importMode" value="merge" checked> Merge with existing data; imported records update matching entries</label><label class="pmf-check"><input type="radio" name="importMode" value="replace"> Delete the current local catalogue and replace it with the backup</label></section><p class="pmf-help" data-transfer-status></p>';footer.innerHTML='<button type="button" data-transfer-action="choice">Back</button><span></span><button type="button" data-transfer-action="cancel">Cancel</button><button type="button" class="pmf-primary" data-transfer-action="import" disabled>Import backup</button>';};
+      const loadFile=async(file)=>{selectedFile=file||null;parsed=null;const name=body.querySelector('[data-import-file-name]'),summary=body.querySelector('[data-import-summary]'),confirm=footer.querySelector('[data-transfer-action="import"]');if(name)name.value=file?.name||'';if(confirm)confirm.disabled=true;if(!file){if(summary)summary.textContent='No backup selected.';return;}try{parsed=await DataPortability.readBackupFile(file);const info=DataPortability.summary(parsed);if(summary)summary.textContent=`${info.creators.toLocaleString()} creator catalogues · ${info.posts.toLocaleString()} posts · ${info.directory.toLocaleString()} creator-directory records · ${info.postPresets} post presets · ${info.creatorPresets} creator presets`;if(confirm)confirm.disabled=false;status('Backup is ready to import.');}catch(error){if(summary)summary.textContent='The selected file could not be read.';status(error.message,true);}};
       renderChoice();const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});
       backdrop.addEventListener('click',async(event)=>{const action=event.target.closest('[data-transfer-action]')?.dataset.transferAction;if(!action||busy)return;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='choice')renderChoice();if(action==='show-import')renderImport();if(action==='choose-file')body.querySelector('[data-import-file]')?.click();if(action==='export'){busy=true;event.target.disabled=true;status('Preparing backup…');try{const payload=await DataPortability.download();const info=DataPortability.summary(payload);status(`Exported ${info.creators.toLocaleString()} creator catalogues and ${info.posts.toLocaleString()} posts.`);}catch(error){status(`Export failed: ${error.message}`,true);}finally{busy=false;if(event.target.isConnected)event.target.disabled=false;}}if(action==='import'){const catalogue=body.querySelector('[name="importCatalogue"]')?.checked===true,settings=body.querySelector('[name="importSettings"]')?.checked===true,presets=body.querySelector('[name="importPresets"]')?.checked===true;if(!catalogue&&!settings&&!presets){status('Select at least one type of data to import.',true);return;}busy=true;event.target.disabled=true;status('Importing backup…');try{const result=await DataPortability.importBackup(parsed,{catalogue,settings,presets,mode:body.querySelector('[name="importMode"]:checked')?.value||'merge'});status(`Import complete${result.catalogue?` · ${result.catalogue.written.toLocaleString()} catalogue records written`:''}. Reloading…`);setTimeout(()=>location.reload(),700);}catch(error){status(`Import failed: ${error.message}`,true);busy=false;if(event.target.isConnected)event.target.disabled=false;}}});
       backdrop.addEventListener('change',(event)=>{if(event.target.matches('[data-import-file]'))loadFile(event.target.files?.[0]);if(event.target.name==='importCatalogue'){const section=body.querySelector('[data-import-catalogue-mode]');if(section)section.hidden=!event.target.checked;}});

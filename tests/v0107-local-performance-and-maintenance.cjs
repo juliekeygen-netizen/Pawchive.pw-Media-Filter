@@ -22,8 +22,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     SettingsUI,
   } = api;
 
-  assert.equal(Config.version, '0.11.4');
-  assert.match(originalSource, /\/\/ @version\s+0\.11\.4/);
+  assert.equal(Config.version, '0.11.5');
+  assert.match(originalSource, /\/\/ @version\s+0\.11\.5/);
   assert.ok(!CreatorIndexUI.render.toString().includes('repairVisible'));
   assert.ok(!CreatorIndexUI.renderCatalogue.toString().includes('repairVisible'));
   assert.ok(CreatorIndexUI.renderCatalogue.toString().includes('createDocumentFragment'));

@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.11.4 specification
+# Pawchive.pw Media Filter v0.11.5 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.11.4`
+- Userscript and `Config.version`: `0.11.5`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -30,6 +30,13 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - A backup whose `sourceHost` is the other supported Pawchive hostname is remapped to the current hostname. The remap covers creator/post keys, directory/meta records, per-creator UI state, post/creator statuses, Favorite snapshot entries/meta, auxiliary Favorite-sync metadata, and Pawchive-owned URLs. Any collisions created by remapping a profile that already contains both host variants are consolidated using the newer record, with creator-directory field merging and post completeness as tie-breakers.
 - Replace clears every catalogue object store before writing the validated backup, including stores represented by empty arrays.
 - When IndexedDB is unavailable, the in-memory fallback exports/imports creator UI state and Favorite snapshot membership in addition to posts, creator metadata, statuses, directory records, and creator state.
+
+## v0.11.5 large-backup stream contract
+
+- New backups use the `.pmfbackup` extension and JSON-Lines container `pawchive-media-filter-backup-jsonl`, stream version 1.
+- Export must serialize the header, catalogue metadata, each store record, Settings, and Presets as independent JSON entries grouped into bounded Blob parts. The complete backup must never be passed to one `JSON.stringify` call.
+- Import detects the streamed header from the file prefix and parses the file incrementally through `File.stream()` and `TextDecoder`. Older v0.11.3/v0.11.4 single-document `.json` backups remain importable.
+- The reconstructed payload must pass the same format, selected-group, duplicate-key, hostname-remapping, Merge, and Replace validation used by legacy backups.
 
 ## v0.11.3 portability and compact-mobile contracts
 

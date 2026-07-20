@@ -24,8 +24,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     App,
   } = api;
 
-  assert.equal(Config.version, '0.11.4');
-  assert.match(originalSource, /\/\/ @version\s+0\.11\.4/);
+  assert.equal(Config.version, '0.11.5');
+  assert.match(originalSource, /\/\/ @version\s+0\.11\.5/);
   assert.equal(Settings.value.settingsSchemaVersion, 5);
 
   const expectedHosts = [
