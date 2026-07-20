@@ -1,0 +1,187 @@
++  const bottomHost = { querySelector: () => bottomMirror };
++  CreatorIndexUI.paginator = topHost;
++  CreatorIndexUI.bottomPaginator = bottomHost;
++  CreatorIndexUI.found = { paginators:[{}] };
++  const originalItems = NativePaginatorMirror.items;
++  const originalRender = NativePaginatorMirror.render;
++  const originalActivate = NativePaginatorMirror.activate;
++  const originalSchedule = Lifecycle.schedule;
++  let current = false;
++  NativePaginatorMirror.items = () => [{ index:4, label:'7', role:'page:7', disabled:false, current }];
++  NativePaginatorMirror.render = (_native, host, options) => {
++    if (host === topMirror) topRenders += 1;
++    if (host === bottomMirror) bottomRenders += 1;
++    host.options = options;
++    return true;
++  };
++  NativePaginatorMirror.activate = () => true;
++  Lifecycle.schedule = () => {};
++  assert.equal(NativeArtistsPageCoordinator.navigate(CreatorIndexUI.found, 4), true);
++  assert.equal(NativeArtistsPageCoordinator.pending.role, 'page:7');
++  assert.equal(topMirror.options.pendingRole, 'page:7');
++  assert.equal(bottomMirror.options.pendingRole, 'page:7');
++  assert.equal(topMirror.options.navigationPending, true);
++  assert.ok(topRenders >= 1 && bottomRenders >= 1);
++  current = true;
++  NativeArtistsPageCoordinator.reconcile(CreatorIndexUI.found);
++  assert.equal(NativeArtistsPageCoordinator.pending, null);
++  NativePaginatorMirror.items = originalItems;
++  NativePaginatorMirror.render = originalRender;
++  NativePaginatorMirror.activate = originalActivate;
++  Lifecycle.schedule = originalSchedule;
++  NativeArtistsPageCoordinator.reset();
++
++  // Retained creator sessions can conceal the native post grid before PMF rebinding.
++  const nativeGrid = makeElement('div');
++  const originalFind = PawchiveDOM.find;
++  context.location.href = 'https://pawchive.pw/patreon/user/123';
++  context.location.hostname = 'pawchive.pw';
++  PawchiveDOM.find = () => ({ grid:nativeGrid });
++  const takeover = CreatorEarlyTakeover.begin({ creatorKey:'pawchive.pw|patreon|123' }, { knownCatalogue:true });
++  assert.ok(takeover);
++  assert.equal(nativeGrid.hidden, true);
++  assert.equal(nativeGrid.style.getPropertyPriority('display'), 'important');
++  assert.equal(CreatorEarlyTakeover.active.shell?.id, 'pmf-creator-early-shell');
++  CreatorEarlyTakeover.cleanup({ restore:true });
++  assert.equal(nativeGrid.hidden, false);
++  PawchiveDOM.find = originalFind;
++
++  // Native-grid replacement is watched from a stable parent and rebound before refresh work.
++  assert.match(originalSource, /observeNativeRoot\(root=ArtistsPageController\.found\?\.main\)/);
++  assert.match(originalSource, /ArtistsPageController\.observer\.observe\(root,\{childList:true,subtree:true\}\)/);
++  assert.doesNotMatch(originalSource, /ArtistsPageController\.observer\.observe\(found\.grid/);
++  assert.match(originalSource, /rebindNativeDom\(reason='native-rebind'\)/);
++  assert.match(originalSource, /artists-native-dom-rebound/);
++
++  // Bulk dialogs expose bounded previews without imposing Scan's 1,000 cap on Update/Resume.
++  assert.match(originalSource, /const firstMaximum=kind==='build'\?' max="1000"':''/);
++  assert.match(originalSource, /data-bulk-more hidden/);
++  assert.match(originalSource, /…and \$\{remaining\.toLocaleString\(\)\} more/);
++  assert.match(originalSource, /action==='resume'\?'Resume scan'/);
++
++  console.log('Pawchive Media Filter v0.10.11 artists navigation and responsive layout tests passed.');
++})().catch((error) => {
++  console.error(error);
++  process.exitCode = 1;
++});
+diff --git a/tests/v0105-missing-metadata-and-paginator.cjs b/tests/v0105-missing-metadata-and-paginator.cjs
+index 77c7503..b5fd3ae 100644
+--- a/tests/v0105-missing-metadata-and-paginator.cjs
++++ b/tests/v0105-missing-metadata-and-paginator.cjs
+@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
+ const { loadUserscript } = require('./test-helper.cjs');
+ 
+ const { api: { Config, Settings, PostMissingStats, CreatorCatalogueSummary, Paginator } } = loadUserscript();
+-assert.equal(Config.version, '0.10.10');
++assert.equal(Config.version, '0.10.11');
+ 
+ const parsed = PostMissingStats.parse(' Missing 1 full-res photo, 2 videos and 3 archives. ');
+ assert.equal(parsed.missingStatsKnown, true);
+@@ -35,4 +35,4 @@ assert.equal(summary.excludedMissingAttachmentPostCount, 20);
+ assert.equal(summary.media.videos.posts, 480);
+ assert.equal(summary.completeness, 'complete');
+ 
+-console.log('Pawchive Media Filter v0.10.10 missing metadata and paginator tests passed.');
++console.log('Pawchive Media Filter v0.10.11 missing metadata and paginator tests passed.');
+diff --git a/tests/v0106-authoritative-runtime.cjs b/tests/v0106-authoritative-runtime.cjs
+index acb6ca3..bff914a 100644
+--- a/tests/v0106-authoritative-runtime.cjs
++++ b/tests/v0106-authoritative-runtime.cjs
+@@ -8,7 +8,7 @@ const {
+   CatalogueJobManager, Paginator, MissingAttachmentMaintenance,
+ } = loaded.api;
+ 
+-assert.equal(Config.version, '0.10.10');
++assert.equal(Config.version, '0.10.11');
+ assert.equal((originalSource.match(/const CreatorBulkUI =/g) || []).length, 1);
+ assert.equal((originalSource.match(/CreatorBulkUI\.open\s*=/g) || []).length, 0);
+ assert.equal((originalSource.match(/SettingsUI\.open\s*=/g) || []).length, 0);
+@@ -74,4 +74,4 @@ assert.match(MissingAttachmentMaintenance.fetchStructured.toString(), /PostMissi
+ assert.match(MissingAttachmentMaintenance.run.toString(), /remainingIds|failedIds/);
+ assert.equal(typeof MissingAttachmentMaintenance.resume, 'function');
+ 
+-console.log('Pawchive Media Filter v0.10.10 authoritative runtime tests passed.');
++console.log('Pawchive Media Filter v0.10.11 authoritative runtime tests passed.');
+diff --git a/tests/v0107-local-performance-and-maintenance.cjs b/tests/v0107-local-performance-and-maintenance.cjs
+index 4ea6e51..b4be2db 100644
+--- a/tests/v0107-local-performance-and-maintenance.cjs
++++ b/tests/v0107-local-performance-and-maintenance.cjs
+@@ -22,8 +22,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+     SettingsUI,
+   } = api;
+ 
+-  assert.equal(Config.version, '0.10.10');
+-  assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
++  assert.equal(Config.version, '0.10.11');
++  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+   assert.ok(!CreatorIndexUI.render.toString().includes('repairVisible'));
+   assert.ok(!CreatorIndexUI.renderCatalogue.toString().includes('repairVisible'));
+   assert.ok(CreatorIndexUI.renderCatalogue.toString().includes('createDocumentFragment'));
+@@ -247,7 +247,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+   assert.ok(MissingAttachmentMaintenance.openScopeDialog.toString().includes('First N unknown posts'));
+   assert.ok(MissingAttachmentMaintenance.openScopeDialog.toString().includes('All unknown posts'));
+ 
+-  console.log('Pawchive Media Filter v0.10.10 Local performance and maintenance runtime tests passed.');
++  console.log('Pawchive Media Filter v0.10.11 Local performance and maintenance runtime tests passed.');
+ })().catch((error) => {
+   console.error(error);
+   process.exitCode = 1;
+diff --git a/tests/v0108-streaming-maintenance.cjs b/tests/v0108-streaming-maintenance.cjs
+index 6b279a9..67d22d3 100644
+--- a/tests/v0108-streaming-maintenance.cjs
++++ b/tests/v0108-streaming-maintenance.cjs
+@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+     CreatorState,
+   } = api;
+ 
+-  assert.equal(Config.version, '0.10.10');
+-  assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
++  assert.equal(Config.version, '0.10.11');
++  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+   assert.doesNotMatch(originalSource, /const LegacyCreatorIndexUI/);
+   assert.doesNotMatch(originalSource, /creatorOpenChildBase/);
+   assert.match(Cache.scanCataloguePostChunk.toString(), /openCursor/);
+@@ -167,7 +167,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+   assert.equal(renders, 1);
+   assert.deepEqual(CreatorIndexUI.records.map((record) => record.summary.generatedAt), [1, 2, 3]);
+ 
+-  console.log('Pawchive Media Filter v0.10.10 streaming maintenance tests passed.');
++  console.log('Pawchive Media Filter v0.10.11 streaming maintenance tests passed.');
+ })().catch((error) => {
+   console.error(error);
+   process.exitCode = 1;
+diff --git a/tests/v0109-live-findings.cjs b/tests/v0109-live-findings.cjs
+index cfcc56e..f605e4f 100644
+--- a/tests/v0109-live-findings.cjs
++++ b/tests/v0109-live-findings.cjs
+@@ -15,8 +15,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+     Cache,
+   } = api;
+ 
+-  assert.equal(Config.version, '0.10.10');
+-  assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
++  assert.equal(Config.version, '0.10.11');
++  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+ 
+   // Aggregate-affecting settings may invalidate a fingerprint, but a structurally
+   // compatible summary must remain renderable until its replacement is committed.
+@@ -155,7 +155,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+   assert.match(originalSource, /aggregate-settings-change/);
+   assert.match(originalSource, /backfillKeys\.delete\(task\.context\.creatorKey\)/);
+ 
+-  console.log('Pawchive Media Filter v0.10.10 live-finding regression tests passed.');
++  console.log('Pawchive Media Filter v0.10.11 live-finding regression tests passed.');
+ })().catch((error) => {
+   console.error(error);
+   process.exitCode = 1;
+diff --git a/tests/visible-card-aspect-ratio.cjs b/tests/visible-card-aspect-ratio.cjs
+index 7bb1a94..1716720 100644
+--- a/tests/visible-card-aspect-ratio.cjs
++++ b/tests/visible-card-aspect-ratio.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript, makeClassList } = require('./test-helper.cjs');
+ const { api, originalSource } = loadUserscript();
+ const { Config, CompactThumbnailRatio, CompactGridScale, App } = api;
+ 
+-assert.equal(Config.version, '0.10.10');
++assert.equal(Config.version, '0.10.11');
+ assert.equal(CompactThumbnailRatio.expectedHeight(320, 1), 320);
