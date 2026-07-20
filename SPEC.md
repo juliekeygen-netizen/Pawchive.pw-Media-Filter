@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.11.1 specification
+# Pawchive.pw Media Filter v0.11.2 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.11.1`
+- Userscript and `Config.version`: `0.11.2`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -22,6 +22,16 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.11.2 mobile UI contracts
+
+- At CSS viewport widths of 760 px or less, Settings field rows must stack the setting title above the control. Labels must wrap by words rather than collapsing into one-character columns.
+- Toggle rows must remain a compact checkbox/label row, with an optional child-settings chevron in a separate fixed-width column.
+- Settings tabs must be horizontally scrollable, non-wrapping, and keep the active tab visible. Dialog height must use the dynamic viewport and account for device safe areas.
+- Post Custom search rules and creator Advanced rules must not require horizontal page or editor scrolling. Controls must stack into readable mobile cards while preserving every desktop field and action.
+- Creator/post toolbars must retain a full-width filter row and a stable Sort + primary action + Settings row. Split primary buttons must keep the main button and chevron side by side.
+- Floating and anchored menus must remain inside the mobile viewport, use a practical readable width, scroll internally when tall, and open above the trigger when necessary.
+- Mobile changes must not alter desktop geometry, Catalogue data, settings schemas, filter semantics, or request behavior.
 
 ## v0.11.1 second-pass audit contracts
 

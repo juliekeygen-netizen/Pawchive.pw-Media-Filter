@@ -15,8 +15,8 @@ const {
   CreatorCatalogueSummary,
 } = api;
 
-assert.equal(Config.version, '0.11.1');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.1/);
+assert.equal(Config.version, '0.11.2');
+assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
 assert.deepEqual(
   JSON.parse(JSON.stringify(CreatorSortUI.modes)),
   [
@@ -173,4 +173,4 @@ assert.ok(originalSource.includes('.pmf-creator-status-badge.pmf-creator-status-
 assert.match(originalSource, /dynamicAggregateSignature/);
 assert.doesNotMatch(originalSource, /Any service<\/span><span aria-hidden="true">▾<\/span>/);
 
-console.log('Pawchive Media Filter v0.11.1 Local catalogue redesign tests passed.');
+console.log('Pawchive Media Filter v0.11.2 Local catalogue redesign tests passed.');

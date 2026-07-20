@@ -13,7 +13,7 @@ const {
   CreatorSortUI,
 } = api;
 
-assert.equal(Config.version, '0.11.1');
+assert.equal(Config.version, '0.11.2');
 
 const migrated = CreatorFilterEngine.normalizeState({
   service: 'fanbox',
@@ -101,4 +101,4 @@ assert.match(originalSource, /Lowest first/);
 assert.doesNotMatch(originalSource, /Public creator favorite count/);
 assert.doesNotMatch(originalSource, /Native-favorited posts/);
 
-console.log('Pawchive Media Filter v0.11.1 creator preset and migration tests passed.');
+console.log('Pawchive Media Filter v0.11.2 creator preset and migration tests passed.');

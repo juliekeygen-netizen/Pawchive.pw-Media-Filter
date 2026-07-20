@@ -1,4 +1,17 @@
-# Pawchive.pw Media Filter v0.11.1 testing
+# Pawchive.pw Media Filter v0.11.2 testing
+
+## v0.11.2 mobile responsive matrix
+
+Run `node tests/v0112-mobile-responsive-ui.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete v0.11.2 suite contains 51 executable tests. Static source/DOM fixtures do not replace the following live phone-browser checks.
+
+1. At approximately 360, 390, 412, and 760 CSS pixels, open Settings from both a creator page and Local catalogue. In every tab, field labels must sit above controls, ordinary words must not break one letter per line, and selects/textareas must stay inside the modal.
+2. Swipe the Settings tab strip from General through Data & performance. Tabs must remain one line tall, scroll horizontally, and center the selected tab. Save & apply, Cancel, and Reset must remain reachable above Android browser controls in portrait and landscape.
+3. Open Post Custom search rules with at least three rows. IF/AND/OR, Match/No match, text, Fields, and delete controls must all be visible without horizontal dragging. Add, edit, delete, Discard, and Apply must still work.
+4. Open Local catalogue Advanced rules. Verify condition, enabled state, join, outcome, search value, Fields, text operator, Amount/Percentage, threshold(s), and remove action all reflow without horizontal overflow.
+5. On a creator page, verify Filter is full width and Sort, Update, and Settings remain usable on the next row. On Local catalogue, verify Update and its chevron remain side by side rather than stacking vertically.
+6. Open long sort/service menus near the left, right, top, and bottom edges. Menus must stay inside the viewport, wrap by words, scroll internally when tall, and open above low triggers when required.
+7. Exercise Published date, Custom extensions, Advanced attachment sorting, Bulk Scan/Update, Queue, metadata maintenance, and preset dialogs. No dialog may force page-level horizontal scrolling, and primary actions must remain reachable.
+8. Recheck 1920×1080 and 2560×1440 desktop layouts to confirm the mobile overrides do not change desktop toolbar, settings, card, paginator, or menu geometry.
 
 ## v0.11.1 second-pass audit matrix
 
@@ -15,7 +28,7 @@ Run `node tests/v0111-second-pass-audit.cjs`, the two v0.11.0 suites, `node --ch
 
 ## v0.11.0 Local catalogue redesign matrix
 
-Run `node tests/v011-local-catalogue-redesign.cjs`, `node tests/v011-creator-filter-presets-and-migration.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The v0.11.0 release suite contained 49 executable tests; the current v0.11.1 complete suite contains 50. Static fixtures do not replace authenticated Tampermonkey checks.
+Run `node tests/v011-local-catalogue-redesign.cjs`, `node tests/v011-creator-filter-presets-and-migration.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The v0.11.0 release suite contained 49 executable tests; the v0.11.1 complete suite contains 50. Static fixtures do not replace authenticated Tampermonkey checks.
 
 1. Open `/artists` at 1920×1080 and 2560×1440. Confirm the mode says **Local catalogue**, the search placeholder says **Search Local catalogue creators…**, stored/match/empty text uses the same wording, cards retain the corrected responsive size, and exactly one Native or Local grid is visible.
 2. Open the Local sort menu. It must contain only Popularity, Alphabetical, Catalogue post count, Post publish date, and Advanced attachment amounts. Re-select a mode to reverse it. Unknown values must remain after known values in both directions.

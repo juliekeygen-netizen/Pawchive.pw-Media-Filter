@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.11.1
+// @version      0.11.2
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.11.1',
+    version: '0.11.2',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -5244,7 +5244,25 @@ sync() {
       UI.positionFloating(menu, trigger); menu.addEventListener('click', (event) => { const item = event.target.closest('[data-field]'); if (!item) return; fields[item.dataset.field] = item.getAttribute('aria-checked') !== 'true'; item.setAttribute('aria-checked', String(fields[item.dataset.field])); item.querySelector('span').textContent = fields[item.dataset.field] ? '✓' : ''; trigger.dataset.fields = JSON.stringify(fields); trigger.firstChild.textContent = `${Object.values(fields).filter(Boolean).length} fields`; UI.updateExpressionPreview(editor); });
       menu.addEventListener('keydown', (event) => UI.menuKeys(event, menu)); OverlayManager.open({ node: menu, opener: trigger, onClose: () => { trigger.setAttribute('aria-expanded', 'false'); trigger.removeAttribute('aria-controls'); } });
     },
-    positionFloating(menu, trigger) { document.body.append(menu); UI.own(menu); const rect = trigger.getBoundingClientRect(); menu.style.left = `${Math.min(rect.left, innerWidth - Math.max(190, menu.offsetWidth) - 8)}px`; menu.style.top = `${Math.min(rect.bottom + 4, innerHeight - menu.offsetHeight - 8)}px`; },
+    positionFloating(menu, trigger) {
+      document.body.append(menu); UI.own(menu);
+      const rect = trigger.getBoundingClientRect();
+      const viewportWidth = Math.max(240, globalThis.innerWidth || document.documentElement.clientWidth || 240);
+      const viewportHeight = Math.max(320, globalThis.innerHeight || document.documentElement.clientHeight || 320);
+      const mobile = Boolean(globalThis.matchMedia?.('(max-width: 760px)')?.matches);
+      const width = Math.min(viewportWidth - 16, Math.max(mobile ? 220 : 190, rect.width, menu.offsetWidth));
+      menu.style.width = `${width}px`;
+      menu.style.maxWidth = 'calc(100vw - 16px)';
+      const left = Math.max(8, Math.min(rect.left, viewportWidth - width - 8));
+      const menuHeight = Math.min(menu.offsetHeight, viewportHeight - 16);
+      const spaceBelow = viewportHeight - rect.bottom - 8;
+      const spaceAbove = rect.top - 8;
+      const top = menuHeight > spaceBelow && spaceAbove > spaceBelow
+        ? Math.max(8, rect.top - menuHeight - 4)
+        : Math.max(8, Math.min(rect.bottom + 4, viewportHeight - menuHeight - 8));
+      menu.style.left = `${left}px`;
+      menu.style.top = `${top}px`;
+    },
     menuKeys(event, menu) { const items = [...menu.querySelectorAll('[role^="menuitem"]')]; const index = Math.max(0, items.indexOf(document.activeElement)); if (event.key === 'ArrowDown') { event.preventDefault(); items[(index + 1) % items.length]?.focus(); } if (event.key === 'ArrowUp') { event.preventDefault(); items[(index - 1 + items.length) % items.length]?.focus(); } if (event.key === 'Home') { event.preventDefault(); items[0]?.focus(); } if (event.key === 'End') { event.preventDefault(); items.at(-1)?.focus(); } },
     async applyFilterEditor(type) {
       const editor = App.ui.editor; const error = editor.querySelector('.pmf-editor-error');
@@ -5393,7 +5411,10 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       name = ''
     } = {}) {
       const row = SettingsUI.el('div', 'pmf-settings-row');
-      const text = SettingsUI.el('span', '', label);
+      const isToggle = String(control?.className || '').split(/\s+/).includes('pmf-settings-toggle');
+      row.classList.add(isToggle ? 'pmf-settings-row-toggle' : 'pmf-settings-row-field');
+      if (chevron) row.classList.add('pmf-settings-row-chevron');
+      const text = SettingsUI.el('span', 'pmf-settings-row-label', label);
       row.append(text, control);
       if (chevron) {
         const button = SettingsUI.el('button', 'pmf-settings-chevron', '›');
@@ -5756,9 +5777,15 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       const content = dialog.querySelector('.pmf-settings-content');
       const draft = App.ui.settingsDraft;
       content.replaceChildren(SettingsUI.buildGeneral(draft), SettingsUI.buildDetection(draft), SettingsUI.buildScanning(draft), SettingsUI.buildData(draft));
-      dialog.querySelectorAll('[data-pmf-settings-tab]').forEach((button) => button.classList.toggle('pmf-active', button.dataset.pmfSettingsTab === active));
+      let activeButton = null;
+      dialog.querySelectorAll('[data-pmf-settings-tab]').forEach((button) => {
+        const selected = button.dataset.pmfSettingsTab === active;
+        button.classList.toggle('pmf-active', selected);
+        if (selected) activeButton = button;
+      });
       content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel) => panel.hidden = panel.dataset.pmfSettingsPanel !== active);
       content.scrollTop = App.ui.settingsParentScroll || 0;
+      if (globalThis.matchMedia?.('(max-width: 760px)')?.matches) queueMicrotask(() => activeButton?.scrollIntoView?.({ block: 'nearest', inline: 'center', behavior: 'smooth' }));
       App.ui.settingsChild = '';
     },
     preview(dialog) {
@@ -6518,7 +6545,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     preview(draft){const committed=Settings.value;Settings.value=Settings.normalize(draft);try{CreatorIndexUI.render();}finally{Settings.value=committed;}},
     open(opener) {
       const draft=Util.clone(Settings.value);const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-settings-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Media Filter settings');const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Media Filter settings'));const close=SettingsUI.action('×','cancel');close.className='pmf-icon-close';header.append(close);const layout=SettingsUI.el('div','pmf-settings-layout');const nav=SettingsUI.el('nav');const content=SettingsUI.el('div','pmf-settings-content');const panels=[SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft)];[['general','General'],['default-detection','Default detection'],['scanning','Scanning'],['data','Data & performance']].forEach(([key,label])=>{const button=SettingsUI.action(label,'tab');button.dataset.creatorSettingsTab=key;nav.append(button);});content.append(...panels);layout.append(nav,content);const footer=SettingsUI.el('footer');footer.append(SettingsUI.action('Reset all settings','reset'),SettingsUI.el('span'),SettingsUI.action('Cancel','cancel'));const save=SettingsUI.action('Save & apply','save');save.className='pmf-primary';footer.append(save);dialog.append(header,layout,footer);backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);
-      const show=(name)=>{nav.querySelectorAll('button').forEach((button)=>button.classList.toggle('pmf-active',button.dataset.creatorSettingsTab===name));content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel)=>panel.hidden=panel.dataset.pmfSettingsPanel!==name);};show('general');let committed=false,unsubscribe=null;const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true,onClose:()=>{unsubscribe?.();if(!committed)CreatorIndexUI.render();}});unsubscribe=SettingsUI.bindMaintenance(backdrop);
+      const show=(name)=>{let activeButton=null;nav.querySelectorAll('button').forEach((button)=>{const selected=button.dataset.creatorSettingsTab===name;button.classList.toggle('pmf-active',selected);if(selected)activeButton=button;});content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel)=>panel.hidden=panel.dataset.pmfSettingsPanel!==name);if(globalThis.matchMedia?.('(max-width: 760px)')?.matches)queueMicrotask(()=>activeButton?.scrollIntoView?.({block:'nearest',inline:'center',behavior:'smooth'}));};show('general');let committed=false,unsubscribe=null;const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true,onClose:()=>{unsubscribe?.();if(!committed)CreatorIndexUI.render();}});unsubscribe=SettingsUI.bindMaintenance(backdrop);
       backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-creator-settings-tab]')?.dataset.creatorSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)show(tab);if(child)CreatorSettingsUI.openChild(child,draft,event.target);if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='reset'){Object.assign(draft,Util.clone(DefaultSettings));CreatorSettingsUI.preview(draft);}if(action==='save'){const next=SettingsUI.collect(dialog,draft);Settings.save(next);committed=true;OverlayManager.close(overlay,'save');CreatorIndexUI.render();}if(action==='update-missing-attachment-metadata')MissingAttachmentMaintenance.openScopeDialog(event.target);if(action==='stop-missing-attachment-metadata')MissingAttachmentMaintenance.stop();if(action==='resume-missing-attachment-metadata')SettingsUI.runMaintenance(MissingAttachmentMaintenance.resume());if(action==='retry-failed-missing-attachment-metadata')SettingsUI.runMaintenance(MissingAttachmentMaintenance.retryFailed());if(action==='repair-creator-profile-metadata')SettingsUI.runMaintenance(CreatorProfileRepairManager.run());if(action==='stop-creator-profile-repair')CreatorProfileRepairManager.stop();if(action==='resume-creator-profile-repair')SettingsUI.runMaintenance(CreatorProfileRepairManager.resume());if(action==='retry-failed-creator-profile-repair')SettingsUI.runMaintenance(CreatorProfileRepairManager.retryFailed());});
       backdrop.addEventListener('change',()=>{Object.assign(draft,SettingsUI.collect(dialog,draft));CreatorSettingsUI.preview(draft);});
     },
@@ -6624,7 +6651,33 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
   };
 
   const AnchoredMenu = {
-    open(opener,items,{selected='',onSelect=()=>{},anchor=opener,owner=`anchored:${opener?.dataset?.creatorIndexAction||opener?.id||opener?.getAttribute?.('aria-label')||'menu'}`}={}){const menu=SettingsUI.el('div','pmf-floating-menu pmf-surface pmf-control-menu');menu.setAttribute('role','menu');items.forEach(({value,label})=>{const button=SettingsUI.el('button','',label);button.type='button';button.dataset.menuValue=String(value);button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(String(value)===String(selected)));menu.append(button);});document.body.append(menu);const rect=(anchor||opener).getBoundingClientRect();const width=Math.max(1,rect.width);menu.style.left=`${Math.max(4,Math.min(rect.left,window.innerWidth-width-4))}px`;menu.style.top=`${rect.bottom+4}px`;menu.style.width=`${width}px`;menu.style.minWidth=`${width}px`;const overlay=OverlayManager.open({owner,node:menu,root:menu,opener,dismissible:true});if(!overlay){menu.remove();return null;}menu.addEventListener('click',(event)=>{const value=event.target.closest('[data-menu-value]')?.dataset.menuValue;if(value===undefined)return;onSelect(value);OverlayManager.close(overlay,'select');});menu.querySelector('[aria-checked="true"]')?.focus();return overlay;},
+    open(opener,items,{selected='',onSelect=()=>{},anchor=opener,owner=`anchored:${opener?.dataset?.creatorIndexAction||opener?.id||opener?.getAttribute?.('aria-label')||'menu'}`}={}){
+      const menu=SettingsUI.el('div','pmf-floating-menu pmf-surface pmf-control-menu');
+      menu.setAttribute('role','menu');
+      items.forEach(({value,label})=>{const button=SettingsUI.el('button','',label);button.type='button';button.dataset.menuValue=String(value);button.setAttribute('role','menuitemradio');button.setAttribute('aria-checked',String(String(value)===String(selected)));menu.append(button);});
+      document.body.append(menu);
+      const rect=(anchor||opener).getBoundingClientRect();
+      const viewportWidth=Math.max(240,window.innerWidth||document.documentElement.clientWidth||240);
+      const viewportHeight=Math.max(320,window.innerHeight||document.documentElement.clientHeight||320);
+      const mobile=Boolean(globalThis.matchMedia?.('(max-width: 760px)')?.matches);
+      const preferredWidth=mobile?Math.max(rect.width,Math.min(286,viewportWidth-16)):Math.max(1,rect.width);
+      const width=Math.min(viewportWidth-16,preferredWidth);
+      menu.style.width=`${width}px`;
+      menu.style.minWidth=`${width}px`;
+      menu.style.maxWidth='calc(100vw - 16px)';
+      const left=Math.max(8,Math.min(rect.left,viewportWidth-width-8));
+      const menuHeight=Math.min(menu.offsetHeight,viewportHeight-16);
+      const spaceBelow=viewportHeight-rect.bottom-8;
+      const spaceAbove=rect.top-8;
+      const top=menuHeight>spaceBelow&&spaceAbove>spaceBelow?Math.max(8,rect.top-menuHeight-4):Math.max(8,Math.min(rect.bottom+4,viewportHeight-menuHeight-8));
+      menu.style.left=`${left}px`;
+      menu.style.top=`${top}px`;
+      const overlay=OverlayManager.open({owner,node:menu,root:menu,opener,dismissible:true});
+      if(!overlay){menu.remove();return null;}
+      menu.addEventListener('click',(event)=>{const value=event.target.closest('[data-menu-value]')?.dataset.menuValue;if(value===undefined)return;onSelect(value);OverlayManager.close(overlay,'select');});
+      menu.querySelector('[aria-checked="true"]')?.focus();
+      return overlay;
+    },
   };
 
   const NativeControlMenu = {
@@ -7410,6 +7463,115 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     .pmf-native-proxy-controls .pmf-filter-button>span[aria-hidden="true"]{display:none!important}
     @media(max-width:1100px){.pmf-creator-rule-controls{grid-template-columns:68px 88px minmax(150px,1fr) minmax(145px,1fr) 100px minmax(135px,1fr) 82px 76px 12px 76px 34px;min-width:940px}.pmf-creator-rules-dialog .pmf-editor-body{overflow-x:auto}}
     @media(max-width:760px){.pmf-creator-filter-popover{max-width:calc(100vw - 16px)!important}.pmf-date-fields,.pmf-creator-rule-condition{grid-template-columns:1fr}.pmf-aggregate-expression{grid-template-columns:1fr 14px 1fr}.pmf-aggregate-expression input,.pmf-aggregate-expression [data-between-dash]{grid-row:2}.pmf-aggregate-expression input[name="from"]{grid-column:1}.pmf-aggregate-expression [data-between-dash]{grid-column:2}.pmf-aggregate-expression input[name="to"]{grid-column:3}.pmf-advanced-sort-expression{grid-template-columns:1fr}.pmf-advanced-sort-expression>span{transform:rotate(90deg)}}
+  `);
+
+  GM_addStyle(`
+    @media(max-width:760px){
+      html{overflow-x:hidden}
+      #pmf-root{width:calc(100% - 10px);margin-left:auto;margin-right:auto}
+      .pmf-modal-backdrop{place-items:center;padding:max(5px,env(safe-area-inset-top)) max(5px,env(safe-area-inset-right)) max(5px,env(safe-area-inset-bottom)) max(5px,env(safe-area-inset-left))}
+      .pmf-dialog{width:calc(100vw - 10px);max-width:calc(100vw - 10px);max-height:calc(100dvh - 10px);border-radius:8px}
+      .pmf-dialog>header,.pmf-dialog>footer{padding:10px 12px}
+      .pmf-dialog>header strong{min-width:0;font-size:16px;line-height:1.25;overflow-wrap:anywhere}
+      .pmf-dialog>footer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding-bottom:max(10px,env(safe-area-inset-bottom))}
+      .pmf-dialog>footer>span{display:none}
+      .pmf-dialog>footer>button{width:100%;min-width:0;margin:0;white-space:normal}
+      .pmf-settings-dialog{width:calc(100vw - 10px);height:calc(100dvh - 10px);max-height:calc(100dvh - 10px)}
+      .pmf-settings-dialog>footer>button:first-child{grid-column:1/-1}
+      .pmf-settings-layout{grid-template-columns:1fr;overflow:hidden}
+      .pmf-settings-layout>nav{display:flex;flex:0 0 auto;width:100%;max-width:100%;gap:6px;overflow-x:auto;overflow-y:hidden;padding:8px;border-right:0;border-bottom:1px solid var(--pmf-border);scroll-snap-type:x proximity;scrollbar-width:none;overscroll-behavior-x:contain}
+      .pmf-settings-layout>nav::-webkit-scrollbar{display:none}
+      .pmf-settings-layout>nav button{width:auto!important;min-width:max-content!important;min-height:42px;flex:0 0 auto;margin:0;padding:0 13px;text-align:center;white-space:nowrap;scroll-snap-align:center}
+      .pmf-settings-content{padding:14px 12px calc(18px + env(safe-area-inset-bottom));overflow-x:hidden}
+      .pmf-settings-tab-title{font-size:24px;overflow-wrap:normal;word-break:normal}
+      .pmf-settings-section h3{font-size:12px}
+      .pmf-settings-row{min-width:0;word-break:normal;overflow-wrap:normal}
+      .pmf-settings-row-field{grid-template-columns:minmax(0,1fr);align-items:stretch;gap:6px;min-height:0;padding:8px 0}
+      .pmf-settings-row-field>.pmf-settings-row-label{display:block;grid-column:1;min-width:0;font-size:14px;line-height:1.35;white-space:normal;word-break:normal;overflow-wrap:break-word}
+      .pmf-settings-row-field>.pmf-select-shell,.pmf-settings-row-field>input,.pmf-settings-row-field>textarea{grid-column:1;width:100%;min-width:0}
+      .pmf-editor-body .pmf-settings-row:not(.pmf-settings-row-toggle){grid-template-columns:minmax(0,1fr);align-items:stretch;gap:6px;min-height:0;padding:8px 0}
+      .pmf-editor-body .pmf-settings-row:not(.pmf-settings-row-toggle)>span{display:block;min-width:0;font-size:14px;line-height:1.35;white-space:normal;word-break:normal;overflow-wrap:break-word}
+      .pmf-editor-body .pmf-settings-row:not(.pmf-settings-row-toggle)>.pmf-select-shell{width:100%;min-width:0}
+      .pmf-settings-row-toggle{grid-template-columns:minmax(0,1fr);align-items:center;gap:6px;padding:5px 0}
+      .pmf-settings-row-toggle.pmf-settings-row-chevron{grid-template-columns:minmax(0,1fr) 42px}
+      .pmf-settings-row-toggle>.pmf-settings-row-label{display:none}
+      .pmf-settings-row-toggle>.pmf-settings-toggle{grid-column:1!important;min-width:0;margin:0!important;padding:5px 0;line-height:1.35;white-space:normal;word-break:normal;overflow-wrap:break-word}
+      .pmf-settings-row-toggle>.pmf-settings-chevron{grid-column:2;width:42px;min-height:38px!important}
+      .pmf-settings-content textarea{width:100%;min-width:0;min-height:96px;max-height:220px;line-height:1.45;word-break:normal;overflow-wrap:break-word}
+      .pmf-settings-actions{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+      .pmf-settings-actions button{width:100%;min-width:0;white-space:normal}
+      .pmf-settings-child h2{font-size:22px;line-height:1.25}
+      .pmf-editor-body{padding:12px;overflow-x:hidden}
+      .pmf-list-editor{max-height:min(430px,calc(100dvh - 230px))}
+      .pmf-rule-list{overflow-x:hidden}
+      .pmf-rule-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 38px;gap:8px;min-width:0;margin:8px 0;padding:9px;border:1px solid var(--pmf-border);border-radius:5px;background:var(--pmf-surface-1);white-space:normal}
+      .pmf-rule-row>:nth-child(1){grid-column:1;grid-row:1}
+      .pmf-rule-row>:nth-child(2){grid-column:2;grid-row:1}
+      .pmf-rule-row>[data-pmf-rule-text]{grid-column:1/-1;grid-row:2;min-height:40px}
+      .pmf-rule-row>.pmf-field-choice{grid-column:1/-1;grid-row:3;width:100%;min-height:40px;text-align:left}
+      .pmf-rule-row>.pmf-delete-row{grid-column:3;grid-row:1;width:38px;min-height:38px!important}
+      .pmf-rule-first{display:grid;place-items:center;min-height:38px;border:1px solid var(--pmf-border);border-radius:4px;background:var(--pmf-surface-2)}
+      .pmf-expression-preview{font-size:12px;line-height:1.45;overflow-wrap:anywhere}
+      .pmf-floating-menu,.pmf-control-menu{max-width:calc(100vw - 16px)!important;max-height:min(420px,calc(100dvh - 16px));overflow:auto}
+      .pmf-control-menu button{min-height:42px;padding:8px 12px;line-height:1.25;text-align:left;white-space:normal;word-break:normal;overflow-wrap:break-word}
+      .pmf-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;padding:8px;gap:8px}
+      .pmf-controls .pmf-filter-button{grid-column:1/-1}
+      .pmf-controls .pmf-sort-button{grid-column:1;min-width:0}
+      .pmf-controls>.pmf-scan-button{grid-column:2;min-width:0}
+      .pmf-controls>.pmf-icon-button{grid-column:3;width:44px}
+      .pmf-split-primary{grid-column:2!important;grid-template-columns:minmax(0,1fr) 38px!important;min-width:0}
+      .pmf-split-primary>.pmf-scan-button:first-child{grid-column:1!important;grid-row:1!important;min-width:0}
+      .pmf-split-primary>.pmf-split-chevron{grid-column:2!important;grid-row:1!important;width:38px;min-width:38px}
+      .pmf-status{padding:8px 10px}
+      .pmf-status-left,.pmf-status-actions{min-width:0}
+      .pmf-status-right{width:100%;margin-left:0;text-align:left;overflow-wrap:anywhere}
+      .pmf-filter-popover{max-height:calc(100dvh - 16px);overflow:auto;overscroll-behavior:contain}
+      .pmf-creator-index-toolbar .pmf-controls,.pmf-creator-index-toolbar .pmf-native-proxy-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px}
+      .pmf-creator-index-toolbar .pmf-sort-button{grid-column:1}
+      .pmf-creator-index-toolbar .pmf-icon-button{grid-column:3;width:44px}
+      .pmf-creator-rule-list{overflow-x:hidden}
+      .pmf-creator-rules-dialog .pmf-editor-body{overflow-x:hidden}
+      .pmf-creator-rule-row{padding:10px}
+      .pmf-creator-rule-condition{grid-template-columns:minmax(0,1fr);align-items:stretch}
+      .pmf-creator-rule-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;min-width:0}
+      .pmf-creator-rule-controls>[name="join"]{grid-column:1}
+      .pmf-creator-rule-controls>[name="outcome"]{grid-column:2}
+      .pmf-creator-rule-controls>[name="value"]{grid-column:1/-1}
+      .pmf-creator-rule-controls>.pmf-rule-fields{grid-column:1/-1;width:100%;white-space:normal;text-align:left}
+      .pmf-creator-rule-controls>[name="match"]{grid-column:1}
+      .pmf-creator-rule-controls>[name="method"]{grid-column:2}
+      .pmf-creator-rule-controls>[name="from"]{grid-column:1}
+      .pmf-creator-rule-controls>[data-rule-between-dash]{display:none!important}
+      .pmf-creator-rule-controls>[name="to"]{grid-column:2}
+      .pmf-creator-rule-controls>[data-creator-rule-action="remove"]{grid-column:1/-1;width:100%;min-height:38px}
+      .pmf-aggregate-expression,.pmf-advanced-sort-expression{grid-template-columns:minmax(0,1fr);gap:7px}
+      .pmf-aggregate-expression>span,.pmf-advanced-sort-expression>span{display:none}
+      .pmf-aggregate-expression input,.pmf-aggregate-expression select,.pmf-advanced-sort-expression select{grid-column:1!important;grid-row:auto!important;width:100%}
+      .pmf-date-fields,.pmf-date-fields.pmf-between{grid-template-columns:minmax(0,1fr);gap:10px}
+      .pmf-bulk-scope{grid-template-columns:auto minmax(0,1fr);align-items:start}
+      .pmf-bulk-scope input[type="number"]{grid-column:2;width:100%}
+      .pmf-queue-batch,.pmf-queue-row{grid-template-columns:minmax(0,1fr)}
+      .pmf-queue-batch>span,.pmf-queue-row>span{justify-self:stretch;flex-wrap:wrap}
+      .pmf-queue-batch>button,.pmf-queue-batch>progress{grid-column:1}
+    }
+    @media(max-width:430px){
+      .pmf-dialog>header strong{font-size:15px}
+      .pmf-settings-content{padding-left:10px;padding-right:10px}
+      .pmf-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 42px}
+      .pmf-creator-index-toolbar .pmf-controls,.pmf-creator-index-toolbar .pmf-native-proxy-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 42px}
+      .pmf-controls button,.pmf-controls select{font-size:13px}
+      .pmf-status-left{gap:8px}
+      .pmf-dialog>footer{grid-template-columns:minmax(0,1fr)}
+      .pmf-settings-dialog>footer>button:first-child{grid-column:1}
+      .pmf-rule-row{grid-template-columns:minmax(0,1fr) 38px}
+      .pmf-rule-row>:nth-child(1){grid-column:1;grid-row:1}
+      .pmf-rule-row>:nth-child(2){grid-column:1;grid-row:2}
+      .pmf-rule-row>[data-pmf-rule-text]{grid-column:1/-1;grid-row:3}
+      .pmf-rule-row>.pmf-field-choice{grid-column:1/-1;grid-row:4}
+      .pmf-rule-row>.pmf-delete-row{grid-column:2;grid-row:1}
+      .pmf-creator-rule-controls{grid-template-columns:minmax(0,1fr)}
+      .pmf-creator-rule-controls>*{grid-column:1!important}
+    }
   `);
 
   const NativeActionAlignment = {

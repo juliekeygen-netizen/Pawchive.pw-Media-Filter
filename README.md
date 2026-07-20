@@ -2,11 +2,19 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.11.1**
+Current version: **0.11.2**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.11.2 mobile-responsive interface
+
+The PMF interface now has a dedicated phone and small-tablet layout. Settings rows stack the setting name above its select, input, or textarea instead of squeezing labels into a narrow desktop column. Checkbox rows retain a compact checkbox-and-chevron layout. Settings tabs scroll horizontally without wrapping, automatically center the selected tab, and the modal uses the dynamic viewport plus safe-area padding so its content and Save/Cancel actions remain reachable above mobile browser controls.
+
+Post **Custom search rules** and creator **Advanced rules** are rendered as stacked mobile cards rather than wide desktop tables. Rule text, field selection, conditions, Amount/Percentage inputs, and delete controls no longer require horizontal dragging. Creator/post toolbars use safe mobile columns; the Local catalogue Update split button keeps its primary action and chevron on one row. Floating sort, service, field, and choice menus use a useful mobile width, remain inside the viewport, and can open above a trigger when space below is limited.
+
+Bulk selection, queue rows, filter popovers, date and aggregate editors, maintenance buttons, dialog footers, and long help/status text also reflow at 760 px and narrower. Desktop 1080p/1440p layouts and stored data are unchanged.
 
 ## v0.11.1 second-pass audit corrections
 

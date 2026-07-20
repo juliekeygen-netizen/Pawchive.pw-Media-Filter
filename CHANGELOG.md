@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.2
+
+- Added a dedicated responsive mobile layout for post and creator Settings: setting names stack above controls, toggle/chevron rows remain compact, textareas/selects use the available width, and labels no longer collapse into vertical letter columns.
+- Converted Settings tabs into a horizontally scrollable, non-wrapping tab strip that keeps the active section centered, and switched modal sizing to dynamic viewport units with safe-area-aware padding and reachable mobile footers.
+- Reflowed post Custom search rules and creator Advanced rules into mobile card layouts without horizontal dragging, while keeping fields, text, conditions, values, and remove actions usable on narrow screens.
+- Repaired mobile toolbar geometry, including the Local catalogue Update split button, and made floating/anchored menus wider, viewport-clamped, internally scrollable, and able to open above low triggers.
+- Added responsive queue, bulk-dialog, filter-popover, date/aggregate-editor, and maintenance-action layouts for phones and small tablets.
+- Added focused v0.11.2 mobile responsive UI coverage; 51 executable tests now pass.
+
 ## 0.11.1
 
 - Corrected saved Published date off-state and separated the Advanced-rules group switch from each rule row, so disabling a group no longer erases or silently re-enables its configuration.
