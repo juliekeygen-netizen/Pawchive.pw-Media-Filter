@@ -1,3 +1,4 @@
+# Triggered after workflow registration
 name: Apply Pawchive v0.10.10
 
 on:
