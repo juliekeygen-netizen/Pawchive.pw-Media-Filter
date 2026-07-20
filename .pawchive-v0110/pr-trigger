@@ -1,1 +1,1 @@
-Retrigger Pawchive v0.10.10 publication with split validation steps.
+Retrigger Pawchive v0.10.10 publication using git apply and the full test suite as integrity checks.
