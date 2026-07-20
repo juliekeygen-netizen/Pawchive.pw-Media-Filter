@@ -1,0 +1,40 @@
++      const scope=native?.querySelector?.('menu')||native;const nodes=[...scope?.querySelectorAll?.('a[data-value],button[data-value],li')||[]];
++      const candidates=nodes.map((item,index)=>{const label=String(item.textContent||'').trim();return{item,index,label,role:NativePaginatorMirror.role(label,index),anchor:item.matches('a[data-value],button[data-value]'),disabled:item.matches('li,.pagination-button-disabled,[disabled],[aria-disabled="true"]'),current:item.matches('.pagination-button-current,[aria-current="page"]')};});
++      const chosen=new Map();candidates.forEach((candidate)=>{const prior=chosen.get(candidate.role);if(!prior||candidate.current&&!prior.current||candidate.anchor&&!prior.anchor&&!prior.current||!candidate.disabled&&prior.disabled&&!prior.current)chosen.set(candidate.role,candidate);});
++      return[...chosen.values()].sort((a,b)=>a.index-b.index);
++    },
++    render(native,host,{includeCount=true}={}){
++      host?.replaceChildren?.();if(!native||!host)return false;
++      const items=NativePaginatorMirror.items(native);if(!items.length)return false;
++      if(includeCount){const small=native.querySelector('small');if(small){const count=small.cloneNode(true);count.classList.add('pmf-filtered-count');host.append(count);}}
++      const menu=document.createElement('div');menu.className='pmf-page-controls';items.forEach(({index,label,disabled,current})=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.nativePaginatorIndex=String(index);button.disabled=disabled;if(current){button.setAttribute('aria-current','page');button.classList.add('pmf-current-page');}menu.append(button);});host.append(menu);return true;
++    },
++    activate(native,index){const candidate=NativePaginatorMirror.items(native).find((item)=>item.index===Number(index));if(!candidate||candidate.disabled)return false;candidate.item.click();return true;},
++    activateRole(native,role){const candidate=NativePaginatorMirror.items(native).find((item)=>item.role===role&&!item.disabled);if(!candidate)return false;candidate.item.click();return true;},
++  };
++
+   const NativeArtistsProxy = {
+     options(source,{service=false}={}){return[...source?.options||[]].map((option)=>({value:option.value,label:service&&option.value===''?'Any service':String(option.textContent||option.value).trim()}));},
+     label(source,{service=false}={}){const option=[...source?.options||[]].find((item)=>item.value===source.value);return service&&source?.value===''?'Any service':String(option?.textContent||source?.value||'').trim();},
+     defaultDirection(mode){return['name','service'].includes(String(mode))?'asc':'desc';},
+-    nextSort(currentMode,currentDirection,selectedMode){const same=String(currentMode)===String(selectedMode);return{mode:String(selectedMode),direction:same?(String(currentDirection)==='asc'?'desc':'asc'):NativeArtistsProxy.defaultDirection(selectedMode)};},
++    nextSort(currentMode,currentDirection,selectedMode){const direction=String(currentDirection)==='asc'?'asc':'desc';const same=String(currentMode)===String(selectedMode);return{mode:String(selectedMode),direction:same?(direction==='asc'?'desc':'asc'):direction};},
+     sync(found,host){
+       if(!found||!host||!found.serviceControl||!found.sortControl||!found.directionControl)return false;const service=host.querySelector('[data-creator-index-action="native-service"]'),sort=host.querySelector('[data-creator-index-action="native-sort"]');if(!service||!sort)return false;service.querySelector('[data-proxy-label]').textContent=NativeArtistsProxy.label(found.serviceControl,{service:true});sort.querySelector('[data-proxy-label]').textContent=`Sort: ${NativeArtistsProxy.label(found.sortControl)}`;sort.querySelector('[data-proxy-direction]').textContent=(found.directionControl.value||'desc')==='asc'?'▲':'▼';return true;
+     },
+     activate(found,type,value){
+       const source=type==='service'?found?.serviceControl:found?.sortControl;if(!source)return false;if(type==='sort'){const next=NativeArtistsProxy.nextSort(source.value,found?.directionControl?.value,value);if(found?.directionControl)found.directionControl.value=next.direction;source.value=next.mode;}else source.value=value;source.dispatchEvent(new Event('input',{bubbles:true}));source.dispatchEvent(new Event('change',{bubbles:true}));return true;
+     },
+-    paginator(found,host){
+-      host.replaceChildren();const native=found?.paginators?.[0];if(!native)return false;const small=native.querySelector('small');const candidates=[...native.querySelectorAll('a[data-value],li')].map((item,index)=>{const label=String(item.textContent||'').trim();const role=label==='<<'?'first':label==='<'?'previous':label==='>'?'next':label==='>>'?'last':/^\d+$/.test(label)?`page:${label}`:`other:${index}`;return{item,index,label,role,anchor:item.matches('a[data-value]'),disabled:item.matches('li,.pagination-button-disabled'),current:item.matches('.pagination-button-current,[aria-current="page"]')};});const chosen=new Map();candidates.forEach((candidate)=>{const prior=chosen.get(candidate.role);if(!prior||candidate.current&&!prior.current||candidate.anchor&&!prior.anchor&&!prior.current||!candidate.disabled&&prior.disabled&&!prior.current)chosen.set(candidate.role,candidate);});const ordered=[...chosen.values()].sort((a,b)=>a.index-b.index);const menu=document.createElement('div');menu.className='pmf-page-controls';ordered.forEach(({index,label,disabled,current})=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.nativePaginatorIndex=String(index);button.disabled=disabled;if(current)button.setAttribute('aria-current','page');menu.append(button);});if(small){const count=small.cloneNode(true);count.classList.add('pmf-filtered-count');host.append(count);}host.append(menu);return true;
+-    },
+-    activatePage(found,index){const source=[...found?.paginators?.[0]?.querySelectorAll?.('a[data-value],li')||[]][Number(index)];if(!source||source.matches('li,.pagination-button-disabled'))return false;source.click();return true;},
++    paginator(found,host){return NativePaginatorMirror.render(found?.paginators?.[0],host);},
++    activatePage(found,index){return NativePaginatorMirror.activate(found?.paginators?.[0],index);},
+   };
+ 
+   const AttachmentBadgeSizing = {
+@@ -2961,9 +3061,10 @@
+     subscribe(listener){CatalogueJobManager.listeners.add(listener);listener(CatalogueJobManager.snapshot());return()=>CatalogueJobManager.listeners.delete(listener);},
+     notify(){const snapshot=CatalogueJobManager.snapshot();CatalogueJobManager.listeners.forEach((listener)=>{try{listener(snapshot);}catch(error){Logger.warn('Catalogue job subscriber failed.',error);}});},
+     setConcurrency(value){CatalogueJobManager.concurrency=[1,2].includes(Number(value))?Number(value):1;CatalogueJobManager.notify();CatalogueJobManager.pump();return CatalogueJobManager.concurrency;},
