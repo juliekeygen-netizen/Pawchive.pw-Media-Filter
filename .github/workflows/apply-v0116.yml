@@ -38,21 +38,63 @@ jobs:
           git apply /tmp/pawchive-v0116.patch
 
       - name: Validate v0.11.6
+        id: validate
         shell: bash
         run: |
-          set -euo pipefail
-          node --check pawchive-pw-media-filter.user.js
+          set +e
+          result=/tmp/pawchive-v0116-validation.txt
+          : > "$result"
+          failed=0
+          echo "Node: $(node --version)" >> "$result"
+          if node --check pawchive-pw-media-filter.user.js >> "$result" 2>&1; then
+            echo "PASS node --check" >> "$result"
+          else
+            echo "FAIL node --check" >> "$result"
+            failed=1
+          fi
           test_count=0
           while IFS= read -r test_file; do
-            echo "Running $test_file"
-            node "$test_file"
             test_count=$((test_count + 1))
+            one=/tmp/pawchive-one-test.log
+            if node "$test_file" > "$one" 2>&1; then
+              echo "PASS $test_file" >> "$result"
+            else
+              echo "FAIL $test_file" >> "$result"
+              cat "$one" >> "$result"
+              failed=1
+            fi
           done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
-          echo "Executable tests: $test_count"
-          test "$test_count" -eq 55
-          git diff --check
-          grep -q '@version      0.11.6' pawchive-pw-media-filter.user.js
-          grep -q "version: '0.11.6'" pawchive-pw-media-filter.user.js
+          echo "Executable tests: $test_count" >> "$result"
+          if [ "$test_count" -ne 55 ]; then
+            echo "FAIL expected 55 executable tests" >> "$result"
+            failed=1
+          fi
+          if git diff --check >> "$result" 2>&1; then
+            echo "PASS git diff --check" >> "$result"
+          else
+            echo "FAIL git diff --check" >> "$result"
+            failed=1
+          fi
+          if grep -q '@version      0.11.6' pawchive-pw-media-filter.user.js && grep -q "version: '0.11.6'" pawchive-pw-media-filter.user.js; then
+            echo "PASS version markers" >> "$result"
+          else
+            echo "FAIL version markers" >> "$result"
+            failed=1
+          fi
+          cat "$result"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload validation diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: pawchive-v0116-validation
+          path: /tmp/pawchive-v0116-validation.txt
+          if-no-files-found: error
+
+      - name: Require successful validation
+        shell: bash
+        run: test "${{ steps.validate.outputs.failed }}" = "0"
 
       - name: Publish directly to master
         shell: bash
