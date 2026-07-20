@@ -1,0 +1,99 @@
++- `/artists` Native and Catalogue modes and creator post pages expose functional top and bottom pagination. Left/Right Arrow paging is ignored inside form controls, editable content, or overlays.
++- The missing-attachment inventory is a local IndexedDB cursor count and reports known complete, known missing, unknown, and total stored Catalogue posts without network requests.
++- Missing-attachment maintenance has at most five structured workers and two HTML workers. The shared scheduler still spaces request starts and applies global 429 cooldown. After repeated zero-hit samples for a host/service, structured lookup is bypassed for the remainder of the page session.
++- Native all-creator API records merge any supplied profile identity/artwork into existing directory records. Creator profile repair remains the explicit operation for optional identity/artwork gaps.
++- Creator/all Catalogue clearing cancels pending maintenance, stops and awaits active Catalogue and repair writers, resets the missing-attachment checkpoint, removes retained creator-session data, and refreshes a mounted `/artists` view. Clear-all preserves creator-directory records, creator/post status, presets, and global settings. The creator-only clear action is unavailable outside an active creator page.
++
+ ## v0.10.9 live-test contracts
+ 
+ - Aggregate-setting changes must not blank creator attachment badges. A structurally compatible prior summary may remain visible while its fingerprint is stale, but a background refresh must recompute and replace it.
+diff --git a/TESTING.md b/TESTING.md
+index 254ef3a..3f8cdd6 100644
+--- a/TESTING.md
++++ b/TESTING.md
+@@ -1,4 +1,18 @@
+-# Pawchive.pw Media Filter v0.10.9 testing
++# Pawchive.pw Media Filter v0.10.10 testing
++
++## v0.10.10 consistency and navigation matrix
++
++Run `tests/v01010-consistency-navigation-defaults.cjs` and the complete suite; 45 executable tests must pass.
++
++1. In External-link scope, switch between **Media and download links** and **Any external link**. For one scanned creator, compare creator-card External links totals, the creator-page External links filter, post-card badges, creator filters, and sort values. Every surface must use the same scope.
++2. Confirm the defaults omit `redgifs.com`; save comma-separated project keywords and verify English, Japanese, Simplified Chinese, and Traditional Chinese project-file phrases match after reload. Customized lists must survive the schema-5 migration.
++3. On Native directory, keep the native direction descending, change the sort field to Alphabetical Order, and compare against Pawchive with the userscript disabled. The direction and ordering must remain native-authoritative. Choosing Alphabetical Order again must reverse it.
++4. Exercise first/previous/page/next/last at both top and bottom of Native creators, Local Catalogue, creator native posts, and creator filtered posts. Both controls must stay synchronized. Left/Right Arrow must page except while focus is in an input, textarea, select, button, editable node, or modal.
++5. Open Data & performance and verify the missing-attachment inventory satisfies `known = no-missing + missing` and `total = known + unknown`. Run First N maintenance and confirm the inventory refreshes after completion.
++6. During maintenance, confirm at most five structured workers and two HTML fallbacks are active, request starts remain scheduler-spaced, 429 triggers cooldown/concurrency reduction, and a repeatedly unhelpful structured endpoint is bypassed.
++7. Change known hosts or project keywords after a completed scan. Existing records and creator badges must refresh without clearing the Catalogue or refetching all list pages.
++8. Start bulk scans from Native all-results selection and verify API-supplied name, favorite count, avatar, and banner survive into Local cards. Run Creator profile repair for remaining weak/optional records.
++9. Start a creator scan and a missing-attachment update, then use the relevant clear action. Confirm all writers settle before deletion, the maintenance checkpoint disappears, cleared rows do not reappear, retained creator pages do not restore stale posts, `/artists` refreshes, and the creator-only clear action is absent from `/artists` Settings.
+ 
+ ## v0.10.9 live-test regression matrix
+ 
+diff --git a/pawchive-pw-media-filter.user.js b/pawchive-pw-media-filter.user.js
+index 3daeaf5..23364ab 100644
+--- a/pawchive-pw-media-filter.user.js
++++ b/pawchive-pw-media-filter.user.js
+@@ -1,7 +1,7 @@
+ // ==UserScript==
+ // @name         Pawchive.pw Media Filter
+ // @namespace    pawchive-pw-media-filter
+-// @version      0.10.9
++// @version      0.10.10
+ // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
+ // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
+ // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
+@@ -22,7 +22,7 @@
+ 
+   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+   const Config = Object.freeze({
+-    version: '0.10.9',
++    version: '0.10.10',
+     schemaVersion: 2,
+     pageSize: 50,
+     filteredPageSize: 50,
+@@ -71,7 +71,7 @@
+     likelyHosts: [
+       'youtube.com', 'youtu.be', 'vimeo.com', 'mega.nz', 'drive.google.com',
+       'dropbox.com', 'pixeldrain.com', 'pixeldrain.net', 'gofile.io',
+-      'mediafire.com', 'streamable.com', 'redgifs.com',
++      'mediafire.com', 'streamable.com',
+     ],
+   });
+ 
+@@ -79,10 +79,17 @@
+     'PSD', 'Photoshop', 'PSB', 'CLIP', 'Clip Studio', 'CSP', 'SAI', 'Krita',
+     'source file', 'project file',
+     'Blender', 'BLEND', 'Maya', 'C4D', 'Cinema 4D', 'ZBrush',
++    // Japanese project/source-file phrases.
++    'PSDファイル', 'PSBファイル', 'CLIPファイル', 'プロジェクトファイル',
++    'ソースファイル', '元データ', '編集可能ファイル', 'レイヤー付きファイル',
++    // Simplified and Traditional Chinese project/source-file phrases.
++    'PSD文件', 'PSB文件', 'CLIP文件', '项目文件', '工程文件', '源文件',
++    '分层文件', '可编辑文件', 'PSD檔案', 'PSB檔案', 'CLIP檔案', '專案檔案',
++    '工程檔案', '原始檔案', '分層檔案', '可編輯檔案',
+   ]);
+ 
+   const DefaultSettings = Object.freeze({
+-    settingsSchemaVersion: 4,
++    settingsSchemaVersion: 5,
+     compactCardScale: 'big',
+     compactThumbnailAspectRatio: '1-1',
+     postAttachmentBadgeSize: 'small',
+@@ -238,7 +245,7 @@
+     value: Util.clone(DefaultSettings),
+     initialized:false,
+     schema:Object.freeze({
+-      version:4,
++      version:5,
+       sizeValues:Object.freeze(['small','medium','big']),
+       legacySharedAttachmentSize:'attachmentBadgeSize',
+       splitAttachmentSizes:Object.freeze(['postAttachmentBadgeSize','creatorAttachmentBadgeSize']),
+@@ -275,6 +282,24 @@
+           : 'posts';
+         next.settingsSchemaVersion=4;
+       }
++      if(version<5){
++        const previousHosts=[
++          'youtube.com','youtu.be','vimeo.com','mega.nz','drive.google.com','dropbox.com',
