@@ -36,6 +36,7 @@ jobs:
           test "$(sha256sum /tmp/pawchive-v0112.patch | awk '{print $1}')" = "b7ae90c3b63a52a61d639c7d303dcfa4970d3dc747fcbef087a957101b9afb78"
           git apply --check /tmp/pawchive-v0112.patch
           git apply /tmp/pawchive-v0112.patch
+          cp .pawchive-v0112/v0112-mobile-responsive-ui.cjs tests/v0112-mobile-responsive-ui.cjs
 
       - name: Validate v0.11.2
         id: validate
