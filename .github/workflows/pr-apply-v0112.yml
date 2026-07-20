@@ -35,6 +35,7 @@ jobs:
           test "$(sha256sum /tmp/pawchive-v01012.patch | awk '{print $1}')" = "2ceca857beb667803e4b64506cab30db92f9b9385597614a604336fcc41edeaf"
           git apply --check /tmp/pawchive-v01012.patch
           git apply /tmp/pawchive-v01012.patch
+          cp .pawchive-v0112/v01012-creator-native-visibility.cjs tests/v01012-creator-native-visibility.cjs
 
       - name: Validate userscript
         id: validate
