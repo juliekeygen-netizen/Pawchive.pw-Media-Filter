@@ -2,11 +2,21 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.12**
+Current version: **0.11.0**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.11.0 Local catalogue redesign
+
+The visible creator-directory mode is now **Local catalogue**. Its compact toolbar, search placeholder, stored-count text, typography, selected colors, and status language are aligned with the creator-page PMF interface without changing Pawchive’s native directory or the internal Catalogue storage model. The Native directory service proxy also renders one dropdown arrow instead of stacking a native-looking marker and PMF’s shared marker.
+
+Local sorting is reduced to **Popularity**, **Alphabetical**, **Catalogue post count**, **Post publish date**, and **Advanced attachment amounts**. The Advanced child dialog selects Videos, Images, Archives, Project files, or External links, chooses Amount or Percentage, and exposes Highest-first or Lowest-first direction. Amount and Percentage use the same global **Count method** as creator-card attachment badges: post mode counts matching posts; attachment mode counts files/links and calculates percentages against all counted attachments/links. Unknown values remain after known values in both directions.
+
+The former giant Creator Filters modal is replaced with a compact anchored popover. Service is always an independent AND condition; enabled groups can match **All** or **Any**. Published date and every media type open focused child dialogs. Custom extensions remain available, and Advanced rules support IF/AND/OR, Match/No match, multiple searchable fields, Amount/Percentage conditions, and an expression preview. Partial Catalogues are included only for mathematically safe lower-bound Amount conditions.
+
+Creator filter presets use a compact manager and preserve service, All/Any, date rules, media conditions, Custom extensions, Advanced rules, and partial-data policy. Legacy creator-filter and sort values are normalized into the new model without clearing Local Catalogue posts, creator identities, statuses, presets, or settings.
 
 ## v0.10.12 creator native-card visibility repair
 
@@ -112,7 +122,7 @@ Post schema 2 and IndexedDB version 5 are unchanged.
 
 Historical note for v0.10.0: that release exposed Favorite, Like, Hidden, and Scanned creator quick filters. v0.10.2 supersedes that combined index: Catalogue mode now exposes only Favorite, Like, and Hidden, while Native directory has the single negative current-page Catalogue-availability filter described above.
 
-Creator filters support directory fields, complete/partial/unscanned Catalogue state, media post and attachment/link counts, optional editable Catalogue percentages, and post-status aggregates. Percentages always use `posts containing the type ÷ total Catalogue posts × 100`. Aggregate filters require complete Catalogues by default; partial Catalogues can be explicitly included as lower-bound results.
+Historical note for v0.10.0: Creator filters originally exposed directory, Catalogue-state, media, percentage, and post-status aggregate fields in one large modal. v0.11.0 supersedes that interface with the compact Local catalogue popover, global Count-method semantics, Published date/media child dialogs, All/Any groups, Custom extensions, and Advanced rules.
 
 Individual creator pages add local **Like/Unlike** and **Hide/Unhide** actions beside Pawchive’s real Favorite action. Like and Hidden are stored locally and never make a Pawchive request. Creator cards use one coordinated right rail for Favorite/Like, attachment totals, and Hidden status. Hidden cards can use the shared Low/Medium/High dim treatment.
 

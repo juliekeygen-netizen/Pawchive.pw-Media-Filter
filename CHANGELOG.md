@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.0
+
+- Renamed the visible creator-directory mode to **Local catalogue** and aligned its search, status, count, and empty-state wording while preserving internal Catalogue identifiers and stored data.
+- Replaced the legacy Local sort list with Popularity, Alphabetical, Catalogue post count, Post publish date, and an Advanced attachment amounts child dialog.
+- Made the existing global Count method authoritative for creator media Amount and Percentage sorting/filtering, including attachment/link percentages against the complete counted attachment/link universe.
+- Replaced the oversized Creator Filters modal with a compact anchored popover, independent Service filtering, All/Any group matching, Published date and media child dialogs, and safe partial-Catalogue handling.
+- Added advanced creator text rules with IF/AND/OR, Match/No match, multi-field selection, Amount/Percentage conditions, expression previews, and lower-bound safety.
+- Redesigned creator filter presets while preserving Custom extensions, advanced rules, service, date, All/Any, and partial-data settings through normalization and migration.
+- Unified Local catalogue typography and selected-state styling, added the requested quick Hidden status color, and removed the duplicate native service dropdown arrow.
+- Added focused v0.11.0 coverage; 49 executable tests now pass.
+
 ## 0.10.12
 
 - Fixed the creator-page early-takeover regression that concealed native post geometry before the compact grid could measure it, which could leave a scanned creator with toolbar and paginators but no visible post cards.

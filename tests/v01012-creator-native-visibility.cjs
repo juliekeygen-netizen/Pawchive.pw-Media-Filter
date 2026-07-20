@@ -13,8 +13,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     PawchiveDOM,
   } = api;
 
-  assert.equal(Config.version, '0.10.12');
-  assert.match(originalSource, /\/\/ @version\s+0\.10\.12/);
+  assert.equal(Config.version, '0.11.0');
+  assert.match(originalSource, /\/\/ @version\s+0\.11\.0/);
 
   // An actually unscanned creator must never enter early takeover.
   App.context = { creatorKey:'pawchive.pw|patreon|unscanned' };
@@ -61,7 +61,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(nativeGrid.dataset.pmfEarlyConcealed, undefined);
 
   PawchiveDOM.find = originalFind;
-  console.log('Pawchive Media Filter v0.10.12 creator native-visibility regression tests passed.');
+  console.log('Pawchive Media Filter v0.11.0 creator native-visibility regression tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

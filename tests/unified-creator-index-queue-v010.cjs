@@ -11,8 +11,8 @@ const {
   CatalogueJobManager, NativeActionAlignment,
 } = api;
 
-assert.equal(Config.version, '0.10.12');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.12/);
+assert.equal(Config.version, '0.11.0');
+assert.match(originalSource, /\/\/ @version\s+0\.11\.0/);
 assert.equal(Config.databaseVersion, 5);
 assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
 assert.match(originalSource, /createObjectStore\('creatorStates'/);
@@ -154,12 +154,12 @@ assert.match(originalSource, /root\.id\s*=\s*'pmf-artists-root'/);
 assert.match(originalSource, /CreatorCardRightRail/);
 assert.match(originalSource, /CreatorQueuePanel/);
 assert.match(originalSource, /pmf-field-availability/);
-assert.match(originalSource, /Public creator favorite count/);
-assert.match(originalSource, /Total Catalogue posts/);
-assert.match(originalSource, /Posts published within/);
-assert.match(originalSource, /Native-favorited posts/);
+assert.match(originalSource, /Match selected filters/);
+assert.match(originalSource, /Published date/);
+assert.match(originalSource, /Advanced rules/);
+assert.match(originalSource, /Custom extensions/);
 assert.match(originalSource, /CreatorPresets\.apply/);
 assert.match(originalSource, /records\.forEach\(\(record\)=>ArtistsPageController\.scheduleBackfill/);
 assert.doesNotMatch(originalSource, /width:\s*100vw/);
 
-console.log('Pawchive Media Filter v0.10.0 unified creator index and queue tests passed.');
+console.log('Pawchive Media Filter v0.11.0 unified creator index and queue tests passed.');

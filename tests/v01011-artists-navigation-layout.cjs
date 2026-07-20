@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Lifecycle,
   } = api;
 
-  assert.equal(Config.version, '0.10.12');
-  assert.match(originalSource, /\/\/ @version\s+0\.10\.12/);
+  assert.equal(Config.version, '0.11.0');
+  assert.match(originalSource, /\/\/ @version\s+0\.11\.0/);
 
   // Local grid visibility must be authoritative even against display:grid!important.
   const localGrid = makeElement('section');
@@ -114,7 +114,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(originalSource, /…and \$\{remaining\.toLocaleString\(\)\} more/);
   assert.match(originalSource, /action==='resume'\?'Resume scan'/);
 
-  console.log('Pawchive Media Filter v0.10.12 artists navigation and responsive layout tests passed.');
+  console.log('Pawchive Media Filter v0.11.0 artists navigation and responsive layout tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

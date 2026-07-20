@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.10.12
+// @version      0.11.0
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.10.12',
+    version: '0.11.0',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -2554,48 +2554,211 @@
   const CreatorCustomRule = {
     fields:['title','attachmentFilename','tags','content','service','creator'],
     matches:['contains','equals','starts-with','ends-with'],
-    normalize(rule={}){return{id:String(rule.id||`creator-rule-${Date.now()}-${Math.random().toString(36).slice(2)}`),enabled:rule.enabled!==false,field:CreatorCustomRule.fields.includes(rule.field)?rule.field:'title',match:CreatorCustomRule.matches.includes(rule.match)?rule.match:'contains',value:String(rule.value||'').trim(),count:CreatorAggregateCondition.normalize(rule.count||{}),percentageEnabled:rule.percentageEnabled===true,percentage:CreatorAggregateCondition.normalize(rule.percentage||{},true)};},
-    valid(rule={}){const value=CreatorCustomRule.normalize(rule);return Boolean(value.value)&&CreatorAggregateCondition.valid(value.count)&&(!value.percentageEnabled||CreatorAggregateCondition.valid(value.percentage,true));},
+    joins:['if','and','or'],
+    outcomes:['match','no-match'],
+    normalize(rule={}) {
+      const legacyField=CreatorCustomRule.fields.includes(rule.field)?rule.field:'title';
+      const fields=Util.unique((Array.isArray(rule.fields)?rule.fields:[legacyField]).filter((field)=>CreatorCustomRule.fields.includes(field)));
+      return {
+        id:String(rule.id||`creator-rule-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+        enabled:rule.enabled!==false,
+        join:CreatorCustomRule.joins.includes(rule.join)?rule.join:'if',
+        outcome:CreatorCustomRule.outcomes.includes(rule.outcome)?rule.outcome:'match',
+        fields:fields.length?fields:['title'],
+        field:fields[0]||'title',
+        match:CreatorCustomRule.matches.includes(rule.match)?rule.match:'contains',
+        value:String(rule.value||'').trim(),
+        method:rule.method==='percentage'||rule.percentageEnabled===true?'percentage':'amount',
+        count:CreatorAggregateCondition.normalize(rule.count||{operator:'at-least',from:1,to:1}),
+        percentageEnabled:rule.method==='percentage'||rule.percentageEnabled===true,
+        percentage:CreatorAggregateCondition.normalize(rule.percentage||{operator:'at-least',from:1,to:1},true),
+      };
+    },
+    valid(rule={}) {
+      const value=CreatorCustomRule.normalize(rule);
+      return Boolean(value.value)&&value.fields.length>0&&(value.method==='percentage'?CreatorAggregateCondition.valid(value.percentage,true):CreatorAggregateCondition.valid(value.count));
+    },
   };
 
   const DefaultCreatorFilterState = Object.freeze({
-    service:'all',catalogueState:'any',includePartialLowerBounds:false,publicFavorites:null,dateIndexedFrom:'',dateIndexedTo:'',dateUpdatedFrom:'',dateUpdatedTo:'',
-    totalPosts:null,lastCatalogueUpdateFrom:'',lastCatalogueUpdateTo:'',earliestPublishedFrom:'',latestPublishedTo:'',publishedWithinFrom:'',publishedWithinTo:'',
-    media:{},postStatuses:{},customRules:[],
+    service:'all',
+    matchMode:'all',
+    includePartialLowerBounds:false,
+    publishedDate:{enabled:false,operator:'between',from:'',to:'',includeUnknown:false},
+    media:{},
+    customRules:[],
   });
 
   const CreatorFilterEngine = {
-    normalizeState(value={}) {
-      const safe=value&&typeof value==='object'?value:{};const media={};
-      ['videos','images','archives','projectFiles','externalLinks','customExtensions'].forEach((type)=>{const source=safe.media?.[type]||{};media[type]={enabled:source.enabled===true,measure:String(source.measure||'posts'),count:CreatorAggregateCondition.normalize(source.count||source),percentageEnabled:source.percentageEnabled===true,percentage:CreatorAggregateCondition.normalize(source.percentage||{},true),extensions:type==='customExtensions'?Util.normalizeExtensions(source.extensions||source.values||[]).values:[]};});
-      const postStatuses={};['liked','seen','favorited'].forEach((type)=>{const source=safe.postStatuses?.[type]||{};postStatuses[type]={enabled:source.enabled===true,count:CreatorAggregateCondition.normalize(source.count||source),percentageEnabled:source.percentageEnabled===true,percentage:CreatorAggregateCondition.normalize(source.percentage||{},true)};});
-      return{...Util.clone(DefaultCreatorFilterState),...safe,service:String(safe.service||'all'),catalogueState:['any','complete','partial','unscanned'].includes(safe.catalogueState)?safe.catalogueState:'any',includePartialLowerBounds:safe.includePartialLowerBounds===true,publicFavorites:safe.publicFavorites?CreatorAggregateCondition.normalize(safe.publicFavorites):null,totalPosts:safe.totalPosts?CreatorAggregateCondition.normalize(safe.totalPosts):null,media,postStatuses,customRules:Array.isArray(safe.customRules)?safe.customRules.slice(0,50).map(CreatorCustomRule.normalize):[]};
+    mediaTypes:['videos','images','archives','projectFiles','externalLinks','customExtensions'],
+    normalizePublishedDate(value={}) {
+      const source=value&&typeof value==='object'?value:{};
+      const legacyEnabled=Boolean(source.enabled||source.from||source.to);
+      const operator=['at-least','at-most','between'].includes(source.operator)?source.operator:'between';
+      return {enabled:source.enabled===true||legacyEnabled,operator,from:String(source.from||''),to:String(source.to||''),includeUnknown:source.includeUnknown===true};
     },
-    requiresCatalogue(state){const value=CreatorFilterEngine.normalizeState(state);return value.catalogueState!=='any'||Object.values(value.media).some((rule)=>rule.enabled)||Object.values(value.postStatuses||{}).some((rule)=>rule?.enabled)||value.customRules.some((rule)=>rule.enabled);},
-    mediaMetric(record,type,rule){const media=record.summary?.media?.[type]||{};return rule.measure==='attachments'||rule.measure==='links'?Number(media.attachments??media.links??0):Number(media.posts||0);},
+    normalizeState(value={}) {
+      const safe=value&&typeof value==='object'?value:{};
+      const media={};
+      CreatorFilterEngine.mediaTypes.forEach((type)=>{
+        const source=safe.media?.[type]||{};
+        const hasConfiguredRule=Object.keys(source).length>0;
+        const method=source.percentageEnabled===true?'percentage':source.percentageEnabled===false?'amount':source.method==='percentage'?'percentage':'amount';
+        media[type]={
+          enabled:source.enabled===true,
+          method,
+          count:CreatorAggregateCondition.normalize(hasConfiguredRule?(source.count||source):{operator:'at-least',from:1,to:1}),
+          percentageEnabled:method==='percentage',
+          percentage:CreatorAggregateCondition.normalize(hasConfiguredRule?(source.percentage||{}):{operator:'at-least',from:1,to:1},true),
+          extensions:type==='customExtensions'?Util.normalizeExtensions(source.extensions||source.values||[]).values:[],
+        };
+      });
+      const legacyPublished=safe.publishedDate||{
+        enabled:Boolean(safe.publishedWithinFrom||safe.publishedWithinTo),
+        operator:'between',
+        from:safe.publishedWithinFrom||'',
+        to:safe.publishedWithinTo||'',
+        includeUnknown:false,
+      };
+      return {
+        ...Util.clone(DefaultCreatorFilterState),
+        service:['all','patreon','fanbox'].includes(String(safe.service))?String(safe.service):'all',
+        matchMode:safe.matchMode==='any'?'any':'all',
+        includePartialLowerBounds:safe.includePartialLowerBounds===true,
+        publishedDate:CreatorFilterEngine.normalizePublishedDate(legacyPublished),
+        media,
+        customRules:Array.isArray(safe.customRules)?safe.customRules.slice(0,50).map(CreatorCustomRule.normalize):[],
+      };
+    },
+    activeGroupCount(state) {
+      const value=CreatorFilterEngine.normalizeState(state);
+      return Number(value.publishedDate.enabled)+Object.values(value.media).filter((rule)=>rule.enabled).length+Number(value.customRules.some((rule)=>rule.enabled));
+    },
+    requiresCatalogue(state){return CreatorFilterEngine.activeGroupCount(state)>0;},
+    mediaAmount(record,type) {
+      const media=record.summary?.media?.[type]||{};
+      const countMode=Settings.value.creatorCardBadgeCountMode;
+      if(countMode==='attachments')return Number(media.attachments??media.links??0);
+      return Number(media.posts||0);
+    },
+    totalAttachmentUniverse(record) {
+      return ['videos','images','archives','projectFiles','externalLinks'].reduce((total,type)=>{
+        const media=record.summary?.media?.[type]||{};
+        return total+Math.max(0,Number(media.attachments??media.links??0)||0);
+      },0);
+    },
+    mediaPercentage(record,type) {
+      const summary=record.summary||{};
+      const media=summary.media?.[type]||{};
+      if(Settings.value.creatorCardBadgeCountMode==='attachments') {
+        const amount=Number(media.attachments??media.links??0);
+        return CreatorAggregateCondition.percentage(amount,CreatorFilterEngine.totalAttachmentUniverse(record));
+      }
+      const eligible=Number(summary.aggregateEligiblePostCount??summary.sourcePostCount)||0;
+      return CreatorAggregateCondition.percentage(Number(media.posts||0),eligible);
+    },
+    effectiveMethod(rule={}) {return rule.percentageEnabled===true?'percentage':rule.percentageEnabled===false?'amount':rule.method==='percentage'?'percentage':'amount';},
+    safeForPartial(rule) {
+      return CreatorFilterEngine.effectiveMethod(rule)!=='percentage'&&CreatorAggregateCondition.safeForPartial(rule.count,false);
+    },
+    publishedDateMatches(record,rule) {
+      if(!rule.enabled)return true;
+      const stamps=(record.summary?.publishedTimestamps||[]).filter(Number.isFinite);
+      if(!stamps.length)return rule.includeUnknown===true;
+      const from=rule.from?Date.parse(rule.from):Number.NEGATIVE_INFINITY;
+      const to=rule.to?Date.parse(rule.to)+86400000-1:Number.POSITIVE_INFINITY;
+      if(rule.operator==='at-least')return stamps.some((stamp)=>stamp>=from);
+      if(rule.operator==='at-most')return stamps.some((stamp)=>stamp<=(rule.from?Date.parse(rule.from)+86400000-1:to));
+      return stamps.some((stamp)=>stamp>=from&&stamp<=to);
+    },
+    mediaGroupMatches(record,type,rule,completeness,includePartialLowerBounds) {
+      if(!record.summary)return false;
+      if(completeness!=='complete'&&(!includePartialLowerBounds||!CreatorFilterEngine.safeForPartial(rule)))return false;
+      let amount,percentage;
+      if(type==='customExtensions') {
+        const aggregate=record.summary.customExtensionAggregates?.[CreatorCatalogueSummary.extensionFingerprint(rule.extensions)];
+        if(!aggregate)return false;
+        amount=Settings.value.creatorCardBadgeCountMode==='attachments'?Number(aggregate.files||0):Number(aggregate.posts||0);
+        const denominator=Settings.value.creatorCardBadgeCountMode==='attachments'?CreatorFilterEngine.totalAttachmentUniverse(record):Number(record.summary.aggregateEligiblePostCount??record.summary.sourcePostCount)||0;
+        percentage=CreatorAggregateCondition.percentage(Settings.value.creatorCardBadgeCountMode==='attachments'?Number(aggregate.files||0):Number(aggregate.posts||0),denominator);
+      } else {
+        amount=CreatorFilterEngine.mediaAmount(record,type);
+        percentage=CreatorFilterEngine.mediaPercentage(record,type);
+      }
+      return CreatorFilterEngine.effectiveMethod(rule)==='percentage'
+        ?CreatorAggregateCondition.test(percentage,{...rule.percentage,percentage:true})
+        :CreatorAggregateCondition.test(amount,rule.count);
+    },
+    customRuleMatches(record,rule,completeness,includePartialLowerBounds) {
+      if(!record.summary)return false;
+      if(completeness!=='complete'&&(!includePartialLowerBounds||rule.outcome==='no-match'||CreatorFilterEngine.effectiveMethod(rule)==='percentage'||!CreatorAggregateCondition.safeForPartial(rule.count,false)))return false;
+      const aggregate=record.summary.customRuleAggregates?.[CreatorCatalogueSummary.ruleFingerprint(rule)];
+      if(!aggregate)return false;
+      const eligible=Number(record.summary.aggregateEligiblePostCount??record.summary.sourcePostCount)||0;
+      const matched=CreatorFilterEngine.effectiveMethod(rule)==='percentage'
+        ?CreatorAggregateCondition.test(CreatorAggregateCondition.percentage(aggregate.posts,eligible),{...rule.percentage,percentage:true})
+        :CreatorAggregateCondition.test(aggregate.posts,rule.count);
+      return rule.outcome==='no-match'?!matched:matched;
+    },
+    customExpression(record,rules,completeness,includePartialLowerBounds) {
+      const active=rules.filter((rule)=>rule.enabled);
+      if(!active.length)return true;
+      let result=CreatorFilterEngine.customRuleMatches(record,active[0],completeness,includePartialLowerBounds);
+      for(let index=1;index<active.length;index+=1) {
+        const rule=active[index];
+        const current=CreatorFilterEngine.customRuleMatches(record,rule,completeness,includePartialLowerBounds);
+        result=rule.join==='or'?result||current:result&&current;
+      }
+      return result;
+    },
     matches(record,state) {
-      const value=CreatorFilterEngine.normalizeState(state);if(value.service!=='all'&&record.directory?.service!==value.service)return false;
-      if(value.publicFavorites&&!CreatorAggregateCondition.test(record.directory?.publicFavoriteCount,value.publicFavorites))return false;const inDate=(stamp,from,to)=>{const number=Number(stamp)||0;return(!from||number>=Date.parse(from))&&(!to||number<=Date.parse(to)+86400000-1);};if(!inDate(record.directory?.indexedAt,value.dateIndexedFrom,value.dateIndexedTo)||!inDate(record.directory?.updatedAt,value.dateUpdatedFrom,value.dateUpdatedTo))return false;
-      const completeness=record.summary?.completeness||record.catalogueState||'unscanned';if(value.catalogueState!=='any'&&completeness!==value.catalogueState)return false;
-      if(value.totalPosts&&!CreatorAggregateCondition.test(record.summary?.sourcePostCount,value.totalPosts))return false;
-      if(record.summary){if(!inDate(record.summary.lastCatalogueUpdateAt,value.lastCatalogueUpdateFrom,value.lastCatalogueUpdateTo))return false;if(value.earliestPublishedFrom&&(record.summary.earliestPublishedAt==null||Number(record.summary.earliestPublishedAt)<Date.parse(value.earliestPublishedFrom)))return false;if(value.latestPublishedTo&&(record.summary.latestPublishedAt==null||Number(record.summary.latestPublishedAt)>Date.parse(value.latestPublishedTo)+86400000-1))return false;if((value.publishedWithinFrom||value.publishedWithinTo)&&!(CreatorCatalogueSummary.publishedWithin(record.summary,value.publishedWithinFrom,value.publishedWithinTo)>0))return false;}
-       const eligible=Number(record.summary?.aggregateEligiblePostCount??record.summary?.sourcePostCount)||0;
-       for(const [type,rule] of Object.entries(value.media)){if(!rule.enabled)continue;if(!record.summary)return false;if(completeness!=='complete'&&(!value.includePartialLowerBounds||!CreatorAggregateCondition.safeForPartial(rule.count,rule.percentageEnabled)))return false;let media=record.summary.media?.[type]||{posts:0};if(type==='customExtensions'){const aggregate=record.summary.customExtensionAggregates?.[CreatorCatalogueSummary.extensionFingerprint(rule.extensions)];if(!aggregate)return false;media={posts:aggregate.posts,attachments:aggregate.files};}if(!CreatorAggregateCondition.test(rule.measure==='attachments'||rule.measure==='links'?Number(media.attachments??media.links??0):Number(media.posts||0),rule.count))return false;if(rule.percentageEnabled&&!CreatorAggregateCondition.test(CreatorAggregateCondition.percentage(media.posts,eligible),{...rule.percentage,percentage:true}))return false;}
-       for(const [type,rule] of Object.entries(value.postStatuses)){if(!rule.enabled)continue;if(!record.summary||completeness!=='complete'&&(!value.includePartialLowerBounds||!CreatorAggregateCondition.safeForPartial(rule.count,rule.percentageEnabled)))return false;const statuses=record.summary.statuses||{};if(type==='favorited'&&Number(statuses.favoriteKnown)<eligible)return false;const count=Number(statuses[type]||0);if(!CreatorAggregateCondition.test(count,rule.count))return false;if(rule.percentageEnabled&&!CreatorAggregateCondition.test(CreatorAggregateCondition.percentage(count,eligible),{...rule.percentage,percentage:true}))return false;}
-       for(const rule of value.customRules.filter((item)=>item.enabled)){if(!record.summary||completeness!=='complete'&&(!value.includePartialLowerBounds||!CreatorAggregateCondition.safeForPartial(rule.count,rule.percentageEnabled)))return false;const aggregate=record.summary.customRuleAggregates?.[CreatorCatalogueSummary.ruleFingerprint(rule)];if(!aggregate||!CreatorAggregateCondition.test(aggregate.posts,rule.count))return false;if(rule.percentageEnabled&&!CreatorAggregateCondition.test(CreatorAggregateCondition.percentage(aggregate.posts,eligible),{...rule.percentage,percentage:true}))return false;}
-      return true;
+      const value=CreatorFilterEngine.normalizeState(state);
+      if(value.service!=='all'&&record.directory?.service!==value.service)return false;
+      const completeness=record.summary?.completeness||record.catalogueState||'unscanned';
+      const groups=[];
+      if(value.publishedDate.enabled)groups.push(CreatorFilterEngine.publishedDateMatches(record,value.publishedDate));
+      for(const [type,rule] of Object.entries(value.media))if(rule.enabled)groups.push(CreatorFilterEngine.mediaGroupMatches(record,type,rule,completeness,value.includePartialLowerBounds));
+      if(value.customRules.some((rule)=>rule.enabled))groups.push(CreatorFilterEngine.customExpression(record,value.customRules,completeness,value.includePartialLowerBounds));
+      if(!groups.length)return true;
+      return value.matchMode==='any'?groups.some(Boolean):groups.every(Boolean);
     },
   };
 
   const CreatorSorter = {
-    normalize(mode='popularity',direction='desc'){return{mode:String(mode||'popularity'),direction:direction==='asc'?'asc':'desc'};},
-    value(record,mode) {
-      const directory=record.directory||{};const summary=record.summary||{},eligible=Number(summary.aggregateEligiblePostCount??summary.sourcePostCount)||0;const values={popularity:directory.publicFavoriteCount,indexed:directory.indexedAt,updated:directory.updatedAt,alphabetical:String(directory.creatorName||'').toLocaleLowerCase(),service:String(directory.service||''),posts:summary.sourcePostCount,latest:summary.latestPublishedAt,earliest:summary.earliestPublishedAt,catalogueUpdated:summary.lastCatalogueUpdateAt,liked:summary.statuses?.liked,seen:summary.statuses?.seen,favorited:summary.statuses?.favoriteKnown===eligible?summary.statuses?.favorited:null};
-      if(mode in values)return values[mode];const [type,metric='posts']=mode.split(':');const media=summary.media?.[type];return media?(metric==='percentage'?CreatorAggregateCondition.percentage(media.posts,eligible):media[metric]??media.posts):null;
+    modes:['popularity','alphabetical','posts','published','advanced'],
+    mediaTypes:['videos','images','archives','projectFiles','externalLinks'],
+    normalize(mode='popularity',direction='desc') {
+      const source=mode&&typeof mode==='object'?mode:{mode,direction};
+      let nextMode=String(source.mode||'popularity');
+      let nextDirection=source.direction==='asc'?'asc':'desc';
+      let advancedType=CreatorSorter.mediaTypes.includes(source.advancedType)?source.advancedType:'videos';
+      let advancedMethod=source.advancedMethod==='percentage'?'percentage':'amount';
+      if(nextMode==='latest'||nextMode==='earliest'){nextDirection=nextMode==='earliest'?'asc':'desc';nextMode='published';}
+      if(nextMode.includes(':')){const [type,metric]=nextMode.split(':');if(CreatorSorter.mediaTypes.includes(type)){nextMode='advanced';advancedType=type;advancedMethod=metric==='percentage'?'percentage':'amount';}}
+      if(!CreatorSorter.modes.includes(nextMode))nextMode='popularity';
+      return{mode:nextMode,direction:nextDirection,advancedType,advancedMethod};
+    },
+    advancedAmount(record,type) {return CreatorFilterEngine.mediaAmount(record,type);},
+    advancedPercentage(record,type) {return CreatorFilterEngine.mediaPercentage(record,type);},
+    value(record,modeOrOptions='popularity') {
+      const options=CreatorSorter.normalize(modeOrOptions,typeof modeOrOptions==='string'?'desc':modeOrOptions?.direction);
+      const directory=record.directory||{};const summary=record.summary||{};
+      if(options.mode==='popularity')return directory.publicFavoriteCount;
+      if(options.mode==='alphabetical')return String(directory.creatorName||'').toLocaleLowerCase();
+      if(options.mode==='posts')return summary.sourcePostCount;
+      if(options.mode==='published')return summary.latestPublishedAt;
+      if(options.mode==='advanced')return options.advancedMethod==='percentage'?CreatorSorter.advancedPercentage(record,options.advancedType):CreatorSorter.advancedAmount(record,options.advancedType);
+      return null;
     },
     sort(records,options={}) {
-      const {mode,direction}=CreatorSorter.normalize(options.mode,options.direction);const sign=direction==='asc'?1:-1;
-      return records.map((record,index)=>({record,index,value:CreatorSorter.value(record,mode)})).sort((a,b)=>{const aUnknown=a.value==null||a.value==='',bUnknown=b.value==null||b.value==='';if(aUnknown!==bUnknown)return aUnknown?1:-1;if(aUnknown)return a.index-b.index;const compared=typeof a.value==='string'?a.value.localeCompare(b.value):Number(a.value)-Number(b.value);return compared?compared*sign:a.index-b.index;}).map((item)=>item.record);
+      const normalized=CreatorSorter.normalize(options);const sign=normalized.direction==='asc'?1:-1;
+      return records.map((record,index)=>({record,index,value:CreatorSorter.value(record,normalized)})).sort((a,b)=>{
+        const aUnknown=a.value==null||a.value==='',bUnknown=b.value==null||b.value==='';
+        if(aUnknown!==bUnknown)return aUnknown?1:-1;
+        if(aUnknown)return a.index-b.index;
+        const compared=typeof a.value==='string'?a.value.localeCompare(b.value,undefined,{numeric:true,sensitivity:'base'}):Number(a.value)-Number(b.value);
+        return compared?compared*sign:a.index-b.index;
+      }).map((item)=>item.record);
     },
   };
 
@@ -2625,14 +2788,14 @@
       return{fingerprint:CreatorCatalogueSummary.extensionFingerprint(extensions),extensions,posts:matchingPosts,files:matchingFiles};
     },
     ruleFingerprint(rule={}) {
-      const normalized={field:String(rule.field||'title'),match:String(rule.match||'contains'),value:String(rule.value||'').trim().toLocaleLowerCase()};
-      return JSON.stringify(normalized);
+      const normalized=CreatorCustomRule.normalize(rule);const fields=[...normalized.fields].sort();
+      return fields.length===1?JSON.stringify({field:fields[0],match:normalized.match,value:normalized.value.toLocaleLowerCase()}):JSON.stringify({fields,match:normalized.match,value:normalized.value.toLocaleLowerCase()});
     },
     customRuleAggregate(posts,rule={}) {
-      const fingerprint=CreatorCatalogueSummary.ruleFingerprint(rule);const value=String(rule.value||'').trim().toLocaleLowerCase();let matchingPosts=0;
+      const normalized=CreatorCustomRule.normalize(rule);const fingerprint=CreatorCatalogueSummary.ruleFingerprint(normalized);const value=normalized.value.toLocaleLowerCase();let matchingPosts=0;
       if(!value)return{fingerprint,posts:0};
-      const match=(text)=>{const source=String(text||'').toLocaleLowerCase();return rule.match==='equals'?source===value:rule.match==='starts-with'?source.startsWith(value):rule.match==='ends-with'?source.endsWith(value):source.includes(value);};
-      CreatorCatalogueSummary.aggregatePosts(posts).forEach((post)=>{const fields={title:[post.title],attachmentFilename:post.attachmentFilenames||[],tags:post.tags||[],content:[post.contentText],service:[post.service],creator:[post.creatorId]};if((fields[rule.field]||fields.title).some(match))matchingPosts+=1;});
+      const match=(text)=>{const source=String(text||'').toLocaleLowerCase();return normalized.match==='equals'?source===value:normalized.match==='starts-with'?source.startsWith(value):normalized.match==='ends-with'?source.endsWith(value):source.includes(value);};
+      CreatorCatalogueSummary.aggregatePosts(posts).forEach((post)=>{const fields={title:[post.title],attachmentFilename:post.attachmentFilenames||[],tags:post.tags||[],content:[post.contentText],service:[post.service],creator:[post.creatorId]};if(normalized.fields.some((field)=>(fields[field]||[]).some(match)))matchingPosts+=1;});
       return{fingerprint,posts:matchingPosts};
     },
     publishedWithin(summary,from='',to='') {
@@ -5815,7 +5978,9 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     nativeScannedFilter: 'off',
     sort: {
       mode: 'popularity',
-      direction: 'desc'
+      direction: 'desc',
+      advancedType: 'videos',
+      advancedMethod: 'amount'
     },
     filterState: CreatorFilterEngine.normalizeState(GM_getValue(Config.creatorFilterStateKey, {})),
     statusFilters: CreatorStatusFilters.load(),
@@ -5846,7 +6011,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       modeSelector.dataset.pmfOwned = 'true';
       modeSelector.setAttribute('role', 'group');
       modeSelector.setAttribute('aria-label', 'Creator directory mode');
-      modeSelector.innerHTML = '<span>Directory mode</span><div class="pmf-mode-segments"><button type="button" data-creator-mode="native">Native directory</button><button type="button" data-creator-mode="catalogue">Catalogue</button></div>';
+      modeSelector.innerHTML = '<span>Directory mode</span><div class="pmf-mode-segments"><button type="button" data-creator-mode="native">Native directory</button><button type="button" data-creator-mode="catalogue">Local catalogue</button></div>';
       if (found.searchForm) found.searchForm.append(modeSelector);
       else found.searchInput?.insertAdjacentElement('afterend', modeSelector);
       const searchWidth = Math.round(found.searchInput?.getBoundingClientRect?.().width || 0);
@@ -5907,12 +6072,11 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       return root;
     },
     sortLabel() {
-      const item = CreatorSortUI.modes.find(([mode]) => mode === CreatorIndexUI.sort.mode);
-      return `${item?.[1]||'Popularity'} ${CreatorIndexUI.sort.direction==='asc'?'▲':'▼'}`;
+      return CreatorSortUI.label(CreatorIndexUI.sort);
     },
     chrome() {
       const native = CreatorIndexUI.mode === 'native';
-      CreatorIndexUI.toolbar.innerHTML = native ? `<div class="pmf-controls pmf-native-proxy-controls"><button class="pmf-filter-button pmf-menu-trigger" data-creator-index-action="native-service" aria-haspopup="menu"><span data-proxy-label>Any service</span><span aria-hidden="true">▾</span></button><button class="pmf-sort-button pmf-menu-trigger" data-creator-index-action="native-sort" aria-haspopup="menu"><span data-proxy-label>Sort</span><span data-proxy-direction aria-hidden="true">▼</span></button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-primary">Scan</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More scan actions" aria-haspopup="menu">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div>` : `<div class="pmf-controls"><button class="pmf-filter-button" data-creator-index-action="filter">All Catalogue creators</button><button class="pmf-sort-button" data-creator-index-action="sort" aria-haspopup="menu">Sort: ${CreatorIndexUI.sortLabel()}</button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-primary">Update</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More update actions" aria-haspopup="menu">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div>`;
+      CreatorIndexUI.toolbar.innerHTML = native ? `<div class="pmf-controls pmf-native-proxy-controls"><button class="pmf-filter-button pmf-menu-trigger" data-creator-index-action="native-service" aria-haspopup="menu"><span data-proxy-label>Any service</span></button><button class="pmf-sort-button pmf-menu-trigger" data-creator-index-action="native-sort" aria-haspopup="menu"><span data-proxy-label>Sort</span><span data-proxy-direction aria-hidden="true">▼</span></button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-primary">Scan</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More scan actions" aria-haspopup="menu">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div>` : `<div class="pmf-controls"><button class="pmf-filter-button" data-creator-index-action="filter">${CreatorFilterUI.buttonLabel()}</button><button class="pmf-sort-button" data-creator-index-action="sort" aria-haspopup="menu">Sort: ${CreatorIndexUI.sortLabel()}</button><span class="pmf-split-primary"><button class="pmf-scan-button" data-creator-index-action="bulk-primary">Update</button><button class="pmf-scan-button pmf-split-chevron" data-creator-index-action="bulk-menu" aria-label="More update actions" aria-haspopup="menu">▾</button></span><button class="pmf-icon-button" data-creator-index-action="settings" aria-label="Media Filter settings">${Icons.gear}</button></div>`;
       CreatorIndexUI.toolbar.insertAdjacentHTML('beforeend', `<div class="pmf-status ${native?'pmf-native-status':''}"><div class="pmf-status-actions"><button class="pmf-details-link" data-creator-index-action="queue">Queue empty</button></div>${native?'':'<div class="pmf-status-left"><strong data-creator-matches>0 matches</strong></div>'}<div class="pmf-status-right" data-creator-summary></div></div><section class="pmf-catalogue-details pmf-creator-queue-panel" hidden></section>`);
       CreatorIndexUI.queuePanel = CreatorIndexUI.toolbar.querySelector('.pmf-creator-queue-panel');
       CreatorIndexUI.queueButton = CreatorIndexUI.toolbar.querySelector('[data-creator-index-action="queue"]');
@@ -5923,6 +6087,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.creatorStatusFilter = field;
+      button.dataset.pmfQuickStatus = field === 'hidden' ? 'hidden' : field;
       button.innerHTML = `<span class="pmf-quick-status-main">${icon}</span><span class="pmf-quick-status-negate">${Icons.x}</span>`;
       button.setAttribute('aria-label', label);
       return button;
@@ -5961,7 +6126,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         CreatorIndexUI.invalidateFilteredCache('search');
         CreatorIndexUI.render();
       }, 180);
-      input.placeholder = 'Search Catalogue creators…';
+      input.placeholder = 'Search Local catalogue creators…';
       input.addEventListener('input', update, {
         signal: controller.signal
       });
@@ -6024,8 +6189,8 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       CreatorIndexUI.refreshing = Boolean(value);
       if (CreatorIndexUI.mode !== 'catalogue' || !CreatorIndexUI.root) return;
       const summary = CreatorIndexUI.toolbar?.querySelector('[data-creator-summary]');
-      if (summary && CreatorIndexUI.refreshing) summary.textContent = `Refreshing local catalogue… · ${CreatorIndexUI.records.length} cached`;
-      else if (summary) summary.textContent = `Catalogue · ${CreatorIndexUI.records.length} stored`;
+      if (summary && CreatorIndexUI.refreshing) summary.textContent = `Refreshing Local catalogue… · ${CreatorIndexUI.records.length} cached`;
+      else if (summary) summary.textContent = `Local catalogue · ${CreatorIndexUI.records.length} stored`;
     },
     recordSignature(record) {
       const directory = record?.directory || {};
@@ -6078,7 +6243,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       CreatorIndexUI.page = Math.max(1, Number(saved.page) || 1);
       CreatorIndexUI.pageSize = Number(saved.pageSize) || 50;
       CreatorIndexUI.query = String(saved.query || '');
-      CreatorIndexUI.sort = Util.clone(saved.sort || CreatorIndexUI.sort);
+      CreatorIndexUI.sort = CreatorSorter.normalize(saved.sort || CreatorIndexUI.sort);
       CreatorIndexUI.filterState = CreatorFilterEngine.normalizeState(saved.filterState || CreatorIndexUI.filterState);
       CreatorIndexUI.statusFilters = CreatorStatusFilters.normalize(saved.statusFilters || CreatorIndexUI.statusFilters);
       CreatorIndexUI.loading = false;
@@ -6209,12 +6374,12 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
 
       ArtistsPageController.cards = visible.map((record) => record.renderedInfo).filter(Boolean);
       ArtistsPageController.cardByElement = new Map(ArtistsPageController.cards.map((info) => [info.card, info]));
-      if (CreatorIndexUI.loading && !records.length) CreatorIndexUI.setState('loading', 'Loading local catalogue…');
-      else CreatorIndexUI.setState(records.length ? 'ready' : 'empty', records.length ? '' : 'No local Catalogue creators match the current search and filters.');
+      if (CreatorIndexUI.loading && !records.length) CreatorIndexUI.setState('loading', 'Loading Local catalogue…');
+      else CreatorIndexUI.setState(records.length ? 'ready' : 'empty', records.length ? '' : 'No Local catalogue creators match the current search and filters.');
       const matches = CreatorIndexUI.toolbar.querySelector('[data-creator-matches]');
       const summary = CreatorIndexUI.toolbar.querySelector('[data-creator-summary]');
-      if (matches) matches.textContent = `✓ ${records.length} Catalogue creators`;
-      if (summary) summary.textContent = CreatorIndexUI.refreshing ? `Refreshing local catalogue… · ${CreatorIndexUI.records.length} cached` : `Catalogue · ${CreatorIndexUI.records.length} stored`;
+      if (matches) matches.textContent = `${records.length} Local catalogue creators`;
+      if (summary) summary.textContent = CreatorIndexUI.refreshing ? `Refreshing Local catalogue… · ${CreatorIndexUI.records.length} cached` : `Local catalogue · ${CreatorIndexUI.records.length} stored`;
       const renderPaginator=(host)=>{const count=host?.querySelector?.('.pmf-filtered-count');const controls=host?.querySelector?.('.pmf-page-controls');if(count)count.textContent=records.length?`Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}`:'Showing 0 of 0';if(!controls)return;controls.replaceChildren();const add=(label,page,disabled,action)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.dataset.creatorPage=String(page);button.dataset.creatorPageAction=action;if(action==='page'&&page===CreatorIndexUI.page){button.setAttribute('aria-current','page');button.classList.add('pmf-current-page');}controls.append(button);};add('«',1,CreatorIndexUI.page===1,'first');add('‹',CreatorIndexUI.page-1,CreatorIndexUI.page===1,'previous');for(const page of Paginator.pageButtons(CreatorIndexUI.page,totalPages,Paginator.windowSize(Number(host?.clientWidth)||800)))add(String(page),page,page===CreatorIndexUI.page,'page');add('›',CreatorIndexUI.page+1,CreatorIndexUI.page===totalPages,'next');add('»',totalPages,CreatorIndexUI.page===totalPages,'last');};
       renderPaginator(CreatorIndexUI.paginator);renderPaginator(CreatorIndexUI.bottomPaginator);
       CreatorIndexUI.updateQuickFilters();
@@ -6287,11 +6452,11 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         return;
       }
       if (action === 'filter' && CreatorIndexUI.mode === 'catalogue') {
-        CreatorFilterUI.open(event.target);
+        CreatorFilterUI.open(event.target.closest('button'));
         return;
       }
       if (action === 'sort' && CreatorIndexUI.mode === 'catalogue') {
-        CreatorSortUI.open(event.target);
+        CreatorSortUI.open(event.target.closest('button'));
         return;
       }
       if (action === 'bulk-primary') {
@@ -6364,32 +6529,89 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
 
 
   const CreatorFilterUI = {
+    mediaLabels:{videos:'Videos',images:'Images',archives:'Archives',projectFiles:'Project files',externalLinks:'External links',customExtensions:'Custom extensions'},
+    fieldLabels:{title:'Title',attachmentFilename:'Attachment filename',tags:'Tags',content:'Content',service:'Service',creator:'Creator ID'},
+    buttonLabel(state=CreatorIndexUI.filterState) {
+      const value=CreatorFilterEngine.normalizeState(state);const active=CreatorFilterEngine.activeGroupCount(value);const service=value.service==='all'?'':value.service==='fanbox'?'Pixiv Fanbox':'Patreon';
+      if(!active&&!service)return'All Local catalogue creators';
+      return`Creator filters · ${active}${service?` · ${service}`:''}`;
+    },
+    updateButton() {
+      const button=CreatorIndexUI.toolbar?.querySelector?.('[data-creator-index-action="filter"]');if(button)button.textContent=CreatorFilterUI.buttonLabel();
+    },
+    conditionText(rule,method=rule?.method||'amount') {
+      const condition=method==='percentage'?rule.percentage:rule.count;const label={ 'at-least':'≥','at-most':'≤',between:'between',exactly:'=' }[condition.operator]||'≥';const unit=method==='percentage'?'%':'';
+      return condition.operator==='between'?`${condition.from}${unit}–${condition.to}${unit}`:`${label} ${condition.from}${unit}`;
+    },
+    dynamicAggregateSignature(state) {
+      const value=CreatorFilterEngine.normalizeState(state);const extensions=value.media.customExtensions?.enabled?value.media.customExtensions.extensions:[];const rules=value.customRules.filter((rule)=>rule.enabled&&CreatorCustomRule.valid(rule));
+      return JSON.stringify({extensions:CreatorCatalogueSummary.extensionFingerprint(extensions),rules:rules.map((rule)=>CreatorCatalogueSummary.ruleFingerprint(rule)).sort()});
+    },
+    commit(next,{refreshAggregates=true}={}) {
+      const previousSignature=CreatorFilterUI.dynamicAggregateSignature(CreatorIndexUI.filterState);CreatorIndexUI.filterState=CreatorFilterEngine.normalizeState(next);const nextSignature=CreatorFilterUI.dynamicAggregateSignature(CreatorIndexUI.filterState);GM_setValue(Config.creatorFilterStateKey,CreatorIndexUI.filterState);CreatorIndexUI.page=1;CreatorIndexUI.invalidateFilteredCache('creator-filters');CreatorFilterUI.updateButton();CreatorIndexUI.render();CreatorIndexUI.retainSession();
+      if(refreshAggregates&&previousSignature!==nextSignature)ArtistsPageController.requestRefresh('creator-filter-aggregates');
+      return CreatorIndexUI.filterState;
+    },
+    position(node,opener,{width=360}={}) {
+      document.body.append(node);const rect=opener?.getBoundingClientRect?.()||{left:8,bottom:8,width};const viewportWidth=Number(window.innerWidth||globalThis.innerWidth)||1024,viewportHeight=Number(window.innerHeight||globalThis.innerHeight)||768;const actual=Math.min(width,Math.max(280,viewportWidth-16));node.style.position='fixed';node.style.left=`${Math.max(8,Math.min(rect.left,viewportWidth-actual-8))}px`;node.style.top=`${Math.max(8,Math.min(rect.bottom+5,viewportHeight-(node.offsetHeight||520)-8))}px`;node.style.width=`${actual}px`;return node;
+    },
     open(opener) {
-      let draft=CreatorFilterEngine.normalizeState(CreatorIndexUI.filterState);let presetRecord=CreatorPresets.load();
-      const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-filter-editor pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Creator filters');dialog.innerHTML='<header><strong>Creator filters</strong><button class="pmf-icon-close" data-filter-action="cancel" aria-label="Close creator filters">×</button></header><div class="pmf-editor-body"></div><footer><span></span><button data-filter-action="cancel">Cancel</button><button class="pmf-primary" data-filter-action="apply">Apply</button></footer>';
-      const body=dialog.querySelector('.pmf-editor-body');const dateField=(name,value)=>{const input=SettingsUI.field(name,value);input.type='date';return input;};const summary=(rule)=>{const count=rule?.count||rule||CreatorAggregateCondition.normalize({});return`${count.operator.replace('-',' ')} ${count.from}${count.operator==='between'?`–${count.to}`:''}${rule?.percentageEnabled?` · ${rule.percentage.operator.replace('-',' ')} ${rule.percentage.from}${rule.percentage.operator==='between'?`–${rule.percentage.to}`:''}%`:''}`;};
-      const presets=SettingsUI.section('Creator presets');const presetSelect=SettingsUI.select('creatorPreset',presetRecord.activeId,presetRecord.presets.map((preset)=>[preset.id,preset.name]));const presetActions=SettingsUI.el('div','pmf-settings-actions');presetActions.append(SettingsUI.action('Save current as preset','save-preset'),SettingsUI.action('Update','update-preset'),SettingsUI.action('Rename','rename-preset'),SettingsUI.action('Delete','delete-preset'),SettingsUI.action('Reset Default','reset-default-preset'));presets.append(SettingsUI.row('Preset',presetSelect),presetActions);
-      const directory=SettingsUI.section('Directory');directory.append(SettingsUI.row('Service',SettingsUI.select('service',draft.service,[['all','All services'],['patreon','Patreon'],['fanbox','Pixiv Fanbox']])),SettingsUI.toggle('publicFavoritesEnabled',Boolean(draft.publicFavorites),`Public creator favorite count · ${summary(draft.publicFavorites)}`,{child:'creator-aggregate-publicFavorites'}),SettingsUI.row('Date indexed — from',dateField('dateIndexedFrom',draft.dateIndexedFrom)),SettingsUI.row('Date indexed — to',dateField('dateIndexedTo',draft.dateIndexedTo)),SettingsUI.row('Date updated — from',dateField('dateUpdatedFrom',draft.dateUpdatedFrom)),SettingsUI.row('Date updated — to',dateField('dateUpdatedTo',draft.dateUpdatedTo)));
-      const catalogue=SettingsUI.section('Catalogue');catalogue.append(SettingsUI.row('Catalogue state',SettingsUI.select('catalogueState',draft.catalogueState,[['any','Any'],['complete','Complete'],['partial','Partial'],['unscanned','Unscanned']])),SettingsUI.toggle('totalPostsEnabled',Boolean(draft.totalPosts),`Total Catalogue posts · ${summary(draft.totalPosts)}`,{child:'creator-aggregate-totalPosts'}),SettingsUI.row('Last Catalogue update — from',dateField('lastCatalogueUpdateFrom',draft.lastCatalogueUpdateFrom)),SettingsUI.row('Last Catalogue update — to',dateField('lastCatalogueUpdateTo',draft.lastCatalogueUpdateTo)),SettingsUI.row('Earliest published post — from',dateField('earliestPublishedFrom',draft.earliestPublishedFrom)),SettingsUI.row('Latest published post — to',dateField('latestPublishedTo',draft.latestPublishedTo)),SettingsUI.row('Posts published within — from',dateField('publishedWithinFrom',draft.publishedWithinFrom)),SettingsUI.row('Posts published within — to',dateField('publishedWithinTo',draft.publishedWithinTo)),SettingsUI.toggle('includePartial',draft.includePartialLowerBounds,'Include partial Catalogues as lower-bound results'));
-      const media=SettingsUI.section('Media');[['videos','Videos'],['images','Images'],['archives','Archives'],['projectFiles','Project files'],['externalLinks','External links'],['customExtensions','Custom extensions']].forEach(([type,label])=>media.append(SettingsUI.toggle(`media-${type}`,draft.media[type].enabled,`${label} · ${summary(draft.media[type])}`,{child:`creator-media-${type}`})));
-      const status=SettingsUI.section('Post-status aggregates');[['liked','Liked posts'],['seen','Seen posts'],['favorited','Native-favorited posts']].forEach(([type,label])=>status.append(SettingsUI.toggle(`status-${type}`,draft.postStatuses[type].enabled,`${label} · ${summary(draft.postStatuses[type])}`,{child:`creator-status-${type}`})));status.append(SettingsUI.el('p','pmf-help','Native Favorite filters preserve unknown state and require sufficient known-state coverage.'));
-      const custom=SettingsUI.section('Custom Catalogue search rules');custom.append(SettingsUI.el('p','pmf-help','Creator-level custom aggregate rules are evaluated only from locally stored Catalogue data.'));const customRows=SettingsUI.el('div','pmf-creator-custom-rules');const renderCustomRules=()=>{customRows.replaceChildren();draft.customRules.forEach((raw,index)=>{const rule=CreatorCustomRule.normalize(raw);const row=SettingsUI.el('div','pmf-custom-rule-row');row.dataset.customRuleIndex=String(index);row.innerHTML=`<label class="pmf-check"><input type="checkbox" name="customEnabled" ${rule.enabled?'checked':''}> Enabled</label><select name="customField">${CreatorCustomRule.fields.map((field)=>`<option value="${field}" ${field===rule.field?'selected':''}>${field}</option>`).join('')}</select><select name="customMatch">${CreatorCustomRule.matches.map((match)=>`<option value="${match}" ${match===rule.match?'selected':''}>${match.replace('-',' ')}</option>`).join('')}</select><input name="customValue" value="${Util.escapeHtml(rule.value)}" placeholder="Search value"><select name="customOperator">${CreatorAggregateCondition.operators.map((operator)=>`<option value="${operator}" ${operator===rule.count.operator?'selected':''}>${operator.replace('-',' ')}</option>`).join('')}</select><input type="number" min="0" name="customFrom" value="${rule.count.from}"><input type="number" min="0" name="customTo" value="${rule.count.to}"><button type="button" data-filter-action="remove-custom-rule" data-rule-index="${index}" aria-label="Remove custom rule">×</button>`;customRows.append(row);});};renderCustomRules();const addCustom=SettingsUI.action('+ Add custom rule','add-custom-rule');custom.append(customRows,addCustom);
-      body.append(presets,directory,catalogue,media,status,custom);backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});
-      const syncControls=()=>{const assign=(name,value)=>{const control=dialog.querySelector(`[name="${name}"]`);if(control)control.value=value||'';};assign('service',draft.service);assign('catalogueState',draft.catalogueState);['dateIndexedFrom','dateIndexedTo','dateUpdatedFrom','dateUpdatedTo','lastCatalogueUpdateFrom','lastCatalogueUpdateTo','earliestPublishedFrom','latestPublishedTo','publishedWithinFrom','publishedWithinTo'].forEach((name)=>assign(name,draft[name]));dialog.querySelector('[name="includePartial"]').checked=draft.includePartialLowerBounds;dialog.querySelector('[name="publicFavoritesEnabled"]').checked=Boolean(draft.publicFavorites);dialog.querySelector('[name="totalPostsEnabled"]').checked=Boolean(draft.totalPosts);Object.keys(draft.media).forEach((type)=>{dialog.querySelector(`[name="media-${type}"]`).checked=draft.media[type].enabled;});Object.keys(draft.postStatuses).forEach((type)=>{dialog.querySelector(`[name="status-${type}"]`).checked=draft.postStatuses[type].enabled;});};
-      const collect=()=>{draft.service=dialog.querySelector('[name="service"]').value;draft.catalogueState=dialog.querySelector('[name="catalogueState"]').value;draft.includePartialLowerBounds=dialog.querySelector('[name="includePartial"]').checked;['dateIndexedFrom','dateIndexedTo','dateUpdatedFrom','dateUpdatedTo','lastCatalogueUpdateFrom','lastCatalogueUpdateTo','earliestPublishedFrom','latestPublishedTo','publishedWithinFrom','publishedWithinTo'].forEach((name)=>{draft[name]=dialog.querySelector(`[name="${name}"]`).value;});draft.publicFavorites=dialog.querySelector('[name="publicFavoritesEnabled"]').checked?CreatorAggregateCondition.normalize(draft.publicFavorites||{}):null;draft.totalPosts=dialog.querySelector('[name="totalPostsEnabled"]').checked?CreatorAggregateCondition.normalize(draft.totalPosts||{}):null;Object.keys(draft.media).forEach((type)=>{draft.media[type].enabled=dialog.querySelector(`[name="media-${type}"]`)?.checked||false;});Object.keys(draft.postStatuses).forEach((type)=>{draft.postStatuses[type].enabled=dialog.querySelector(`[name="status-${type}"]`)?.checked||false;});draft.customRules=[...dialog.querySelectorAll('[data-custom-rule-index]')].map((row,index)=>CreatorCustomRule.normalize({id:draft.customRules[index]?.id,enabled:row.querySelector('[name="customEnabled"]').checked,field:row.querySelector('[name="customField"]').value,match:row.querySelector('[name="customMatch"]').value,value:row.querySelector('[name="customValue"]').value,count:{operator:row.querySelector('[name="customOperator"]').value,from:row.querySelector('[name="customFrom"]').value,to:row.querySelector('[name="customTo"]').value}}));};
-      dialog.querySelector('[name="creatorPreset"]').addEventListener('change',(event)=>{const applied=CreatorPresets.apply(presetRecord,event.target.value);if(applied){draft=applied;syncControls();}});
-      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-filter-action]')?.dataset.filterAction;const settingsAction=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(child?.startsWith('creator-media-'))CreatorFilterUI.openMedia(child.replace('creator-media-',''),draft,event.target);if(child?.startsWith('creator-status-'))CreatorFilterUI.openAggregate(child.replace('creator-status-',''),draft,event.target,{status:true});if(child?.startsWith('creator-aggregate-'))CreatorFilterUI.openAggregate(child.replace('creator-aggregate-',''),draft,event.target);if(settingsAction==='add-custom-rule'){collect();draft.customRules.push(CreatorCustomRule.normalize({}));renderCustomRules();}if(action==='remove-custom-rule'){collect();draft.customRules.splice(Number(event.target.closest('[data-rule-index]').dataset.ruleIndex),1);renderCustomRules();}if(settingsAction==='save-preset'){collect();const name=globalThis.prompt?.('Creator preset name','Creator preset');if(name){presetRecord=CreatorPresets.create(presetRecord,name,draft);GlobalUI.flash('Creator preset saved.');}}if(settingsAction==='update-preset'){collect();presetRecord=CreatorPresets.update(presetRecord,dialog.querySelector('[name="creatorPreset"]').value,draft);GlobalUI.flash('Creator preset updated.');}if(settingsAction==='rename-preset'){const id=dialog.querySelector('[name="creatorPreset"]').value;const current=presetRecord.presets.find((preset)=>preset.id===id);const name=globalThis.prompt?.('Rename creator preset',current?.name||'');if(name)presetRecord=CreatorPresets.rename(presetRecord,id,name);}if(settingsAction==='delete-preset'){const id=dialog.querySelector('[name="creatorPreset"]').value;presetRecord=CreatorPresets.remove(presetRecord,id);if(id==='default')GlobalUI.flash('Default cannot be deleted.');}if(settingsAction==='reset-default-preset'){presetRecord=CreatorPresets.resetDefault(presetRecord);draft=CreatorFilterEngine.normalizeState({});syncControls();renderCustomRules();}if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){collect();const invalid=draft.customRules.find((rule)=>rule.enabled&&!CreatorCustomRule.valid(rule));if(invalid){GlobalUI.flash('Complete or remove every enabled custom Catalogue rule.');return;}CreatorIndexUI.filterState=CreatorFilterEngine.normalizeState(draft);GM_setValue(Config.creatorFilterStateKey,CreatorIndexUI.filterState);CreatorIndexUI.page=1;CreatorIndexUI.invalidateFilteredCache('filters-applied');OverlayManager.close(overlay,'apply');CreatorIndexUI.render();}});
+      const state=CreatorFilterEngine.normalizeState(CreatorIndexUI.filterState);const presetRecord=CreatorPresets.load();const activePreset=presetRecord.presets.find((preset)=>preset.id===presetRecord.activeId)||presetRecord.presets[0];
+      const popover=document.createElement('div');popover.className='pmf-creator-filter-popover pmf-surface';popover.dataset.pmfOwned='true';popover.setAttribute('role','dialog');popover.setAttribute('aria-label','Local catalogue creator filters');
+      const row=(type,label,advanced=true)=>{const rule=state.media[type];return`<div class="pmf-filter-row"><label><input type="checkbox" data-creator-filter-toggle="${type}" ${rule.enabled?'checked':''}><span>${label}</span></label>${advanced?`<button type="button" class="pmf-row-chevron" data-creator-filter-editor="media:${type}" aria-label="Configure ${label}">›</button>`:'<span class="pmf-row-spacer"></span>'}</div>`;};
+      const date=state.publishedDate;const rulesEnabled=state.customRules.some((rule)=>rule.enabled);
+      popover.innerHTML=`<div class="pmf-popover-title">Creator filters</div><label class="pmf-match-mode"><span>Service</span><select data-creator-filter-service><option value="all">All services</option><option value="patreon">Patreon</option><option value="fanbox">Pixiv Fanbox</option></select></label><label class="pmf-match-mode"><span>Match selected filters</span><select data-creator-filter-match><option value="all">All</option><option value="any">Any</option></select></label><button type="button" class="pmf-preset-selector" data-creator-filter-presets aria-haspopup="dialog"><span>Preset: ${Util.escapeHtml(activePreset?.name||'Default')}</span><b>›</b></button><div class="pmf-popover-section">General</div><div class="pmf-filter-row"><label><input type="checkbox" data-creator-filter-toggle="publishedDate" ${date.enabled?'checked':''}><span>Published date</span></label><button type="button" class="pmf-row-chevron" data-creator-filter-editor="publishedDate" aria-label="Configure published date">›</button></div>${row('videos','Videos')}${row('images','Images')}${row('archives','Archives')}${row('projectFiles','Project files')}${row('externalLinks','External links')}<div class="pmf-popover-section">Advanced</div>${row('customExtensions','Custom extensions')}<div class="pmf-filter-row"><label><input type="checkbox" data-creator-filter-toggle="customRules" ${rulesEnabled?'checked':''}><span>Advanced rules</span></label><button type="button" class="pmf-row-chevron" data-creator-filter-editor="customRules" aria-label="Configure advanced rules">›</button></div><label class="pmf-creator-partial-option"><input type="checkbox" data-creator-filter-partial ${state.includePartialLowerBounds?'checked':''}><span>Include safe partial lower bounds</span></label><p class="pmf-help">Percentages, ≤, and Between require complete Local catalogues. Service is always combined with the selected filters.</p>`;
+      popover.querySelector('[data-creator-filter-service]').value=state.service;popover.querySelector('[data-creator-filter-match]').value=state.matchMode;
+      popover.addEventListener('change',(event)=>{
+        const next=CreatorFilterEngine.normalizeState(CreatorIndexUI.filterState);const toggle=event.target.dataset.creatorFilterToggle;
+        if(toggle==='publishedDate')next.publishedDate.enabled=event.target.checked;
+        else if(toggle==='customRules'){if(event.target.checked&&!next.customRules.some((rule)=>CreatorCustomRule.valid(rule))){OverlayManager.close(overlay,'configure-rules');queueMicrotask(()=>CreatorFilterUI.openAdvancedRules(opener));return;}next.customRules.forEach((rule)=>{rule.enabled=event.target.checked;});}
+        else if(toggle&&next.media[toggle])next.media[toggle].enabled=event.target.checked;
+        if(event.target.matches('[data-creator-filter-service]'))next.service=event.target.value;
+        if(event.target.matches('[data-creator-filter-match]'))next.matchMode=event.target.value;
+        if(event.target.matches('[data-creator-filter-partial]'))next.includePartialLowerBounds=event.target.checked;
+        CreatorFilterUI.commit(next);
+      });
+      popover.addEventListener('click',(event)=>{
+        if(event.target.closest('[data-creator-filter-presets]')){OverlayManager.close(overlay,'child');CreatorFilterUI.openPresets(opener);return;}
+        const editor=event.target.closest('[data-creator-filter-editor]')?.dataset.creatorFilterEditor;if(!editor)return;OverlayManager.close(overlay,'child');if(editor==='publishedDate')CreatorFilterUI.openPublishedDate(opener);else if(editor==='customRules')CreatorFilterUI.openAdvancedRules(opener);else if(editor.startsWith('media:'))CreatorFilterUI.openMedia(editor.slice(6),opener);
+      });
+      CreatorFilterUI.position(popover,opener,{width:370});const overlay=OverlayManager.open({owner:'artists:creator-filters',node:popover,root:popover,opener,dismissible:true});return overlay;
     },
-    openAggregate(type,draft,opener,{status=false}={}) {
-      const target=status?draft.postStatuses:draft;const source=status?target[type]:target[type]||{};const count=CreatorAggregateCondition.normalize(source.count||source);const percentage=CreatorAggregateCondition.normalize(source.percentage||{},true);const title=status?`${type[0].toUpperCase()+type.slice(1)} posts`:type==='publicFavorites'?'Public creator favorite count':'Total Catalogue posts';
-      const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-small-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label',`Configure ${title}`);
-      dialog.innerHTML=`<header><strong>${title}</strong><button class="pmf-icon-close" data-aggregate-action="cancel" aria-label="Close">×</button></header><div class="pmf-editor-body"><section class="pmf-settings-section"><h3>Primary condition</h3><label>Condition<select name="operator">${CreatorAggregateCondition.operators.map((value)=>`<option value="${value}">${value.replace('-',' ')}</option>`).join('')}</select></label><label>Value<input type="number" name="from" min="0" step="1" value="${count.from}"></label><label data-between hidden>To<input type="number" name="to" min="0" step="1" value="${count.to}"></label></section>${status?`<section class="pmf-settings-section"><h3>Catalogue percentage</h3><label class="pmf-check"><input type="checkbox" name="percentageEnabled" ${source.percentageEnabled?'checked':''}> Add percentage condition</label><label>Condition<select name="percentageOperator">${CreatorAggregateCondition.operators.map((value)=>`<option value="${value}">${value.replace('-',' ')}</option>`).join('')}</select></label><label>Percentage<input type="number" name="percentageFrom" min="0" max="100" step=".1" value="${percentage.from}"> %</label><label data-percentage-between hidden>To<input type="number" name="percentageTo" min="0" max="100" step=".1" value="${percentage.to}"> %</label></section>`:''}<p class="pmf-editor-error"></p></div><footer><span></span><button data-aggregate-action="cancel">Cancel</button><button class="pmf-primary" data-aggregate-action="apply">Apply</button></footer>`;
-      backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});
-      const update=()=>{dialog.querySelector('[data-between]').hidden=dialog.querySelector('[name="operator"]').value!=='between';if(status)dialog.querySelector('[data-percentage-between]').hidden=dialog.querySelector('[name="percentageOperator"]').value!=='between';};dialog.querySelector('[name="operator"]').value=count.operator;if(status)dialog.querySelector('[name="percentageOperator"]').value=percentage.operator;update();dialog.addEventListener('change',update);
-      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-aggregate-action]')?.dataset.aggregateAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){const next={operator:dialog.querySelector('[name="operator"]').value,from:dialog.querySelector('[name="from"]').value,to:dialog.querySelector('[name="to"]').value};const nextPercentage=status?{operator:dialog.querySelector('[name="percentageOperator"]').value,from:dialog.querySelector('[name="percentageFrom"]').value,to:dialog.querySelector('[name="percentageTo"]').value,percentage:true}:null;const validation=CreatorAggregateCondition.validateRaw(next),percentageValidation=status?CreatorAggregateCondition.validateRaw(nextPercentage,true):{valid:true};if(!validation.valid||!percentageValidation.valid){dialog.querySelector('.pmf-editor-error').textContent=validation.message||percentageValidation.message;return;}if(status)Object.assign(target[type],{count:CreatorAggregateCondition.normalize(validation.value),percentageEnabled:dialog.querySelector('[name="percentageEnabled"]').checked,percentage:CreatorAggregateCondition.normalize(percentageValidation.value,true)});else target[type]=CreatorAggregateCondition.normalize(validation.value);OverlayManager.close(overlay,'apply');}});
+    dialog(title,opener,{wide=false}={}) {
+      const backdrop=SettingsUI.el('div','pmf-modal-backdrop');backdrop.dataset.pmfOwned='true';const dialog=SettingsUI.el('section',`pmf-dialog pmf-surface ${wide?'pmf-creator-rules-dialog':'pmf-small-dialog'}`);dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.innerHTML=`<header><strong>${Util.escapeHtml(title)}</strong><button type="button" class="pmf-icon-close" data-creator-dialog-action="cancel" aria-label="Close">×</button></header><div class="pmf-editor-body"></div><footer><button type="button" data-creator-dialog-action="discard">Discard</button><span></span><button type="button" class="pmf-primary" data-creator-dialog-action="apply">Apply</button></footer>`;backdrop.append(dialog);(CreatorIndexUI.root||document.body).append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});return{backdrop,dialog,body:dialog.querySelector('.pmf-editor-body'),overlay};
     },
-    openMedia(type,draft,opener) {
-      const rule=draft.media[type];const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-small-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.innerHTML=`<header><strong>${type}</strong><button class="pmf-icon-close" data-media-action="cancel">×</button></header><div class="pmf-editor-body"><section class="pmf-settings-section"><h3>Primary condition</h3>${type==='customExtensions'?`<label>Extensions<textarea name="extensions" placeholder="psd, clip, blend">${Util.escapeHtml((rule.extensions||[]).join(', '))}</textarea></label>`:''}<label>Measure<select name="measure"><option value="posts">Posts containing the type</option><option value="attachments">Total attachments or links</option></select></label><label>Condition<select name="operator">${CreatorAggregateCondition.operators.map((value)=>`<option value="${value}">${value.replace('-',' ')}</option>`).join('')}</select></label><label>Value<input type="number" name="from" min="0" step="1" value="${rule.count.from}"></label><label data-between hidden>To<input type="number" name="to" min="0" step="1" value="${rule.count.to}"></label></section><section class="pmf-settings-section"><h3>Catalogue percentage</h3><label class="pmf-check"><input type="checkbox" name="percentageEnabled" ${rule.percentageEnabled?'checked':''}> Add percentage condition</label><label>Condition<select name="percentageOperator">${CreatorAggregateCondition.operators.map((value)=>`<option value="${value}">${value.replace('-',' ')}</option>`).join('')}</select></label><label>Percentage<input type="number" name="percentageFrom" min="0" max="100" step=".1" value="${rule.percentage.from}"> %</label><label data-percentage-between hidden>To<input type="number" name="percentageTo" min="0" max="100" step=".1" value="${rule.percentage.to}"> %</label><p class="pmf-editor-error"></p></section></div><footer><span></span><button data-media-action="cancel">Cancel</button><button class="pmf-primary" data-media-action="apply">Apply</button></footer>`;backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});const update=()=>{dialog.querySelector('[data-between]').hidden=dialog.querySelector('[name="operator"]').value!=='between';dialog.querySelector('[data-percentage-between]').hidden=dialog.querySelector('[name="percentageOperator"]').value!=='between';};dialog.querySelector('[name="measure"]').value=rule.measure;dialog.querySelector('[name="operator"]').value=rule.count.operator;dialog.querySelector('[name="percentageOperator"]').value=rule.percentage.operator;update();dialog.addEventListener('change',update);backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-media-action]')?.dataset.mediaAction;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='apply'){const rawCount={operator:dialog.querySelector('[name="operator"]').value,from:dialog.querySelector('[name="from"]').value,to:dialog.querySelector('[name="to"]').value};const rawPercentage={operator:dialog.querySelector('[name="percentageOperator"]').value,from:dialog.querySelector('[name="percentageFrom"]').value,to:dialog.querySelector('[name="percentageTo"]').value,percentage:true};const countValidation=CreatorAggregateCondition.validateRaw(rawCount);const percentageValidation=CreatorAggregateCondition.validateRaw(rawPercentage,true);const extensions=type==='customExtensions'?Util.normalizeExtensions(dialog.querySelector('[name="extensions"]').value.split(/[\s,]+/)):null;if(!countValidation.valid||!percentageValidation.valid||extensions&&(!extensions.values.length||extensions.invalid.length)){dialog.querySelector('.pmf-editor-error').textContent=countValidation.message||percentageValidation.message||'Enter at least one valid extension without a leading dot.';return;}Object.assign(rule,{measure:dialog.querySelector('[name="measure"]').value,count:CreatorAggregateCondition.normalize(countValidation.value),percentageEnabled:dialog.querySelector('[name="percentageEnabled"]').checked,percentage:CreatorAggregateCondition.normalize(percentageValidation.value,true),...(extensions?{extensions:extensions.values}:{})});OverlayManager.close(overlay,'apply');}});
+    openPublishedDate(opener) {
+      const draft=CreatorFilterEngine.normalizeState(CreatorIndexUI.filterState);const rule=draft.publishedDate;const shell=CreatorFilterUI.dialog('Published date',opener);shell.body.innerHTML=`<section class="pmf-settings-section"><h3>At least one creator post</h3><label>Condition<select name="condition"><option value="at-least">On or after</option><option value="at-most">On or before</option><option value="between">Between</option></select></label><div class="pmf-date-fields"><label>From<input type="date" name="from" value="${Util.escapeHtml(rule.from)}"></label><label data-date-to>To<input type="date" name="to" value="${Util.escapeHtml(rule.to)}"></label></div><label class="pmf-check"><input type="checkbox" name="includeUnknown" ${rule.includeUnknown?'checked':''}> Include creators whose post dates are unknown</label><p class="pmf-editor-error"></p></section>`;
+      const condition=shell.dialog.querySelector('[name="condition"]');condition.value=rule.operator;const update=()=>{const between=condition.value==='between';shell.dialog.querySelector('[data-date-to]').hidden=!between;const fromLabel=shell.dialog.querySelector('[name="from"]').closest('label');fromLabel.firstChild.textContent=condition.value==='at-most'?'Date':'From';};update();condition.addEventListener('change',update);
+      shell.backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-creator-dialog-action]')?.dataset.creatorDialogAction;if(action==='cancel'||action==='discard')OverlayManager.close(shell.overlay,action);if(action==='apply'){const from=shell.dialog.querySelector('[name="from"]').value,to=shell.dialog.querySelector('[name="to"]').value,operator=condition.value;const error=shell.dialog.querySelector('.pmf-editor-error');if((operator==='at-least'&&!from)||(operator==='at-most'&&!from)||(operator==='between'&&(!from||!to||Date.parse(to)<Date.parse(from)))){error.textContent='Choose a valid date condition.';return;}draft.publishedDate={enabled:true,operator,from,to:operator==='between'?to:'',includeUnknown:shell.dialog.querySelector('[name="includeUnknown"]').checked};CreatorFilterUI.commit(draft);OverlayManager.close(shell.overlay,'apply');}});
+    },
+    openMedia(type,opener) {
+      const draft=CreatorFilterEngine.normalizeState(CreatorIndexUI.filterState);const rule=draft.media[type];const title=CreatorFilterUI.mediaLabels[type]||type;const shell=CreatorFilterUI.dialog(title,opener);const countMode=Settings.value.creatorCardBadgeCountMode;const amountUnit=countMode==='attachments'?'attachments / links':'matching posts';const percentageHelp=countMode==='attachments'?'Matching attachments or links divided by all counted attachments and links.':'Matching posts divided by all aggregate-eligible posts.';
+      shell.body.innerHTML=`<section class="pmf-settings-section"><h3>Creator aggregate</h3>${type==='customExtensions'?`<label>Extensions<textarea name="extensions" placeholder="psd, clip, blend">${Util.escapeHtml((rule.extensions||[]).join(', '))}</textarea></label>`:''}<label>Method<select name="method"><option value="amount">Amount</option><option value="percentage">Percentage</option></select></label><label>Condition<select name="condition"><option value="at-least">At least (≥)</option><option value="at-most">At most (≤)</option><option value="between">Between</option></select></label><label><span data-value-label>Value</span><input type="number" name="from" min="0" step="1"></label><label data-between hidden>To<input type="number" name="to" min="0" step="1"></label><p class="pmf-method-help"></p><p class="pmf-editor-error"></p></section>`;
+      const method=shell.dialog.querySelector('[name="method"]'),condition=shell.dialog.querySelector('[name="condition"]'),from=shell.dialog.querySelector('[name="from"]'),to=shell.dialog.querySelector('[name="to"]');method.value=rule.method;const current=rule.method==='percentage'?rule.percentage:rule.count;condition.value=['at-least','at-most','between'].includes(current.operator)?current.operator:'at-least';from.value=String(current.from);to.value=String(current.to);
+      const update=()=>{const percentage=method.value==='percentage';from.max=percentage?'100':'';to.max=percentage?'100':'';from.step=percentage?'0.1':'1';to.step=percentage?'0.1':'1';shell.dialog.querySelector('[data-between]').hidden=condition.value!=='between';shell.dialog.querySelector('[data-value-label]').textContent=percentage?'Percentage':'Amount';shell.dialog.querySelector('.pmf-method-help').textContent=percentage?percentageHelp:`Uses the global Count method: ${amountUnit}.`;};method.addEventListener('change',update);condition.addEventListener('change',update);update();
+      shell.backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-creator-dialog-action]')?.dataset.creatorDialogAction;if(action==='cancel'||action==='discard')OverlayManager.close(shell.overlay,action);if(action==='apply'){const percentage=method.value==='percentage';const raw={operator:condition.value,from:from.value,to:to.value};const validation=CreatorAggregateCondition.validateRaw(raw,percentage);const extensions=type==='customExtensions'?Util.normalizeExtensions(shell.dialog.querySelector('[name="extensions"]').value.split(/[\s,]+/)):null;const error=shell.dialog.querySelector('.pmf-editor-error');if(!validation.valid||extensions&&(!extensions.values.length||extensions.invalid.length)){error.textContent=validation.message||'Enter at least one valid extension without a leading dot.';return;}rule.enabled=true;rule.method=method.value;rule.percentageEnabled=percentage;if(percentage)rule.percentage=CreatorAggregateCondition.normalize(validation.value,true);else rule.count=CreatorAggregateCondition.normalize(validation.value);if(extensions)rule.extensions=extensions.values;CreatorFilterUI.commit(draft);OverlayManager.close(shell.overlay,'apply');}});
+    },
+    openFields(rule,draft,button) {
+      const shell=CreatorFilterUI.dialog('Rule fields',button);shell.body.innerHTML=`<section class="pmf-settings-section"><h3>Search in</h3>${CreatorCustomRule.fields.map((field)=>`<label class="pmf-check"><input type="checkbox" name="field" value="${field}" ${rule.fields.includes(field)?'checked':''}> ${CreatorFilterUI.fieldLabels[field]}</label>`).join('')}<p class="pmf-editor-error"></p></section>`;
+      shell.backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-creator-dialog-action]')?.dataset.creatorDialogAction;if(action==='cancel'||action==='discard')OverlayManager.close(shell.overlay,action);if(action==='apply'){const fields=[...shell.dialog.querySelectorAll('[name="field"]:checked')].map((input)=>input.value);if(!fields.length){shell.dialog.querySelector('.pmf-editor-error').textContent='Choose at least one field.';return;}rule.fields=fields;rule.field=fields[0];const row=button.closest('[data-creator-rule-index]');if(row)row.dataset.fields=fields.join(',');button.textContent=`Fields: ${fields.map((field)=>CreatorFilterUI.fieldLabels[field]).join(', ')} ›`;OverlayManager.close(shell.overlay,'apply');}});
+    },
+    openAdvancedRules(opener) {
+      const draft=CreatorFilterEngine.normalizeState(CreatorIndexUI.filterState);if(!draft.customRules.length)draft.customRules=[CreatorCustomRule.normalize({enabled:true})];const shell=CreatorFilterUI.dialog('Advanced creator rules',opener,{wide:true});const list=document.createElement('div');list.className='pmf-creator-rule-list';const preview=document.createElement('p');preview.className='pmf-creator-rule-preview';const error=document.createElement('p');error.className='pmf-editor-error';const add=document.createElement('button');add.type='button';add.dataset.creatorRuleAction='add';add.textContent='+ Add rule';shell.body.append(list,add,preview,error);
+      const collect=()=>{draft.customRules=[...list.querySelectorAll('[data-creator-rule-index]')].map((row,index)=>CreatorCustomRule.normalize({id:draft.customRules[index]?.id,enabled:row.querySelector('[name="enabled"]').checked,join:index===0?'if':row.querySelector('[name="join"]').value,outcome:row.querySelector('[name="outcome"]').value,fields:(row.dataset.fields||'title').split(',').filter(Boolean),match:row.querySelector('[name="match"]').value,value:row.querySelector('[name="value"]').value,method:row.querySelector('[name="method"]').value,count:{operator:row.querySelector('[name="condition"]').value,from:row.querySelector('[name="from"]').value,to:row.querySelector('[name="to"]').value},percentage:{operator:row.querySelector('[name="condition"]').value,from:row.querySelector('[name="from"]').value,to:row.querySelector('[name="to"]').value},percentageEnabled:row.querySelector('[name="method"]').value==='percentage'}));};
+      const updatePreview=()=>{collect();const active=draft.customRules.filter((rule)=>rule.enabled);preview.textContent=active.length?active.map((rule,index)=>`${index?rule.join.toUpperCase():'IF'} ${rule.outcome==='no-match'?'NOT ':''}${rule.fields.map((field)=>CreatorFilterUI.fieldLabels[field]).join(' / ')} ${rule.match.replaceAll('-',' ')} “${rule.value||'…'}” → ${rule.method} ${CreatorFilterUI.conditionText(rule,rule.method)}`).join('  '):'No advanced rules enabled.';};
+      const render=()=>{list.replaceChildren();draft.customRules.forEach((raw,index)=>{const rule=CreatorCustomRule.normalize(raw);const row=document.createElement('div');row.className='pmf-creator-rule-row';row.dataset.creatorRuleIndex=String(index);row.dataset.fields=rule.fields.join(',');row.innerHTML=`<label class="pmf-rule-enabled"><input type="checkbox" name="enabled" ${rule.enabled?'checked':''}> Enabled</label><select name="join" ${index===0?'disabled':''}><option value="if">IF</option><option value="and">AND</option><option value="or">OR</option></select><select name="outcome"><option value="match">Match</option><option value="no-match">No match</option></select><button type="button" class="pmf-rule-fields" data-creator-rule-action="fields">Fields: ${Util.escapeHtml(rule.fields.map((field)=>CreatorFilterUI.fieldLabels[field]).join(', '))} ›</button><select name="match">${CreatorCustomRule.matches.map((match)=>`<option value="${match}">${match.replaceAll('-',' ')}</option>`).join('')}</select><input name="value" value="${Util.escapeHtml(rule.value)}" placeholder="Search value"><select name="method"><option value="amount">Amount</option><option value="percentage">Percentage</option></select><select name="condition"><option value="at-least">≥</option><option value="at-most">≤</option><option value="between">Between</option></select><input type="number" name="from" min="0"><input type="number" name="to" min="0"><button type="button" data-creator-rule-action="remove" aria-label="Remove rule">×</button>`;row.querySelector('[name="join"]').value=index===0?'if':rule.join;row.querySelector('[name="outcome"]').value=rule.outcome;row.querySelector('[name="match"]').value=rule.match;row.querySelector('[name="method"]').value=rule.method;const condition=rule.method==='percentage'?rule.percentage:rule.count;row.querySelector('[name="condition"]').value=['at-least','at-most','between'].includes(condition.operator)?condition.operator:'at-least';row.querySelector('[name="from"]').value=String(condition.from);row.querySelector('[name="to"]').value=String(condition.to);const sync=()=>{const percentage=row.querySelector('[name="method"]').value==='percentage';row.querySelector('[name="from"]').max=percentage?'100':'';row.querySelector('[name="to"]').max=percentage?'100':'';row.querySelector('[name="to"]').hidden=row.querySelector('[name="condition"]').value!=='between';};row.addEventListener('change',()=>{sync();updatePreview();});row.addEventListener('input',updatePreview);sync();list.append(row);});updatePreview();};render();
+      shell.body.addEventListener('click',(event)=>{const action=event.target.closest('[data-creator-rule-action]')?.dataset.creatorRuleAction;if(!action)return;collect();if(action==='add'){draft.customRules.push(CreatorCustomRule.normalize({enabled:true,join:draft.customRules.length?'and':'if'}));render();}if(action==='remove'){const index=Number(event.target.closest('[data-creator-rule-index]').dataset.creatorRuleIndex);draft.customRules.splice(index,1);if(!draft.customRules.length)draft.customRules=[CreatorCustomRule.normalize({enabled:true})];render();}if(action==='fields'){const row=event.target.closest('[data-creator-rule-index]');const index=Number(row.dataset.creatorRuleIndex);CreatorFilterUI.openFields(draft.customRules[index],draft,event.target);}});
+      shell.backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-creator-dialog-action]')?.dataset.creatorDialogAction;if(action==='cancel'||action==='discard')OverlayManager.close(shell.overlay,action);if(action==='apply'){collect();const invalid=draft.customRules.find((rule)=>rule.enabled&&!CreatorCustomRule.valid(rule));if(invalid){error.textContent='Complete every enabled advanced rule.';return;}draft.customRules=draft.customRules.map((rule,index)=>({...rule,join:index===0?'if':rule.join}));CreatorFilterUI.commit(draft);OverlayManager.close(shell.overlay,'apply');}});
+    },
+    openPresetName(title,initial,opener,onApply) {
+      const shell=CreatorFilterUI.dialog(title,opener);shell.body.innerHTML=`<section class="pmf-settings-section"><label>Preset name<input type="text" name="name" maxlength="80" value="${Util.escapeHtml(initial||'')}" autofocus></label><p class="pmf-editor-error"></p></section>`;shell.backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-creator-dialog-action]')?.dataset.creatorDialogAction;if(action==='cancel'||action==='discard')OverlayManager.close(shell.overlay,action);if(action==='apply'){const name=shell.dialog.querySelector('[name="name"]').value.trim();if(!name){shell.dialog.querySelector('.pmf-editor-error').textContent='Enter a preset name.';return;}onApply(name);OverlayManager.close(shell.overlay,'apply');}});return shell.overlay;
+    },
+    openPresets(opener) {
+      let record=CreatorPresets.load();const shell=CreatorFilterUI.dialog('Creator filter presets',opener);const render=()=>{shell.body.innerHTML=`<section class="pmf-settings-section"><h3>Saved presets</h3><div class="pmf-creator-preset-list">${record.presets.map((preset)=>`<label><input type="radio" name="preset" value="${Util.escapeHtml(preset.id)}" ${preset.id===record.activeId?'checked':''}><span>${Util.escapeHtml(preset.name)}</span></label>`).join('')}</div><div class="pmf-settings-actions"><button type="button" data-preset-action="create">Save current</button><button type="button" data-preset-action="update">Update</button><button type="button" data-preset-action="rename">Rename</button><button type="button" data-preset-action="delete">Delete</button><button type="button" data-preset-action="reset">Reset Default</button></div><p class="pmf-help">Presets retain media conditions, custom extensions, advanced rules, date settings, service, and All/Any matching.</p></section>`;};render();
+      shell.body.addEventListener('click',(event)=>{const trigger=event.target.closest('[data-preset-action]');const action=trigger?.dataset.presetAction;if(!action)return;const id=shell.dialog.querySelector('[name="preset"]:checked')?.value||record.activeId;if(action==='apply'){const state=CreatorPresets.apply(record,id);record=CreatorPresets.load();if(state)CreatorFilterUI.commit(state);OverlayManager.close(shell.overlay,'apply');return;}if(action==='create'){CreatorFilterUI.openPresetName('Save creator preset','Creator preset',trigger,(name)=>{record=CreatorPresets.create(record,name,CreatorIndexUI.filterState);render();});return;}if(action==='update')record=CreatorPresets.update(record,id,CreatorIndexUI.filterState);if(action==='rename'){const preset=record.presets.find((item)=>item.id===id);CreatorFilterUI.openPresetName('Rename creator preset',preset?.name||'',trigger,(name)=>{record=CreatorPresets.rename(record,id,name);render();});return;}if(action==='delete')record=CreatorPresets.remove(record,id);if(action==='reset'){record=CreatorPresets.resetDefault(record);CreatorFilterUI.commit(CreatorFilterEngine.normalizeState({}));}render();});
+      shell.backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-creator-dialog-action]')?.dataset.creatorDialogAction;if(action==='cancel'||action==='discard')OverlayManager.close(shell.overlay,action);if(action==='apply'){const id=shell.dialog.querySelector('[name="preset"]:checked')?.value||record.activeId;const state=CreatorPresets.apply(record,id);if(state)CreatorFilterUI.commit(state);OverlayManager.close(shell.overlay,'apply');}});
     },
   };
 
@@ -6402,8 +6624,22 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
   };
 
   const CreatorSortUI = {
-    modes:[['popularity','Popularity'],['alphabetical','Alphabetical'],['service','Service'],['indexed','Date indexed'],['updated','Date updated'],['posts','Catalogue post count'],['catalogueUpdated','Catalogue updated'],['latest','Latest post'],['earliest','Earliest post'],...['videos','images','archives','projectFiles','externalLinks'].flatMap((type)=>[[`${type}:posts`,`${type} — Posts`],[`${type}:${type==='externalLinks'?'links':'attachments'}`,`${type} — Attachments / links`],[`${type}:percentage`,`${type} — Catalogue percentage`]]),['liked','Liked posts'],['seen','Seen posts'],['favorited','Favorited posts']],
-    open(opener){AnchoredMenu.open(opener,CreatorSortUI.modes.map(([value,label])=>({value,label})),{selected:CreatorIndexUI.sort.mode,onSelect:(mode)=>{if(CreatorIndexUI.sort.mode===mode)CreatorIndexUI.sort.direction=CreatorIndexUI.sort.direction==='asc'?'desc':'asc';else CreatorIndexUI.sort={mode,direction:mode==='alphabetical'||mode==='service'?'asc':'desc'};CreatorIndexUI.toolbar.querySelector('[data-creator-index-action="sort"]').textContent=`Sort: ${CreatorSortUI.modes.find((item)=>item[0]===mode)?.[1]} ${CreatorIndexUI.sort.direction==='asc'?'▲':'▼'}`;CreatorIndexUI.invalidateFilteredCache('sort');CreatorIndexUI.render();}});},
+    modes:[['popularity','Popularity'],['alphabetical','Alphabetical'],['posts','Catalogue post count'],['published','Post publish date'],['advanced','Advanced attachment amounts ›']],
+    mediaLabels:{videos:'Videos',images:'Images',archives:'Archives',projectFiles:'Project files',externalLinks:'External links'},
+    label(sort=CreatorIndexUI.sort) {
+      const value=CreatorSorter.normalize(sort);if(value.mode==='advanced')return`Advanced · ${CreatorSortUI.mediaLabels[value.advancedType]} · ${value.advancedMethod==='percentage'?'Percentage':'Amount'} ${value.direction==='asc'?'▲':'▼'}`;
+      const item=CreatorSortUI.modes.find(([mode])=>mode===value.mode);return`${item?.[1]||'Popularity'} ${value.direction==='asc'?'▲':'▼'}`;
+    },
+    defaultDirection(mode){return mode==='alphabetical'?'asc':'desc';},
+    apply(next) {
+      CreatorIndexUI.sort=CreatorSorter.normalize(next);const button=CreatorIndexUI.toolbar?.querySelector?.('[data-creator-index-action="sort"]');if(button)button.textContent=`Sort: ${CreatorSortUI.label()}`;CreatorIndexUI.page=1;CreatorIndexUI.invalidateFilteredCache('sort');CreatorIndexUI.render();CreatorIndexUI.retainSession();
+    },
+    open(opener) {
+      const current=CreatorSorter.normalize(CreatorIndexUI.sort);AnchoredMenu.open(opener,CreatorSortUI.modes.map(([value,label])=>({value,label})),{owner:'artists:local-sort',selected:current.mode,onSelect:(mode)=>{if(mode==='advanced'){queueMicrotask(()=>CreatorSortUI.openAdvanced(opener));return;}const direction=current.mode===mode?(current.direction==='asc'?'desc':'asc'):CreatorSortUI.defaultDirection(mode);CreatorSortUI.apply({...current,mode,direction});}});
+    },
+    openAdvanced(opener) {
+      const current=CreatorSorter.normalize(CreatorIndexUI.sort);const shell=CreatorFilterUI.dialog('Advanced attachment sorting',opener);shell.body.innerHTML=`<section class="pmf-settings-section"><h3>Sort creator Local catalogues</h3><label>Type<select name="type">${Object.entries(CreatorSortUI.mediaLabels).map(([value,label])=>`<option value="${value}">${label}</option>`).join('')}</select></label><label>Method<select name="method"><option value="amount">Amount</option><option value="percentage">Percentage</option></select></label><label>Direction<select name="direction"><option value="desc">Highest first</option><option value="asc">Lowest first</option></select></label><p class="pmf-method-help"></p></section>`;const type=shell.dialog.querySelector('[name="type"]'),method=shell.dialog.querySelector('[name="method"]'),direction=shell.dialog.querySelector('[name="direction"]');type.value=current.advancedType;method.value=current.advancedMethod;direction.value=current.mode==='advanced'?current.direction:'desc';const update=()=>{shell.dialog.querySelector('.pmf-method-help').textContent=method.value==='amount'?`Amount uses the global Count method: ${Settings.value.creatorCardBadgeCountMode==='attachments'?'total attachments/links':'posts containing the selected type'}.`:Settings.value.creatorCardBadgeCountMode==='attachments'?'Percentage is selected-type attachments/links divided by all counted attachments/links.':'Percentage is posts containing the selected type divided by aggregate-eligible posts.';};method.addEventListener('change',update);update();shell.backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-creator-dialog-action]')?.dataset.creatorDialogAction;if(action==='cancel'||action==='discard')OverlayManager.close(shell.overlay,action);if(action==='apply'){CreatorSortUI.apply({mode:'advanced',direction:direction.value,advancedType:type.value,advancedMethod:method.value});OverlayManager.close(shell.overlay,'apply');}});
+    },
   };
 
   const CreatorBulkSelection = {
@@ -6822,7 +7058,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     .pmf-creator-index-paginator .pmf-quick-status-main svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}.pmf-creator-index-paginator .pmf-quick-status-negate{display:none;position:absolute;right:1px;top:1px;width:10px;height:10px}.pmf-creator-index-paginator button.pmf-no-match .pmf-quick-status-negate{display:block}.pmf-creator-index-paginator button.pmf-match svg,.pmf-creator-index-paginator button.pmf-no-match .pmf-quick-status-main svg{fill:currentColor}
     .pmf-creator-card-right-rail{position:absolute;z-index:6;right:7px;top:6px;bottom:6px;display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:4px;pointer-events:none}
     .pmf-creator-status-group{display:flex;justify-content:flex-end;gap:4px}.pmf-creator-status-middle{margin:auto 0}.pmf-creator-card-right-rail .pmf-creator-card-badges{position:static;transform:none}
-    .pmf-creator-status-badge{display:grid;place-items:center;border:1px solid currentColor;border-radius:3px;background:#111d;box-sizing:border-box}.pmf-creator-status-badge svg{width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:2}.pmf-creator-status-badge.pmf-creator-status-favorited{color:#ffd25b}.pmf-creator-status-badge.pmf-creator-status-liked{color:#ff5d9e}.pmf-creator-status-badge.pmf-creator-status-hidden{color:#d98989}.pmf-creator-status-size-small{width:18px;height:18px}.pmf-creator-status-size-medium{width:22px;height:22px}.pmf-creator-status-size-big{width:27px;height:27px}
+    .pmf-creator-status-badge{display:grid;place-items:center;border:1px solid currentColor;border-radius:3px;background:#111d;box-sizing:border-box}.pmf-creator-status-badge svg{width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:2}.pmf-creator-status-badge.pmf-creator-status-favorited{color:#ffd25b}.pmf-creator-status-badge.pmf-creator-status-liked{color:#ff5d9e}.pmf-creator-status-badge.pmf-creator-status-hidden{color:#397dc4}.pmf-creator-status-size-small{width:18px;height:18px}.pmf-creator-status-size-medium{width:22px;height:22px}.pmf-creator-status-size-big{width:27px;height:27px}
     .pmf-creator-card-has-rail [data-pmf-creator-content]{padding-right:var(--pmf-creator-rail-width,0)!important}
     .pmf-hidden-creator-dimmed img,.pmf-hidden-creator-dimmed [style*="background"]{filter:saturate(var(--pmf-seen-saturate,.55)) brightness(var(--pmf-seen-brightness,.72));opacity:var(--pmf-seen-opacity,.72)}.pmf-hidden-creator-dim-low{--pmf-seen-saturate:.72;--pmf-seen-brightness:.86;--pmf-seen-opacity:.84}.pmf-hidden-creator-dim-medium{--pmf-seen-saturate:.52;--pmf-seen-brightness:.74;--pmf-seen-opacity:.74}.pmf-hidden-creator-dim-high{--pmf-seen-saturate:.25;--pmf-seen-brightness:.56;--pmf-seen-opacity:.58}
     .pmf-field-availability{text-align:center}.pmf-field-availability .pmf-availability-row{display:block!important;margin:9px auto!important;text-align:center!important}.pmf-availability-note{display:block;color:var(--pmf-muted);text-align:center}
@@ -7128,6 +7364,42 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     .pmf-select-shell{position:relative;display:block;min-width:0}.pmf-select-shell select{width:100%;appearance:none;-webkit-appearance:none;padding-right:31px!important}.pmf-select-arrow{position:absolute;right:11px;top:50%;transform:translateY(-52%);color:var(--pmf-muted);font-size:12px;line-height:1;pointer-events:none}.pmf-select-shell:has(select:disabled) .pmf-select-arrow{color:#6f767b;opacity:.55}
     .pmf-settings-toggle{display:flex;align-items:center;gap:8px;grid-column:1/3}.pmf-settings-chevron{width:34px;padding:0!important;font-size:22px}
     .pmf-settings-actions{display:flex;flex-wrap:wrap;gap:8px}.pmf-settings-child h2{margin:8px 0 16px;color:var(--pmf-accent)}.pmf-settings-back{margin-bottom:8px}
+  `);
+
+
+  GM_addStyle(`
+    #pmf-artists-root{font-family:var(--pmf-font)}
+    #pmf-creator-mode-selector button.pmf-active{color:#ffd1b5;background:#5d2d1b;box-shadow:inset 0 0 0 2px #d96f38}
+    .pmf-control-menu button[aria-checked="true"]{color:#ffc5a3;background:#3b2b24}
+    .pmf-creator-filter-popover{z-index:5200;max-height:min(620px,calc(100vh - 18px));overflow:auto;overscroll-behavior:contain;padding:12px;scrollbar-width:none}
+    .pmf-creator-filter-popover::-webkit-scrollbar{display:none}
+    .pmf-creator-filter-popover .pmf-match-mode{margin-bottom:8px}
+    .pmf-creator-filter-popover .pmf-filter-row{display:grid;grid-template-columns:minmax(0,1fr) 34px;align-items:center;min-height:34px;border-bottom:1px solid #343a3f}
+    .pmf-creator-filter-popover .pmf-filter-row>label{display:flex;align-items:center;gap:9px;min-width:0;color:#eef0f1}
+    .pmf-creator-filter-popover .pmf-filter-row input[type="checkbox"]{accent-color:var(--pmf-accent)}
+    .pmf-creator-filter-popover .pmf-row-chevron{width:30px;min-height:28px!important;padding:0!important;border:0!important;background:transparent!important;color:#d4a78d;font-size:22px}
+    .pmf-creator-filter-popover .pmf-preset-selector{margin:3px 0 6px}
+    .pmf-creator-partial-option{display:flex;align-items:center;gap:8px;margin-top:11px;color:#d6dade;font-size:12px}
+    .pmf-dialog .pmf-editor-body label:not(.pmf-check):not(.pmf-rule-enabled){display:grid;gap:6px;color:#dce0e2;font-size:12px}
+    .pmf-dialog .pmf-editor-body select,.pmf-dialog .pmf-editor-body input:not([type="checkbox"]),.pmf-dialog .pmf-editor-body textarea{width:100%;min-height:34px;color:var(--pmf-text);background:var(--pmf-surface-1);border:1px solid var(--pmf-border-strong);border-radius:4px;padding:6px 9px}
+    .pmf-dialog .pmf-editor-body textarea{min-height:86px;resize:vertical}
+    .pmf-method-help,.pmf-creator-rule-preview{margin:8px 0 0;color:var(--pmf-muted);font-size:12px;line-height:1.45}
+    .pmf-date-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .pmf-creator-rules-dialog{width:min(1040px,calc(100vw - 28px));max-height:min(760px,calc(100vh - 28px))}
+    .pmf-creator-rule-list{display:flex;flex-direction:column;gap:9px;overflow:auto;scrollbar-width:none}
+    .pmf-creator-rule-list::-webkit-scrollbar{display:none}
+    .pmf-creator-rule-row{display:grid;grid-template-columns:76px 68px 92px minmax(170px,1.2fr) 105px minmax(150px,1fr) 96px 86px 76px 76px 34px;gap:6px;align-items:center;padding:8px;border:1px solid var(--pmf-border);border-radius:5px;background:var(--pmf-surface-1)}
+    .pmf-creator-rule-row>*{min-width:0}
+    .pmf-creator-rule-row .pmf-rule-enabled{display:flex;align-items:center;gap:5px;font-size:11px}
+    .pmf-creator-rule-row .pmf-rule-fields{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
+    .pmf-creator-rule-row button[data-creator-rule-action="remove"]{padding:0!important;color:#ffaaa0}
+    .pmf-creator-preset-list{display:flex;flex-direction:column;gap:5px;max-height:280px;overflow:auto}
+    .pmf-creator-preset-list label{display:flex!important;grid-template-columns:none!important;align-items:center;gap:9px;min-height:34px;padding:5px 8px;border:1px solid transparent;border-radius:4px}
+    .pmf-creator-preset-list label:has(input:checked){border-color:#a85b33;background:#33251f;color:#ffc5a3}
+    .pmf-quick-status-filters button[data-pmf-quick-status="hidden"].pmf-match,.pmf-quick-status-filters button[data-pmf-quick-status="hidden"].pmf-no-match{color:#397dc4;border-color:#397dc4}
+    .pmf-native-proxy-controls .pmf-filter-button>span[aria-hidden="true"]{display:none!important}
+    @media(max-width:1100px){.pmf-creator-rule-row{grid-template-columns:72px 64px 88px minmax(160px,1fr) 100px minmax(140px,1fr) 90px 80px 70px 70px 34px;min-width:950px}.pmf-creator-rules-dialog .pmf-editor-body{overflow-x:auto}}
+    @media(max-width:760px){.pmf-creator-filter-popover{width:min(370px,calc(100vw - 16px))!important}.pmf-date-fields{grid-template-columns:1fr}}
   `);
 
   const NativeActionAlignment = {

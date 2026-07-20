@@ -1,4 +1,22 @@
-# Pawchive.pw Media Filter v0.10.12 testing
+# Pawchive.pw Media Filter v0.11.0 testing
+
+## v0.11.0 Local catalogue redesign matrix
+
+Run `node tests/v011-local-catalogue-redesign.cjs`, `node tests/v011-creator-filter-presets-and-migration.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 49 executable tests. Static fixtures do not replace authenticated Tampermonkey checks.
+
+1. Open `/artists` at 1920×1080 and 2560×1440. Confirm the mode says **Local catalogue**, the search placeholder says **Search Local catalogue creators…**, stored/match/empty text uses the same wording, cards retain the corrected responsive size, and exactly one Native or Local grid is visible.
+2. Open the Local sort menu. It must contain only Popularity, Alphabetical, Catalogue post count, Post publish date, and Advanced attachment amounts. Re-select a mode to reverse it. Unknown values must remain after known values in both directions.
+3. Select Post publish date and verify newest creator latest-post dates first, then reverse and verify oldest latest-post dates first. Creators without a known published date remain at the end.
+4. Open Advanced attachment amounts. Test every Type with Amount and Percentage under both global Count methods, then verify Highest first and Lowest first. In post mode, percentages use matching posts / aggregate-eligible posts. In attachment mode, percentages use selected attachments or links / all counted attachments and links.
+5. Open Creator filters. It must be an anchored compact popover rather than the old full-screen/giant modal. Test Service independently, then combine two or more enabled groups with All and Any. Service must remain AND in both cases.
+6. Configure Published date using On or after, On or before, and inclusive Between. Verify at least one creator post must satisfy it and that unknown dates appear only when Include unknown is enabled.
+7. Configure Videos, Images, Archives, Project files, External links, and Custom extensions. Test ≥, ≤, and Between under Amount and Percentage with both Count methods. Confirm labels/help describe the active units and no Catalogue API scan starts merely because a display filter changes.
+8. Create Advanced rules with IF, AND, and OR; Match and No match; multiple Fields; every text operator; Amount and Percentage. Verify the expression preview, field child, invalid-rule validation, and left-to-right result.
+9. On a partial creator summary, verify safe ≥ Amount lower bounds can participate only when Include safe partial lower bounds is enabled. Verify ≤, Between, Percentage, and No match do not claim exact results from partial data.
+10. Create, apply, update, rename, delete, and reset creator presets. Confirm Custom extensions, Advanced rules, date, service, All/Any, and partial policy survive round trips and a hard refresh. Existing pre-v0.11 presets must normalize without clearing stored posts.
+11. Check creator quick statuses: Favorite yellow, Like pink, Hidden dark blue, and the negative state remains visibly crossed/desaturated. Test mouse and keyboard operation.
+12. In Native directory, open Any service and confirm only one downward triangle is visible. Recheck the same shared dropdown styling on Local catalogue and creator pages at both target resolutions.
+13. Repeat v0.10.12 creator native-card visibility, creator → Back, Native top/bottom paginator, Local pagination, queue, metadata Stop/Resume, 429 cooldown, missing inventory, and clear-one/clear-all checks. Report these live browser results separately from Node tests.
 
 ## v0.10.12 creator native-card visibility matrix
 

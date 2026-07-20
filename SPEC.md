@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.12 specification
+# Pawchive.pw Media Filter v0.11.0 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.12`
+- Userscript and `Config.version`: `0.11.0`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -21,6 +21,20 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.11.0 Local catalogue contracts
+
+- Visible `/artists` terminology is **Local catalogue**. Internal identifiers, IndexedDB stores, creator summary fields, settings keys, and Catalogue coverage semantics remain unchanged.
+- Local sort modes are exactly Popularity, Alphabetical, Catalogue post count, Post publish date, and Advanced attachment amounts. Legacy latest/earliest and media sort values normalize into the new modes. Unknown sort values always follow known values.
+- Post publish date is the newest real stored `published` value for a creator. Reversing direction orders those latest-published values oldest first; it does not substitute an earliest-post field.
+- Advanced attachment sorting chooses one of Videos, Images, Archives, Project files, or External links, one Method (Amount or Percentage), and an explicit direction. The global creator-card Count method controls all creator media Amount and Percentage semantics.
+- In post-count mode, Amount is matching posts and Percentage is matching posts divided by aggregate-eligible posts. In attachment/link mode, Amount is matching files/links and Percentage is matching files/links divided by all counted media attachments/links.
+- Creator filters use one compact anchored parent popover. Service is evaluated independently with AND. Published date, media types, Custom extensions, and Advanced rules are filter groups combined by the saved All/Any mode.
+- Published date matches when at least one stored creator post satisfies On or after, On or before, or inclusive Between. Unknown dates match only when explicitly included.
+- Media and Custom-extension children support Amount or Percentage with ≥, ≤, or inclusive Between. Partial summaries may satisfy only safe lower-bound Amount conditions when the user enables partial lower bounds; unsafe upper bounds, Between, percentages, and negative advanced-rule conclusions are indeterminate and excluded.
+- Advanced rules support ordered IF/AND/OR evaluation, Match/No match, one or more fields, contains/equals/starts-with/ends-with, and Amount/Percentage conditions. Rule aggregate fingerprints remain compatible for legacy single-field rules.
+- Creator presets preserve and round-trip service, All/Any, Published date, media rules, Custom extensions, Advanced rules, and partial policy. Legacy filter fields are normalized away without invalidating stored Catalogue data.
+- Native directory, Local catalogue, and creator pages share PMF typography and selected-state tokens. Favorite is yellow, Like is pink, and Hidden is dark blue. Native service proxy controls render only the shared PMF dropdown arrow.
 
 ## v0.10.12 creator-page visibility contracts
 
@@ -159,9 +173,9 @@ Favorite is Pawchive-native tri-state evidence. Like and Hidden are local creato
 
 `CreatorCatalogueSummary` version 3 stores source count, the full classification fingerprint, media post counts, physical attachment/link totals, all known publication timestamps, last update, metadata health, completeness, authoritative Like/Seen/Favorite aggregates, and dynamic custom-extension/custom-rule aggregate caches. Project-file post counts include project evidence even when the physical attachment total is zero. Old complete Catalogues receive bounded idle backfills without changing stored posts or forcing a scan.
 
-Media percentage is `posts containing the media type / total Catalogue posts × 100`. Count and percentage rules support At least, At most, Exactly, and Between. Percentage values are 0–100 with one decimal place. Complete Catalogues are the default aggregate domain; partial results are explicit lower bounds.
+Historical v0.10 aggregate percentages used matching posts divided by Catalogue posts. v0.11.0 supersedes that contract: the global Count method chooses post-based or attachment/link-based Amount and Percentage semantics. Creator condition dialogs expose ≥, ≤, and inclusive Between; legacy Exactly values remain readable but are not offered by the redesigned UI. Complete Catalogues are authoritative, and partial results are accepted only as explicit mathematically safe lower bounds.
 
-Creator sorting keeps stable ties and always places unknown values after known values in both directions. Directory sorts include Popularity, indexed/updated dates, alphabetical name, and service. Catalogue sorts expose posts, dates, media post/attachment/percentage metrics, and status aggregates.
+Creator sorting keeps stable ties and always places unknown values after known values in both directions. The authoritative Local catalogue list is Popularity, Alphabetical, Catalogue post count, Post publish date, and Advanced attachment amounts; older indexed/service/status/media-list modes normalize into supported v0.11.0 values.
 
 ## Creator queue and batches
 
