@@ -10,8 +10,8 @@ const {
   NativeArtistsProxy, CreatorCardReconstructor, CreatorIndexUI,
 } = api;
 
-assert.equal(Config.version, '0.11.0');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.0/);
+assert.equal(Config.version, '0.11.1');
+assert.match(originalSource, /\/\/ @version\s+0\.11\.1/);
 assert.equal(CreatorDirectoryMode.load(), 'native');
 assert.equal(CreatorDirectoryMode.normalize('bad-value'), 'native');
 assert.equal(CreatorDirectoryMode.save('catalogue'), 'catalogue');

@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.11.0 specification
+# Pawchive.pw Media Filter v0.11.1 specification
 
 ## Scope
 
@@ -6,11 +6,12 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.11.0`
+- Userscript and `Config.version`: `0.11.1`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
 - Post schema: 2
+- Creator-card summary schema: 5
 - IndexedDB: `pawchive-media-filter`, version 5
 - Creator directory store: `creatorDirectory`, keyed by `creatorKey`
 - Creator state store: `creatorStates`, keyed by `creatorKey`
@@ -22,6 +23,17 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
 
+## v0.11.1 second-pass audit contracts
+
+- An explicit `enabled: false` Published-date group remains disabled even when its saved dates remain populated. Enabling an unconfigured date or Custom-extension group opens its child editor rather than committing an empty filter.
+- Advanced rules have an independent parent group switch. Turning the group off and on preserves every row's own enabled state, query, fields, logic join, outcome, method, and thresholds.
+- A text-rule **No match** aggregate is the number of aggregate-eligible posts minus the number matching the text query. It is not the Boolean negation of the aggregate threshold. Partial Catalogues may use only safe lower-bound Amount conditions.
+- Creator summary schema 5 persists `totalAttachmentCount`, `totalExternalLinkCount`, and `totalAttachmentLinkCount`. Attachment-mode Percentage uses every real attachment plus scoped external links as its denominator, including attachments outside the five displayed media categories.
+- Invalid schema-4 summaries are recomputed locally for both complete and partial scanned Catalogues. Dynamic Custom-extension and text-rule aggregates are fingerprinted, bounded, written locally, and represented in record signatures so filtered/sorted caches cannot retain stale values.
+- Creator-filter popovers remain exactly trigger-width at desktop and narrow layouts, remove abandoned same-trigger nodes, clear inherited transforms, stay within the viewport, and may open above the trigger when the lower viewport cannot contain them.
+- Creator preset normalization always retains one canonical Default, repairs duplicate/missing IDs and duplicate names deterministically, and rejects blank/duplicate new names without closing the naming dialog or losing state.
+- Advanced attachment Type order begins with Images, then Videos, Archives, Project files, and External links. Discard preserves the prior active sort but remembers the latest Type and Method configuration for reopening.
+
 ## v0.11.0 Local catalogue contracts
 
 - Visible `/artists` terminology is **Local catalogue**. Internal identifiers, IndexedDB stores, creator summary fields, settings keys, and Catalogue coverage semantics remain unchanged.
@@ -31,7 +43,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - In post-count mode, Amount is matching posts and Percentage is matching posts divided by aggregate-eligible posts. In attachment/link mode, Amount is matching files/links and Percentage is matching files/links divided by all counted media attachments/links.
 - Creator filters use one compact anchored parent popover. Service is evaluated independently with AND. Published date, media types, Custom extensions, and Advanced rules are filter groups combined by the saved All/Any mode.
 - Published date matches when at least one stored creator post satisfies On or after, On or before, or inclusive Between. Unknown dates match only when explicitly included.
-- Media and Custom-extension children support Amount or Percentage with ≥, ≤, or inclusive Between. Partial summaries may satisfy only safe lower-bound Amount conditions when the user enables partial lower bounds; unsafe upper bounds, Between, percentages, and negative advanced-rule conclusions are indeterminate and excluded.
+- Media and Custom-extension children support Amount or Percentage with ≥, ≤, or inclusive Between. Partial summaries may satisfy only safe lower-bound Amount conditions when the user enables partial lower bounds; unsafe upper bounds, Between, and percentages are indeterminate and excluded. A No-match Amount is the known complement inside aggregate-eligible stored posts, so only its at-least lower bound may safely include a partial Catalogue.
 - Advanced rules support ordered IF/AND/OR evaluation, Match/No match, one or more fields, contains/equals/starts-with/ends-with, and Amount/Percentage conditions. Rule aggregate fingerprints remain compatible for legacy single-field rules.
 - Creator presets preserve and round-trip service, All/Any, Published date, media rules, Custom extensions, Advanced rules, and partial policy. Legacy filter fields are normalized away without invalidating stored Catalogue data.
 - Native directory, Local catalogue, and creator pages share PMF typography and selected-state tokens. Favorite is yellow, Like is pink, and Hidden is dark blue. Native service proxy controls render only the shared PMF dropdown arrow.

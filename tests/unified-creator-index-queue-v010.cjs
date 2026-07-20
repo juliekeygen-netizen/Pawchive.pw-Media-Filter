@@ -11,8 +11,8 @@ const {
   CatalogueJobManager, NativeActionAlignment,
 } = api;
 
-assert.equal(Config.version, '0.11.0');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.0/);
+assert.equal(Config.version, '0.11.1');
+assert.match(originalSource, /\/\/ @version\s+0\.11\.1/);
 assert.equal(Config.databaseVersion, 5);
 assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
 assert.match(originalSource, /createObjectStore\('creatorStates'/);
@@ -120,7 +120,7 @@ const summary = CreatorCatalogueSummary.compute([
   { id:'a', scanSchemaVersion:2, cacheSources:{ catalogue:true }, videoCount:2, imageCount:0, archiveCount:0, projectFileCount:0, externalLinkCount:1, published:'2025-01-01' },
   { id:'b', scanSchemaVersion:2, cacheSources:{ catalogue:true }, videoCount:1, imageCount:3, archiveCount:0, projectFileCount:0, externalLinkCount:0, published:'2026-01-01' },
 ], catalogue, 123);
-assert.equal(summary.version, 4);
+assert.equal(summary.version, 5);
 assert.deepEqual(JSON.parse(JSON.stringify(summary.media.videos)), { posts:2, attachments:3 });
 assert.deepEqual(JSON.parse(JSON.stringify(summary.media.images)), { posts:1, attachments:3 });
 assert.equal(summary.earliestPublishedAt, Date.parse('2025-01-01'));
@@ -162,4 +162,4 @@ assert.match(originalSource, /CreatorPresets\.apply/);
 assert.match(originalSource, /records\.forEach\(\(record\)=>ArtistsPageController\.scheduleBackfill/);
 assert.doesNotMatch(originalSource, /width:\s*100vw/);
 
-console.log('Pawchive Media Filter v0.11.0 unified creator index and queue tests passed.');
+console.log('Pawchive Media Filter v0.11.1 unified creator index and queue tests passed.');

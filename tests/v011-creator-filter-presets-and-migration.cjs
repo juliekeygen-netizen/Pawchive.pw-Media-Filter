@@ -13,7 +13,7 @@ const {
   CreatorSortUI,
 } = api;
 
-assert.equal(Config.version, '0.11.0');
+assert.equal(Config.version, '0.11.1');
 
 const migrated = CreatorFilterEngine.normalizeState({
   service: 'fanbox',
@@ -49,7 +49,7 @@ assert.equal('postStatuses' in migrated, false);
 assert.equal('publicFavorites' in migrated, false);
 
 let presets = CreatorPresets.normalize({});
-presets = CreatorPresets.create(presets, 'Media-heavy', {
+const created = CreatorPresets.create(presets, 'Media-heavy', {
   service: 'patreon',
   matchMode: 'any',
   includePartialLowerBounds: true,
@@ -72,6 +72,8 @@ presets = CreatorPresets.create(presets, 'Media-heavy', {
     percentage: { operator: 'at-most', from: 10 },
   })],
 });
+assert.equal(created.valid, true);
+presets = created.record;
 
 const activeId = presets.activeId;
 const applied = CreatorPresets.apply(presets, activeId);
@@ -85,7 +87,7 @@ assert.ok(stored.has(Config.creatorPresetsKey));
 
 assert.equal(CreatorFilterUI.buttonLabel(CreatorFilterEngine.normalizeState({})), 'All Local catalogue creators');
 assert.match(CreatorFilterUI.buttonLabel(applied), /^Creator filters · 2 · Patreon$/);
-assert.match(CreatorSortUI.label({ mode: 'advanced', direction: 'desc', advancedType: 'projectFiles', advancedMethod: 'percentage' }), /Advanced · Project files · Percentage ▼/);
+assert.match(CreatorSortUI.label({ mode: 'advanced', direction: 'desc', advancedType: 'projectFiles', advancedMethod: 'percentage' }), /Project files · Percentage ▼/);
 
 assert.match(originalSource, /Preset: \$\{Util\.escapeHtml\(activePreset\?\.name\|\|'Default'\)\}/);
 assert.match(originalSource, /Fields: \$\{Util\.escapeHtml/);
@@ -99,4 +101,4 @@ assert.match(originalSource, /Lowest first/);
 assert.doesNotMatch(originalSource, /Public creator favorite count/);
 assert.doesNotMatch(originalSource, /Native-favorited posts/);
 
-console.log('Pawchive Media Filter v0.11.0 creator preset and migration tests passed.');
+console.log('Pawchive Media Filter v0.11.1 creator preset and migration tests passed.');

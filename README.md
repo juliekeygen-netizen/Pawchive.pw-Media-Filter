@@ -2,17 +2,25 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.11.0**
+Current version: **0.11.1**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
 
+## v0.11.1 second-pass audit corrections
+
+A full source-level re-audit of the v0.11.0 Local catalogue redesign corrected several state and aggregate edge cases before further feature work. Published-date filters now stay disabled when their saved dates are retained, and the Advanced-rules parent switch no longer overwrites individual rule-row choices. **No match** text rules count eligible posts that do not satisfy the text query rather than negating the final threshold.
+
+Creator summary schema 5 records the authoritative attachment/link universe used by attachment-mode percentages: every real stored attachment, including uncategorized/audio files, plus external links under the active scope. Complete and partial Local Catalogues can rebuild that summary entirely from IndexedDB. Dynamic Custom-extension and text-rule aggregates use bounded fingerprint caches and stronger record signatures so locally hydrated results replace stale rendered records without a Pawchive network scan.
+
+The creator-filter popup now retains the trigger width at narrow layouts, cleans up same-trigger reopen attempts, may open upward when there is insufficient room below, and sends first-time Date or Custom-extension activation to the required child editor instead of enabling an empty condition. Creator presets reject blank/duplicate names without closing the editor, repair malformed legacy IDs/names while preserving Default, and keep validation messages visible. Advanced attachment sorting now defaults to the specified Images-first order and remembers its Type/Method configuration even when Discard leaves the active sort unchanged.
+
 ## v0.11.0 Local catalogue redesign
 
 The visible creator-directory mode is now **Local catalogue**. Its compact toolbar, search placeholder, stored-count text, typography, selected colors, and status language are aligned with the creator-page PMF interface without changing Pawchive’s native directory or the internal Catalogue storage model. The Native directory service proxy also renders one dropdown arrow instead of stacking a native-looking marker and PMF’s shared marker.
 
-Local sorting is reduced to **Popularity**, **Alphabetical**, **Catalogue post count**, **Post publish date**, and **Advanced attachment amounts**. The Advanced child dialog selects Videos, Images, Archives, Project files, or External links, chooses Amount or Percentage, and exposes Highest-first or Lowest-first direction. Amount and Percentage use the same global **Count method** as creator-card attachment badges: post mode counts matching posts; attachment mode counts files/links and calculates percentages against all counted attachments/links. Unknown values remain after known values in both directions.
+Local sorting is reduced to **Popularity**, **Alphabetical**, **Catalogue post count**, **Post publish date**, and **Advanced attachment amounts**. The Advanced child dialog selects Images, Videos, Archives, Project files, or External links, chooses Amount or Percentage, and exposes Highest-first or Lowest-first direction. Amount and Percentage use the same global **Count method** as creator-card attachment badges: post mode counts matching posts; attachment mode counts files/links and calculates percentages against all counted attachments/links. Unknown values remain after known values in both directions.
 
 The former giant Creator Filters modal is replaced with a compact anchored popover. Service is always an independent AND condition; enabled groups can match **All** or **Any**. Published date and every media type open focused child dialogs. Custom extensions remain available, and Advanced rules support IF/AND/OR, Match/No match, multiple searchable fields, Amount/Percentage conditions, and an expression preview. Partial Catalogues are included only for mathematically safe lower-bound Amount conditions.
 

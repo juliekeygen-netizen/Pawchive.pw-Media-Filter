@@ -15,8 +15,8 @@ const {
   CreatorCatalogueSummary,
 } = api;
 
-assert.equal(Config.version, '0.11.0');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.0/);
+assert.equal(Config.version, '0.11.1');
+assert.match(originalSource, /\/\/ @version\s+0\.11\.1/);
 assert.deepEqual(
   JSON.parse(JSON.stringify(CreatorSortUI.modes)),
   [
@@ -143,7 +143,7 @@ assert.equal(CreatorFilterEngine.matches(complete, filters), true);
 filters.customRules[0].outcome = 'no-match';
 filters.customRules[1].join = 'and';
 filters.customRules[1].count = { operator: 'at-least', from: 2, to: 2 };
-assert.equal(CreatorFilterEngine.matches(complete, filters), false);
+assert.equal(CreatorFilterEngine.matches(complete, filters), true);
 
 Settings.value.creatorCardBadgeCountMode = 'posts';
 const unknown = { id: 'unknown', directory: { creatorName: 'Unknown' }, summary: {} };
@@ -166,11 +166,11 @@ assert.equal(
 
 assert.match(originalSource, /Search Local catalogue creators…/);
 assert.match(originalSource, />Local catalogue<\/button>/);
-assert.match(originalSource, /Advanced attachment sorting/);
+assert.match(originalSource, /Advanced attachment amounts/);
 assert.match(originalSource, /Include safe partial lower bounds/);
 assert.match(originalSource, /data-pmf-quick-status="hidden"/);
 assert.ok(originalSource.includes('.pmf-creator-status-badge.pmf-creator-status-hidden{color:#397dc4}'));
 assert.match(originalSource, /dynamicAggregateSignature/);
 assert.doesNotMatch(originalSource, /Any service<\/span><span aria-hidden="true">▾<\/span>/);
 
-console.log('Pawchive Media Filter v0.11.0 Local catalogue redesign tests passed.');
+console.log('Pawchive Media Filter v0.11.1 Local catalogue redesign tests passed.');

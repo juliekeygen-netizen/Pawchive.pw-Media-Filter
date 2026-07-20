@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.11.1
+
+- Corrected saved Published date off-state and separated the Advanced-rules group switch from each rule row, so disabling a group no longer erases or silently re-enables its configuration.
+- Corrected Advanced-rule **No match** semantics to count eligible posts that do not match the text expression, including mathematically safe partial lower-bound Amount checks.
+- Corrected Custom-extension Amount evaluation and attachment/link Percentage denominators; creator summary schema 5 now records every real attachment plus scoped external links, including uncategorized attachments.
+- Added local summary backfill for complete and partial Catalogues, stronger Local record signatures, and bounded fingerprint caches so newly hydrated Custom-extension and text-rule aggregates appear without network rescans or stale cached filtering.
+- Hardened creator-filter popup lifecycle and geometry: same-trigger close removes the unused replacement node, narrow layouts keep the trigger width, near-bottom triggers may open upward, and unconfigured Date/Custom-extension checkboxes open their child editor instead of enabling an invalid filter.
+- Repaired creator-preset validation and legacy corruption handling, preserved visible validation messages, and retained Default plus unique IDs/names without losing creator filter state.
+- Corrected Advanced attachment sorting to use the specified Images-first default, preserve Amount/Percentage choices through Discard, and keep missing metrics unknown-last in either direction.
+- Added focused v0.11.1 second-pass audit coverage; 50 executable tests now pass.
+
 ## 0.11.0
 
 - Renamed the visible creator-directory mode to **Local catalogue** and aligned its search, status, count, and empty-state wording while preserving internal Catalogue identifiers and stored data.

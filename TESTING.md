@@ -1,8 +1,21 @@
-# Pawchive.pw Media Filter v0.11.0 testing
+# Pawchive.pw Media Filter v0.11.1 testing
+
+## v0.11.1 second-pass audit matrix
+
+Run `node tests/v0111-second-pass-audit.cjs`, the two v0.11.0 suites, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 50 executable tests. Browser behavior still requires authenticated Tampermonkey verification.
+
+1. Configure a Published date range, disable the parent row, close/reopen the popover, and reload. It must remain disabled while retaining its dates. On a fresh profile, checking Date published must open the date child instead of silently enabling an unbounded known-date filter.
+2. Create multiple Advanced rules with different row-enabled states. Toggle the parent Advanced rules group off and on; row state and IF/AND/OR configuration must survive. Verify **No match** counts posts that do not match the text query rather than inverting the threshold result.
+3. Use attachment-mode Percentage on a creator containing audio/unknown attachments plus external links. The denominator must include every real attachment and scoped link, not only Images/Videos/Archives/Project files. Recheck project keyword-only evidence: it may increment project posts but not attachment count.
+4. Open a partial and a complete Local Catalogue after upgrading. Summary badges/filter values should repopulate from local IndexedDB without a list-page rescan. Change a Custom-extension or Advanced text query and confirm newly hydrated aggregates appear without stale cached results or Pawchive requests.
+5. Open and close Creator filters repeatedly with the same trigger. There must be one popup and no hidden abandoned node. At 1920×1080, 2560×1440, and a narrow viewport, its width must equal the trigger; near the viewport bottom it must remain on-screen.
+6. On a fresh state, checking Custom extensions must open its child editor. Apply a valid extension list, then disable/re-enable it and confirm the list is preserved.
+7. In Advanced attachment amounts, the first/default Type is Images. Select Amount, then Discard and reopen: Amount remains selected while the previous active sort remains unchanged. Apply and confirm the trigger reads `Sort: Images · Amount` with the correct direction.
+8. Try blank and duplicate creator preset names. The name dialog must stay open with a visible error. Load malformed legacy presets with duplicate IDs/names or a missing active ID and confirm one canonical Default and unique stable entries remain.
 
 ## v0.11.0 Local catalogue redesign matrix
 
-Run `node tests/v011-local-catalogue-redesign.cjs`, `node tests/v011-creator-filter-presets-and-migration.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 49 executable tests. Static fixtures do not replace authenticated Tampermonkey checks.
+Run `node tests/v011-local-catalogue-redesign.cjs`, `node tests/v011-creator-filter-presets-and-migration.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The v0.11.0 release suite contained 49 executable tests; the current v0.11.1 complete suite contains 50. Static fixtures do not replace authenticated Tampermonkey checks.
 
 1. Open `/artists` at 1920×1080 and 2560×1440. Confirm the mode says **Local catalogue**, the search placeholder says **Search Local catalogue creators…**, stored/match/empty text uses the same wording, cards retain the corrected responsive size, and exactly one Native or Local grid is visible.
 2. Open the Local sort menu. It must contain only Popularity, Alphabetical, Catalogue post count, Post publish date, and Advanced attachment amounts. Re-select a mode to reverse it. Unknown values must remain after known values in both directions.
@@ -12,7 +25,7 @@ Run `node tests/v011-local-catalogue-redesign.cjs`, `node tests/v011-creator-fil
 6. Configure Published date using On or after, On or before, and inclusive Between. Verify at least one creator post must satisfy it and that unknown dates appear only when Include unknown is enabled.
 7. Configure Videos, Images, Archives, Project files, External links, and Custom extensions. Test ≥, ≤, and Between under Amount and Percentage with both Count methods. Confirm labels/help describe the active units and no Catalogue API scan starts merely because a display filter changes.
 8. Create Advanced rules with IF, AND, and OR; Match and No match; multiple Fields; every text operator; Amount and Percentage. Verify the expression preview, field child, invalid-rule validation, and left-to-right result.
-9. On a partial creator summary, verify safe ≥ Amount lower bounds can participate only when Include safe partial lower bounds is enabled. Verify ≤, Between, Percentage, and No match do not claim exact results from partial data.
+9. On a partial creator summary, verify safe ≥ Amount lower bounds can participate only when Include safe partial lower bounds is enabled. Verify ≤, Between, and Percentage do not claim exact results from partial data. A No-match Amount may pass only as an explicitly enabled safe ≥ lower bound.
 10. Create, apply, update, rename, delete, and reset creator presets. Confirm Custom extensions, Advanced rules, date, service, All/Any, and partial policy survive round trips and a hard refresh. Existing pre-v0.11 presets must normalize without clearing stored posts.
 11. Check creator quick statuses: Favorite yellow, Like pink, Hidden dark blue, and the negative state remains visibly crossed/desaturated. Test mouse and keyboard operation.
 12. In Native directory, open Any service and confirm only one downward triangle is visible. Recheck the same shared dropdown styling on Local catalogue and creator pages at both target resolutions.
