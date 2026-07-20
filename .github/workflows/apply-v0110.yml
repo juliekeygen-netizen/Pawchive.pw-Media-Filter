@@ -1,0 +1,53 @@
+name: Apply Pawchive v0.10.10
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0110/**'
+      - '.github/workflows/apply-v0110.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate, apply, test, and publish v0.10.10
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat .pawchive-v0110/part?? > /tmp/pawchive-v0110.patch
+          test "$(wc -c < /tmp/pawchive-v0110.patch)" -eq 140046
+          echo 'b6398ed95c2118e7527825dd0d4e8bc1902ba3228855ccd406da0396f53ba74b  /tmp/pawchive-v0110.patch' | sha256sum -c -
+
+          git apply --check /tmp/pawchive-v0110.patch
+          git apply /tmp/pawchive-v0110.patch
+
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          test "$test_count" -eq 45
+          git diff --check
+
+          rm -rf .pawchive-v0110
+          rm -f .github/workflows/apply-v0110.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.10.10 filter consistency, navigation, and maintenance'
+          git push origin HEAD:master
