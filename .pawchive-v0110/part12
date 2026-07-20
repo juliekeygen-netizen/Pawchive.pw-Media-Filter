@@ -1,0 +1,72 @@
++      if(CreatorIndexUI.mode==='native')quick.append(CreatorIndexUI.quickButton('native-scanned',Icons.check,'Hide scanned creators on this Pawchive page'));else[['favorite',Icons.star,'Favorite creator filter'],['liked',Icons.heart,'Like creator filter'],['hidden',Icons.eye,'Hidden creator filter']].forEach(([field,icon,label])=>quick.append(CreatorIndexUI.quickButton(field,icon,label)));
+       CreatorIndexUI.paginator.append(quick);
+-      if (CreatorIndexUI.mode === 'native') {
+-        const mirror = document.createElement('div');
+-        mirror.className = 'pmf-native-paginator-mirror';
+-        CreatorIndexUI.paginator.append(mirror);
+-        NativeArtistsProxy.paginator(CreatorIndexUI.found, mirror);
+-      } else CreatorIndexUI.paginator.insertAdjacentHTML('beforeend', '<small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>');
++      if(CreatorIndexUI.mode==='native'){
++        const topMirror=document.createElement('div');topMirror.className='pmf-native-paginator-mirror';CreatorIndexUI.paginator.append(topMirror);NativeArtistsProxy.paginator(CreatorIndexUI.found,topMirror);
++        const bottomMirror=document.createElement('div');bottomMirror.className='pmf-native-paginator-mirror';CreatorIndexUI.bottomPaginator?.append(bottomMirror);NativeArtistsProxy.paginator(CreatorIndexUI.found,bottomMirror);
++      }else{
++        CreatorIndexUI.paginator.insertAdjacentHTML('beforeend','<small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>');
++        CreatorIndexUI.bottomPaginator?.insertAdjacentHTML('beforeend','<small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>');
++      }
+       CreatorIndexUI.updateQuickFilters();
+     },
+     bindSearch() {
+@@ -5960,8 +6138,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
+       if (summary) summary.textContent = 'Native directory · Pawchive controls';
+       CreatorIndexUI.setState('ready', '');
+       NativeArtistsProxy.sync(CreatorIndexUI.found, CreatorIndexUI.toolbar);
+-      const mirror = CreatorIndexUI.paginator.querySelector('.pmf-native-paginator-mirror');
+-      if (mirror) NativeArtistsProxy.paginator(CreatorIndexUI.found, mirror);
++      [CreatorIndexUI.paginator,CreatorIndexUI.bottomPaginator].forEach((host)=>{const mirror=host?.querySelector?.('.pmf-native-paginator-mirror');if(mirror)NativeArtistsProxy.paginator(CreatorIndexUI.found,mirror);});
+       CreatorIndexUI.updateQuickFilters();
+     },
+     renderCatalogue() {
+@@ -6000,29 +6177,10 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
+       else CreatorIndexUI.setState(records.length ? 'ready' : 'empty', records.length ? '' : 'No local Catalogue creators match the current search and filters.');
+       const matches = CreatorIndexUI.toolbar.querySelector('[data-creator-matches]');
+       const summary = CreatorIndexUI.toolbar.querySelector('[data-creator-summary]');
+-      const count = CreatorIndexUI.paginator.querySelector('.pmf-filtered-count');
+-      const controls = CreatorIndexUI.paginator.querySelector('.pmf-page-controls');
+       if (matches) matches.textContent = `✓ ${records.length} Catalogue creators`;
+       if (summary) summary.textContent = CreatorIndexUI.refreshing ? `Refreshing local catalogue… · ${CreatorIndexUI.records.length} cached` : `Catalogue · ${CreatorIndexUI.records.length} stored`;
+-      if (count) count.textContent = records.length ? `Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}` : 'Showing 0 of 0';
+-      if (controls) {
+-        controls.replaceChildren();
+-        const add = (label, page, disabled, action) => {
+-          const button = document.createElement('button');
+-          button.type = 'button';
+-          button.textContent = label;
+-          button.disabled = disabled;
+-          button.dataset.creatorPage = String(page);
+-          button.dataset.creatorPageAction = action;
+-          if (action === 'page' && page === CreatorIndexUI.page) button.setAttribute('aria-current', 'page');
+-          controls.append(button);
+-        };
+-        add('«', 1, CreatorIndexUI.page === 1, 'first');
+-        add('‹', CreatorIndexUI.page - 1, CreatorIndexUI.page === 1, 'previous');
+-        for (const page of Paginator.pageButtons(CreatorIndexUI.page, totalPages, Paginator.windowSize(Number(CreatorIndexUI.paginator?.clientWidth) || 800))) add(String(page), page, page === CreatorIndexUI.page, 'page');
+-        add('›', CreatorIndexUI.page + 1, CreatorIndexUI.page === totalPages, 'next');
+-        add('»', totalPages, CreatorIndexUI.page === totalPages, 'last');
+-      }
++      const renderPaginator=(host)=>{const count=host?.querySelector?.('.pmf-filtered-count');const controls=host?.querySelector?.('.pmf-page-controls');if(count)count.textContent=records.length?`Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}`:'Showing 0 of 0';if(!controls)return;controls.replaceChildren();const add=(label,page,disabled,action)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.dataset.creatorPage=String(page);button.dataset.creatorPageAction=action;if(action==='page'&&page===CreatorIndexUI.page){button.setAttribute('aria-current','page');button.classList.add('pmf-current-page');}controls.append(button);};add('«',1,CreatorIndexUI.page===1,'first');add('‹',CreatorIndexUI.page-1,CreatorIndexUI.page===1,'previous');for(const page of Paginator.pageButtons(CreatorIndexUI.page,totalPages,Paginator.windowSize(Number(host?.clientWidth)||800)))add(String(page),page,page===CreatorIndexUI.page,'page');add('›',CreatorIndexUI.page+1,CreatorIndexUI.page===totalPages,'next');add('»',totalPages,CreatorIndexUI.page===totalPages,'last');};
++      renderPaginator(CreatorIndexUI.paginator);renderPaginator(CreatorIndexUI.bottomPaginator);
+       CreatorIndexUI.updateQuickFilters();
+       CreatorIndexUI.retainSession();
+     },
+@@ -6075,12 +6233,8 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
+         NativeArtistsProxy.activatePage(CreatorIndexUI.found, paginatorIndex);
+         return;
+       }
+-      const page = event.target.closest('[data-creator-page]')?.dataset.creatorPage;
+-      if (page) {
+-        CreatorIndexUI.page = Number(page);
+-        CreatorIndexUI.render();
+-        return;
+-      }
++      const pageButton=event.target.closest('[data-creator-page]');
++      if(pageButton){const records=CreatorIndexUI.filteredRecords();const totalPages=Math.max(1,Math.ceil(records.length/CreatorIndexUI.pageSize));const action=pageButton.dataset.creatorPageAction||'page';CreatorIndexUI.page=Util.clamp(Paginator.targetForAction(action,pageButton.dataset.creatorPage,CreatorIndexUI.page,totalPages),1,totalPages);CreatorIndexUI.render();return;}
