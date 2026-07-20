@@ -1,0 +1,124 @@
+name: Apply Pawchive v0.12.0 patch
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0120-patch/pr-trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0120-patch-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply tested v0.12.0 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin master "$GITHUB_HEAD_REF"
+          git checkout -B master origin/master
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c6a808fd6accffcaa54f243f34b3035999feb5b4"
+          grep -q '@version      0.11.6' pawchive-pw-media-filter.user.js
+          : > /tmp/pawchive-v0120.patch.gz.b64
+          for part in 00 01 02 03; do
+            git show "origin/$GITHUB_HEAD_REF:.pawchive-v0120-patch/part${part}" >> /tmp/pawchive-v0120.patch.gz.b64
+          done
+          test "$(wc -c < /tmp/pawchive-v0120.patch.gz.b64 | tr -d ' ')" = "60052"
+          test "$(sha256sum /tmp/pawchive-v0120.patch.gz.b64 | awk '{print $1}')" = "7751273f7118a8e34e58cff71fe930b4a592106ff07fc08ed99e0515ce31922a"
+          base64 -d /tmp/pawchive-v0120.patch.gz.b64 > /tmp/pawchive-v0120.patch.gz
+          test "$(sha256sum /tmp/pawchive-v0120.patch.gz | awk '{print $1}')" = "6fdf7d0f88af2bb5c1fbca6d590d9a117914bfba3c76224795b0fb237376618d"
+          gzip -d -c /tmp/pawchive-v0120.patch.gz > /tmp/pawchive-v0120.patch
+          test "$(sha256sum /tmp/pawchive-v0120.patch | awk '{print $1}')" = "195a080144844cbae09d9071f920d77a0e6006cda07a0d97951c438c1c5d5a12"
+          git apply --check /tmp/pawchive-v0120.patch
+          git apply /tmp/pawchive-v0120.patch
+
+      - name: Validate v0.12.0
+        id: validate
+        shell: bash
+        run: |
+          set +e
+          result=/tmp/pawchive-v0120-validation.txt
+          : > "$result"
+          failed=0
+          echo "Node: $(node --version)" >> "$result"
+          if node --check pawchive-pw-media-filter.user.js >> "$result" 2>&1; then
+            echo "PASS node --check" >> "$result"
+          else
+            echo "FAIL node --check" >> "$result"
+            failed=1
+          fi
+          test_count=0
+          while IFS= read -r test_file; do
+            test_count=$((test_count + 1))
+            one=/tmp/pawchive-one-test.log
+            if node "$test_file" > "$one" 2>&1; then
+              echo "PASS $test_file" >> "$result"
+            else
+              echo "FAIL $test_file" >> "$result"
+              cat "$one" >> "$result"
+              failed=1
+            fi
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count" >> "$result"
+          if [ "$test_count" -ne 56 ]; then
+            echo "FAIL expected 56 executable tests" >> "$result"
+            failed=1
+          fi
+          if git diff --check >> "$result" 2>&1; then
+            echo "PASS git diff --check" >> "$result"
+          else
+            echo "FAIL git diff --check" >> "$result"
+            failed=1
+          fi
+          if grep -q '@version      0.12.0' pawchive-pw-media-filter.user.js \
+             && grep -q "version: '0.12.0'" pawchive-pw-media-filter.user.js \
+             && grep -q 'databaseVersion: 6' pawchive-pw-media-filter.user.js \
+             && grep -q 'iframely.net' pawchive-pw-media-filter.user.js \
+             && test -f tests/v0120-popular-posts.cjs; then
+            echo "PASS v0.12.0 release markers" >> "$result"
+          else
+            echo "FAIL v0.12.0 release markers" >> "$result"
+            failed=1
+          fi
+          cat "$result"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload validation diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: pawchive-v0120-validation-patch
+          path: /tmp/pawchive-v0120-validation.txt
+          if-no-files-found: error
+
+      - name: Require successful validation
+        shell: bash
+        run: test "${{ steps.validate.outputs.failed }}" = "0"
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-v0120.yml
+          rm -f .github/workflows/apply-v0120-complete.yml
+          rm -f .github/workflows/apply-v0120-patch.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add v0.12.0 Popular Posts catalogue'
+          git push origin HEAD:master
