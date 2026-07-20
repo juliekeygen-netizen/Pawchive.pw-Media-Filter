@@ -37,19 +37,57 @@ jobs:
           git apply /tmp/pawchive-v01012.patch
 
       - name: Validate userscript
+        id: validate
         shell: bash
         run: |
-          set -euo pipefail
-          node --check pawchive-pw-media-filter.user.js
+          set +e
+          result=/tmp/pawchive-v01012-validation.txt
+          : > "$result"
+          failed=0
+          echo "Node: $(node --version)" >> "$result"
+          if node --check pawchive-pw-media-filter.user.js >> "$result" 2>&1; then
+            echo "PASS node --check" >> "$result"
+          else
+            echo "FAIL node --check" >> "$result"
+            failed=1
+          fi
           test_count=0
           while IFS= read -r test_file; do
-            echo "Running $test_file"
-            node "$test_file"
             test_count=$((test_count + 1))
+            one=/tmp/pawchive-one-test.log
+            if node "$test_file" > "$one" 2>&1; then
+              echo "PASS $test_file" >> "$result"
+            else
+              echo "FAIL $test_file" >> "$result"
+              cat "$one" >> "$result"
+              failed=1
+            fi
           done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
-          echo "Executable tests: $test_count"
-          test "$test_count" -eq 47
-          git diff --check
+          echo "Executable tests: $test_count" >> "$result"
+          if [ "$test_count" -ne 47 ]; then
+            echo "FAIL expected 47 executable tests" >> "$result"
+            failed=1
+          fi
+          if git diff --check >> "$result" 2>&1; then
+            echo "PASS git diff --check" >> "$result"
+          else
+            echo "FAIL git diff --check" >> "$result"
+            failed=1
+          fi
+          cat "$result"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload validation diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: pawchive-v01012-validation
+          path: /tmp/pawchive-v01012-validation.txt
+          if-no-files-found: error
+
+      - name: Require successful validation
+        shell: bash
+        run: test "${{ steps.validate.outputs.failed }}" = "0"
 
       - name: Publish directly to master
         shell: bash
