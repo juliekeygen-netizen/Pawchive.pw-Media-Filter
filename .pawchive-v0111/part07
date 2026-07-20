@@ -1,0 +1,145 @@
+--- a/tests/static-smoke.cjs
++++ b/tests/static-smoke.cjs
+@@ -12,7 +12,7 @@ const {
+ const json = (value) => JSON.parse(JSON.stringify(value));
+ const creator = Route.parse('https://pawchive.pw/fanbox/user/12345?o=50&q=cat');
+ 
+-assert.equal(Config.version, '0.10.10');
++assert.equal(Config.version, '0.10.11');
+ assert.equal(Config.schemaVersion, 2);
+ assert.equal(Config.databaseVersion, 5);
+ assert.equal(Config.settingsKey, 'pmf-settings-v5');
+diff --git a/tests/status-filter-polish-v082.cjs b/tests/status-filter-polish-v082.cjs
+index 9b6ae2b..c6830cc 100644
+--- a/tests/status-filter-polish-v082.cjs
++++ b/tests/status-filter-polish-v082.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+ const { api, originalSource } = loadUserscript();
+ const { Config } = api;
+ 
+-assert.equal(Config.version, '0.10.10');
++assert.equal(Config.version, '0.10.11');
+ 
+ assert.match(originalSource, /--pmf-status-summary-gap:7px;gap:var\(--pmf-status-summary-gap\)!important/);
+ assert.match(originalSource, /\.pmf-page-controls\{gap:5px!important;min-height:27px!important\}/);
+diff --git a/tests/test-helper.cjs b/tests/test-helper.cjs
+index d6b1d90..508db2e 100644
+--- a/tests/test-helper.cjs
++++ b/tests/test-helper.cjs
+@@ -33,7 +33,7 @@ function loadUserscript() {
+   const originalSource = fs.readFileSync(userscriptPath, 'utf8');
+   const source = originalSource.replace(
+     '  Lifecycle.start();',
+-    '  globalThis.__pmfTest = { Config, Util, SettingsEvents, Settings, Route, PawchiveData, MediaClassifier, PostClassification, ExternalLinkDetector, ProjectDetector, CatalogueMetadataPolicy, PostMissingStats, PostNormalizer, CatalogueOnlyMigration, Cache, CatalogueRequestScheduler, PostStatusEvents, PostStatus, FavoriteStateResolver, PostStatusFilters, FavoriteSyncCoordinator, PawchiveAPI, FilterEngine, PostSorter, FilterSummary, CatalogueModel, CreatorDirectory, CreatorState, CreatorStatusFilters, CreatorDirectoryMode, CreatorPresets, CreatorAggregateCondition, CreatorCustomRule, CreatorFilterEngine, CreatorSorter, CreatorCatalogueSummary, ArtistCatalogueAction, CreatorDisplayName, ArtistsDOM, CreatorArtworkFailureCache, CreatorCardReconstructor, CreatorGridGeometry, NativeArtistsVisibility, NativePaginatorMirror, NativeArtistsProxy, AttachmentBadgeSizing, CreatorCardBadgeRenderer, CreatorCardRightRail, CatalogueRunner, CatalogueJobManager, Presets, OverlayManager, PawchiveDOM, BadgeRenderer, CompactGridScale, CompactThumbnailRatio, CompactLayoutEngine, CreatorSessionCache, PostStatusStateCoordinator, CardDimTreatment, SeenCardTreatment, HiddenCreatorTreatment, PostStatusBadgeRenderer, StatusBadgeRenderer, CardRenderer, Paginator, OperationIssues, MetadataDetailPool, MissingAttachmentMaintenance, Catalogue, BaseUI, UI, SettingsUI, CreatorQueuePanel, CreatorIndexUI, CreatorSettingsUI, CreatorFilterUI, CreatorSortUI, CreatorBulkSelection, NativeCreatorDirectorySource, CreatorProfileRepairManager, CreatorBulkUI, ArtistsPageController, App, NativeActionAlignment, PostPageController, CreatorActionController, CreatorPageController, isPmfOwnedNode, PmfDomMutationGuard, NativeStylesheetHealth, Lifecycle };',
++    '  globalThis.__pmfTest = { Config, Util, SettingsEvents, Settings, Route, PawchiveData, MediaClassifier, PostClassification, ExternalLinkDetector, ProjectDetector, CatalogueMetadataPolicy, PostMissingStats, PostNormalizer, CatalogueOnlyMigration, Cache, CatalogueRequestScheduler, PostStatusEvents, PostStatus, FavoriteStateResolver, PostStatusFilters, FavoriteSyncCoordinator, PawchiveAPI, FilterEngine, PostSorter, FilterSummary, CatalogueModel, CreatorDirectory, CreatorState, CreatorStatusFilters, CreatorDirectoryMode, CreatorPresets, CreatorAggregateCondition, CreatorCustomRule, CreatorFilterEngine, CreatorSorter, CreatorCatalogueSummary, ArtistCatalogueAction, CreatorDisplayName, ArtistsDOM, CreatorArtworkFailureCache, CreatorCardReconstructor, CreatorGridGeometry, NativeArtistsVisibility, NativePaginatorMirror, NativeArtistsProxy, NativeArtistsPageCoordinator, AttachmentBadgeSizing, CreatorCardBadgeRenderer, CreatorCardRightRail, CatalogueRunner, CatalogueJobManager, Presets, OverlayManager, PawchiveDOM, BadgeRenderer, CompactGridScale, CompactThumbnailRatio, CompactLayoutEngine, CreatorSessionCache, PostStatusStateCoordinator, CardDimTreatment, SeenCardTreatment, HiddenCreatorTreatment, PostStatusBadgeRenderer, StatusBadgeRenderer, CardRenderer, Paginator, OperationIssues, MetadataDetailPool, MissingAttachmentMaintenance, Catalogue, BaseUI, UI, SettingsUI, CreatorQueuePanel, CreatorIndexUI, CreatorSettingsUI, CreatorFilterUI, CreatorSortUI, CreatorBulkSelection, NativeCreatorDirectorySource, CreatorProfileRepairManager, CreatorBulkUI, ArtistsPageController, App, NativeActionAlignment, PostPageController, CreatorActionController, CreatorEarlyTakeover, CreatorPageController, isPmfOwnedNode, PmfDomMutationGuard, NativeStylesheetHealth, Lifecycle };',
+   );
+   const stored = new Map();
+   let uuidCount = 0;
+diff --git a/tests/thumbnail-crop-position.cjs b/tests/thumbnail-crop-position.cjs
+index 24bfe76..eee3ddb 100644
+--- a/tests/thumbnail-crop-position.cjs
++++ b/tests/thumbnail-crop-position.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript, makeClassList } = require('./test-helper.cjs');
+ const { api, context, originalSource } = loadUserscript();
+ const { Config, CardRenderer, CompactGridScale, CompactThumbnailRatio, App } = api;
+ 
+-assert.equal(Config.version, '0.10.10');
++assert.equal(Config.version, '0.10.11');
+ 
+ function makeStyle(initial = {}) {
+   const values = new Map(Object.entries(initial).map(([name, value]) => [name, { value, priority:'' }]));
+diff --git a/tests/unified-creator-index-queue-v010.cjs b/tests/unified-creator-index-queue-v010.cjs
+index b4c3dc6..ff50953 100644
+--- a/tests/unified-creator-index-queue-v010.cjs
++++ b/tests/unified-creator-index-queue-v010.cjs
+@@ -11,8 +11,8 @@ const {
+   CatalogueJobManager, NativeActionAlignment,
+ } = api;
+ 
+-assert.equal(Config.version, '0.10.10');
+-assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
++assert.equal(Config.version, '0.10.11');
++assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+ assert.equal(Config.databaseVersion, 5);
+ assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
+ assert.match(originalSource, /createObjectStore\('creatorStates'/);
+diff --git a/tests/v01010-consistency-navigation-defaults.cjs b/tests/v01010-consistency-navigation-defaults.cjs
+index 9603971..b444a91 100644
+--- a/tests/v01010-consistency-navigation-defaults.cjs
++++ b/tests/v01010-consistency-navigation-defaults.cjs
+@@ -24,8 +24,8 @@ const { loadUserscript } = require('./test-helper.cjs');
+     App,
+   } = api;
+ 
+-  assert.equal(Config.version, '0.10.10');
+-  assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
++  assert.equal(Config.version, '0.10.11');
++  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
+   assert.equal(Settings.value.settingsSchemaVersion, 5);
+ 
+   const expectedHosts = [
+@@ -242,7 +242,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+   assert.match(originalSource, /CreatorSessionCache\.clear\(\)/);
+   assert.match(originalSource, /requestRefresh\('catalogue-clear'\)/);
+ 
+-  console.log('Pawchive Media Filter v0.10.10 consistency, defaults, inventory, navigation, and clear-safety tests passed.');
++  console.log('Pawchive Media Filter v0.10.11 consistency, defaults, inventory, navigation, and clear-safety tests passed.');
+ })().catch((error) => {
+   console.error(error);
+   process.exitCode = 1;
+diff --git a/tests/v01011-artists-navigation-layout.cjs b/tests/v01011-artists-navigation-layout.cjs
+new file mode 100644
+index 0000000..bf2546e
+--- /dev/null
++++ b/tests/v01011-artists-navigation-layout.cjs
+@@ -0,0 +1,116 @@
++'use strict';
++
++const assert = require('node:assert/strict');
++const { loadUserscript } = require('./test-helper.cjs');
++
++(async () => {
++  const { api, context, originalSource, makeElement } = loadUserscript();
++  const {
++    Config,
++    CreatorGridGeometry,
++    CreatorIndexUI,
++    NativePaginatorMirror,
++    NativeArtistsPageCoordinator,
++    PawchiveDOM,
++    CreatorEarlyTakeover,
++    Lifecycle,
++  } = api;
++
++  assert.equal(Config.version, '0.10.11');
++  assert.match(originalSource, /\/\/ @version\s+0\.10\.11/);
++
++  // Local grid visibility must be authoritative even against display:grid!important.
++  const localGrid = makeElement('section');
++  CreatorIndexUI.grid = localGrid;
++  CreatorIndexUI.setLocalGridVisible(false);
++  assert.equal(localGrid.hidden, true);
++  assert.equal(localGrid.getAttribute('aria-hidden'), 'true');
++  assert.equal(localGrid.style.getPropertyValue('display'), 'none');
++  assert.equal(localGrid.style.getPropertyPriority('display'), 'important');
++  CreatorIndexUI.setLocalGridVisible(true);
++  assert.equal(localGrid.hidden, false);
++  assert.equal(localGrid.style.getPropertyValue('display'), '');
++  assert.match(originalSource, /\.pmf-creator-index-grid\[hidden\]\{display:none!important\}/);
++
++  // Wide desktops get a wider root and larger Local creator-card height without changing 1080p.
++  const geometry = { columnCount:4, cardWidth:320, cardHeight:90, columnGap:8, rowGap:8 };
++  context.innerWidth = 1920;
++  CreatorGridGeometry.apply(localGrid, geometry);
++  assert.equal(localGrid.style.getPropertyValue('--pmf-native-creator-card-height'), '90px');
++  context.innerWidth = 2560;
++  CreatorGridGeometry.apply(localGrid, geometry);
++  assert.equal(localGrid.style.getPropertyValue('--pmf-native-creator-card-height'), '108px');
++  assert.match(originalSource, /@media\(min-width:2200px\)\{#pmf-artists-root\{width:min\(1980px/);
++
++  // Both native paginator mirrors share one pending navigation state.
++  const topMirror = makeElement('div');
++  const bottomMirror = makeElement('div');
++  let topRenders = 0;
++  let bottomRenders = 0;
++  const topHost = { querySelector: () => topMirror };
