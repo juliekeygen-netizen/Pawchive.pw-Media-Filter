@@ -32,14 +32,14 @@ jobs:
           git checkout -B master origin/master
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "5c698cb69521f8cadd3eab37ca9c957b93d151f3"
           grep -q '@version      0.11.2' pawchive-pw-media-filter.user.js
-          : > /tmp/pawchive-v0113.patch.gz.b64
-          for part in 00 01 02 03 04 05 06; do
-            git show "origin/$GITHUB_HEAD_REF:.pawchive-v0113/part${part}" >> /tmp/pawchive-v0113.patch.gz.b64
+          : > /tmp/pawchive-v0113.patch
+          for part in 00 01 02 03 04 05; do
+            git show "origin/$GITHUB_HEAD_REF:.pawchive-v0113/part${part}" >> /tmp/pawchive-v0113.patch
           done
-          base64 -d /tmp/pawchive-v0113.patch.gz.b64 | gzip -d > /tmp/pawchive-v0113.patch
           test "$(sha256sum /tmp/pawchive-v0113.patch | awk '{print $1}')" = "b1a2bdb8f9f10f298ae4d4038f57527508e2888cc948953f7482fb8a13cf63a2"
           git apply --check /tmp/pawchive-v0113.patch
           git apply /tmp/pawchive-v0113.patch
+          git show "origin/$GITHUB_HEAD_REF:.pawchive-v0113/v0113-portability-and-mobile-corrections.cjs" > tests/v0113-portability-and-mobile-corrections.cjs
 
       - name: Validate v0.11.3
         shell: bash
