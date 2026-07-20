@@ -36,6 +36,7 @@ jobs:
           test "$(sha256sum /tmp/pawchive-v0114.patch | awk '{print $1}')" = "15d35366e4c6490af3298e84f4280e97d33df2d006890e4082de18ff47b6acb5"
           git apply --check /tmp/pawchive-v0114.patch
           git apply /tmp/pawchive-v0114.patch
+          git show "origin/$GITHUB_HEAD_REF:.pawchive-v0114/v0114-portability-audit.cjs" > tests/v0114-portability-audit.cjs
 
       - name: Validate v0.11.4
         id: validate
