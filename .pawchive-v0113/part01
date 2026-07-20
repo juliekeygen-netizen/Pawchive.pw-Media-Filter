@@ -1,0 +1,153 @@
+diff --git a/pawchive-pw-media-filter.user.js b/pawchive-pw-media-filter.user.js
+index 5c698cb..34fa29b 100644
+--- a/pawchive-pw-media-filter.user.js
++++ b/pawchive-pw-media-filter.user.js
+@@ -1,7 +1,7 @@
+ // ==UserScript==
+ // @name         Pawchive.pw Media Filter
+ // @namespace    pawchive-pw-media-filter
+-// @version      0.11.2
++// @version      0.11.3
+ // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
+ // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
+ // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
+@@ -22,7 +22,7 @@
+ 
+   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+   const Config = Object.freeze({
+-    version: '0.11.2',
++    version: '0.11.3',
+     schemaVersion: 2,
+     pageSize: 50,
+     filteredPageSize: 50,
+@@ -3018,9 +3018,17 @@
+       const chosen=new Map();candidates.forEach((candidate)=>{const prior=chosen.get(candidate.role);if(!prior||candidate.current&&!prior.current||candidate.anchor&&!prior.anchor&&!prior.current||!candidate.disabled&&prior.disabled&&!prior.current)chosen.set(candidate.role,candidate);});
+       return[...chosen.values()].sort((a,b)=>a.index-b.index);
+     },
++    compactItems(items,{pendingRole=''}={}){
++      const mobile=globalThis.matchMedia?.('(max-width: 760px)')?.matches;
++      if(!mobile)return items;
++      const byRole=(role)=>items.find((item)=>item.role===role);
++      const current=items.find((item)=>item.current)||items.find((item)=>item.role===pendingRole)||items.find((item)=>item.role.startsWith('page:'));
++      const chosen=[byRole('first'),byRole('previous'),current,byRole('next'),byRole('last')].filter(Boolean);
++      return chosen.filter((item,index)=>chosen.findIndex((other)=>other.index===item.index)===index);
++    },
+     render(native,host,{includeCount=true,pendingRole='',navigationPending=false}={}){
+       host?.replaceChildren?.();if(!native||!host)return false;
+-      const items=NativePaginatorMirror.items(native);if(!items.length)return false;
++      const items=NativePaginatorMirror.compactItems(NativePaginatorMirror.items(native),{pendingRole});if(!items.length)return false;
+       if(includeCount){const small=native.querySelector('small');if(small){const count=small.cloneNode(true);count.classList.add('pmf-filtered-count');host.append(count);}}
+       const menu=document.createElement('div');menu.className='pmf-page-controls';items.forEach(({index,label,role,disabled,current})=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.nativePaginatorIndex=String(index);button.dataset.nativePaginatorRole=role;button.disabled=disabled||navigationPending;if(current||pendingRole&&role===pendingRole){button.setAttribute('aria-current','page');button.classList.add('pmf-current-page');}if(pendingRole&&role===pendingRole){button.classList.add('pmf-pending-page');button.setAttribute('aria-busy','true');}menu.append(button);});host.append(menu);return true;
+     },
+@@ -3374,6 +3382,110 @@
+     },
+   };
+ 
++  const DataPortability = {
++    format:'pawchive-media-filter-backup',
++    version:1,
++    catalogueStores:['posts','creators','uiStates','postStatuses','favoriteSnapshotEntries','favoriteSyncMeta','creatorDirectory','creatorStates'],
++    keyPaths:{posts:'key',creators:'creatorKey',uiStates:'creatorKey',postStatuses:'key',favoriteSnapshotEntries:'key',favoriteSyncMeta:'host',creatorDirectory:'creatorKey',creatorStates:'creatorKey'},
++    auxiliarySettingKeys:[Config.postStatusFiltersKey,Config.creatorFilterStateKey,Config.creatorStatusFiltersKey,Config.creatorDirectoryModeKey],
++    filename(){const stamp=new Date().toISOString().replace(/[:.]/g,'-');return`pawchive-media-filter-backup-${stamp}.json`;},
++    normalizeStoreRecord(store,record){
++      if(!record||typeof record!=='object')return null;
++      if(store==='creatorDirectory')return CreatorDirectory.normalize(record);
++      if(store==='creatorStates')return CreatorState.normalize(record);
++      if(store==='postStatuses')return PostStatus.normalize(record);
++      return Util.clone(record);
++    },
++    async readStore(store){
++      const db=await Cache.open();
++      if(!db){
++        const memory={posts:Cache.memory,creators:Cache.metaMemory,postStatuses:Cache.statusMemory,creatorDirectory:Cache.creatorDirectoryMemory,creatorStates:Cache.creatorStateMemory}[store];
++        return memory?[...memory.values()].map(Util.clone):[];
++      }
++      return new Promise((resolve,reject)=>{const request=db.transaction(store,'readonly').objectStore(store).getAll();request.onsuccess=()=>resolve((request.result||[]).map(Util.clone));request.onerror=()=>reject(request.error);});
++    },
++    async exportCatalogue(){
++      const stores={};
++      for(const store of DataPortability.catalogueStores)stores[store]=await DataPortability.readStore(store);
++      const auxiliary={};const favoriteSync=GM_getValue(Config.favoriteSyncKey,null);if(favoriteSync!=null)auxiliary[Config.favoriteSyncKey]=Util.clone(favoriteSync);
++      return{databaseVersion:Config.databaseVersion,stores,auxiliary};
++    },
++    exportSettings(){
++      const auxiliary={};
++      DataPortability.auxiliarySettingKeys.forEach((key)=>{const value=GM_getValue(key,null);if(value!=null)auxiliary[key]=Util.clone(value);});
++      return{value:Util.clone(Settings.value),auxiliary};
++    },
++    exportPresets(){return{post:Util.clone(GM_getValue(Config.presetsKey,Presets.record||null)),creator:Util.clone(GM_getValue(Config.creatorPresetsKey,CreatorPresets.load()))};},
++    async buildBackup(){return{format:DataPortability.format,formatVersion:DataPortability.version,appVersion:Config.version,exportedAt:new Date().toISOString(),sourceHost:String(location.hostname||''),catalogue:await DataPortability.exportCatalogue(),settings:DataPortability.exportSettings(),presets:DataPortability.exportPresets()};},
++    validate(payload){
++      if(!payload||typeof payload!=='object'||payload.format!==DataPortability.format)throw new Error('This is not a Pawchive Media Filter backup.');
++      const version=Number(payload.formatVersion)||0;if(version<1||version>DataPortability.version)throw new Error(`Unsupported backup format version: ${version||'unknown'}.`);
++      return payload;
++    },
++    summary(payload){
++      const data=DataPortability.validate(payload),stores=data.catalogue?.stores||{};
++      return{posts:Array.isArray(stores.posts)?stores.posts.length:0,creators:Array.isArray(stores.creators)?stores.creators.length:0,directory:Array.isArray(stores.creatorDirectory)?stores.creatorDirectory.length:0,hasSettings:Boolean(data.settings?.value),postPresets:Array.isArray(data.presets?.post?.presets)?data.presets.post.presets.length:0,creatorPresets:Array.isArray(data.presets?.creator?.presets)?data.presets.creator.presets.length:0};
++    },
++    async download(){
++      const payload=await DataPortability.buildBackup();const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=DataPortability.filename();anchor.hidden=true;document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);return payload;
++    },
++    async writeCatalogue(catalogue,{mode='merge'}={}){
++      const stores=catalogue?.stores&&typeof catalogue.stores==='object'?catalogue.stores:{};const names=DataPortability.catalogueStores.filter((store)=>Array.isArray(stores[store]));
++      if(!names.length)return{written:0,stores:0};
++      const db=await Cache.open();let written=0;
++      if(!db){
++        if(mode==='replace'){Cache.memory.clear();Cache.metaMemory.clear();Cache.statusMemory.clear();Cache.favoriteSnapshotMemory.clear();Cache.creatorDirectoryMemory.clear();Cache.creatorStateMemory.clear();}
++        const maps={posts:Cache.memory,creators:Cache.metaMemory,postStatuses:Cache.statusMemory,creatorDirectory:Cache.creatorDirectoryMemory,creatorStates:Cache.creatorStateMemory};
++        names.forEach((store)=>{const map=maps[store];if(!map)return;(stores[store]||[]).forEach((raw)=>{const record=DataPortability.normalizeStoreRecord(store,raw),key=record?.[DataPortability.keyPaths[store]];if(key!=null){map.set(String(key),record);written+=1;}});});
++      }else{
++        await new Promise((resolve,reject)=>{
++          const transaction=db.transaction(names,'readwrite');
++          if(mode==='replace')names.forEach((store)=>transaction.objectStore(store).clear());
++          names.forEach((store)=>{const target=transaction.objectStore(store),keyPath=DataPortability.keyPaths[store];(stores[store]||[]).forEach((raw)=>{const record=DataPortability.normalizeStoreRecord(store,raw);if(record?.[keyPath]!=null){target.put(record);written+=1;}});});
++          transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error||new Error('Catalogue import transaction aborted'));
++        });
++        Cache.memory.clear();Cache.metaMemory.clear();Cache.statusMemory.clear();Cache.favoriteSnapshotMemory.clear();Cache.creatorDirectoryMemory.clear();Cache.creatorStateMemory.clear();Cache.staleCreators.clear();
++      }
++      const auxiliary=catalogue?.auxiliary&&typeof catalogue.auxiliary==='object'?catalogue.auxiliary:{};
++      if(Object.prototype.hasOwnProperty.call(auxiliary,Config.favoriteSyncKey))GM_setValue(Config.favoriteSyncKey,Util.clone(auxiliary[Config.favoriteSyncKey]));else if(mode==='replace')GM_deleteValue(Config.favoriteSyncKey);
++      return{written,stores:names.length};
++    },
++    importSettings(payload){
++      if(!payload?.value)return false;Settings.save(Settings.normalize(payload.value));
++      const auxiliary=payload.auxiliary&&typeof payload.auxiliary==='object'?payload.auxiliary:{};
++      DataPortability.auxiliarySettingKeys.forEach((key)=>{if(!Object.prototype.hasOwnProperty.call(auxiliary,key))return;let value=auxiliary[key];if(key===Config.postStatusFiltersKey)value=PostStatusFilters.normalize(value);if(key===Config.creatorFilterStateKey)value=CreatorFilterEngine.normalizeState(value);if(key===Config.creatorStatusFiltersKey)value=CreatorStatusFilters.normalize(value);if(key===Config.creatorDirectoryModeKey)value=CreatorDirectoryMode.normalize(value);GM_setValue(key,value);});
++      PostStatusFilters.load();return true;
++    },
++    importPresets(payload){
++      let imported=false;
++      if(payload?.post&&typeof payload.post==='object'){GM_setValue(Config.presetsKey,Util.clone(payload.post));Presets.load(FilterEngine.createDefaultState());imported=true;}
++      if(payload?.creator&&typeof payload.creator==='object'){GM_setValue(Config.creatorPresetsKey,CreatorPresets.normalize(payload.creator));imported=true;}
++      return imported;
++    },
++    async importBackup(payload,{catalogue=true,settings=true,presets=true,mode='merge'}={}){
++      const data=DataPortability.validate(payload);const snapshot=CatalogueJobManager.snapshot();if((snapshot.active||[]).length||(snapshot.pending||[]).length)throw new Error('Finish or stop the creator queue before importing a backup.');
++      const result={catalogue:null,settings:false,presets:false};
++      if(catalogue)result.catalogue=await DataPortability.writeCatalogue(data.catalogue,{mode:mode==='replace'?'replace':'merge'});
++      if(settings)result.settings=DataPortability.importSettings(data.settings);
++      if(presets)result.presets=DataPortability.importPresets(data.presets);
++      return result;
++    },
++  };
++
++  const DataPortabilityUI = {
++    open(opener){
++      const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-data-transfer-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Export or import catalogue data');const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Export / Import catalogue'));const close=SettingsUI.action('×','cancel');close.className='pmf-icon-close';header.append(close);const body=SettingsUI.el('div','pmf-data-transfer-body');const footer=SettingsUI.el('footer');dialog.append(header,body,footer);backdrop.append(dialog);document.body.append(backdrop);let selectedFile=null,parsed=null,busy=false;
++      const status=(message,error=false)=>{const node=body.querySelector('[data-transfer-status]');if(node){node.textContent=message||'';node.classList.toggle('pmf-error',error);}};
++      const renderChoice=()=>{body.innerHTML='<p>Export a portable JSON backup, or import one on this device.</p><div class="pmf-transfer-choice"><button type="button" data-transfer-action="export">Export catalogue, settings, and presets</button><button type="button" data-transfer-action="show-import">Import backup</button></div><p class="pmf-help" data-transfer-status></p>';footer.innerHTML='<span></span><button type="button" data-transfer-action="cancel">Close</button>';};
++      const renderImport=()=>{body.innerHTML='<button type="button" class="pmf-settings-back" data-transfer-action="choice">‹ Back</button><section class="pmf-settings-section"><h3>Backup file</h3><div class="pmf-import-file-row"><input type="text" readonly data-import-file-name placeholder="Choose or drop a backup file"><button type="button" data-transfer-action="choose-file">Choose file</button><input type="file" accept="application/json,.json" data-import-file hidden></div><div class="pmf-import-dropzone" data-import-dropzone tabindex="0">Drop a Pawchive backup here</div><p class="pmf-help" data-import-summary>No backup selected.</p></section><section class="pmf-settings-section"><h3>Import contents</h3><label class="pmf-check"><input type="checkbox" name="importCatalogue" checked> Catalogue, creators, posts, statuses, and local scan data</label><label class="pmf-check"><input type="checkbox" name="importSettings" checked> Settings and saved filter state</label><label class="pmf-check"><input type="checkbox" name="importPresets" checked> Post and creator presets</label></section><section class="pmf-settings-section" data-import-catalogue-mode><h3>Catalogue conflict handling</h3><label class="pmf-check"><input type="radio" name="importMode" value="merge" checked> Merge with existing data; imported records update matching entries</label><label class="pmf-check"><input type="radio" name="importMode" value="replace"> Delete the current local catalogue and replace it with the backup</label></section><p class="pmf-help" data-transfer-status></p>';footer.innerHTML='<button type="button" data-transfer-action="choice">Back</button><span></span><button type="button" data-transfer-action="cancel">Cancel</button><button type="button" class="pmf-primary" data-transfer-action="import" disabled>Import backup</button>';};
++      const loadFile=async(file)=>{selectedFile=file||null;parsed=null;const name=body.querySelector('[data-import-file-name]'),summary=body.querySelector('[data-import-summary]'),confirm=footer.querySelector('[data-transfer-action="import"]');if(name)name.value=file?.name||'';if(confirm)confirm.disabled=true;if(!file){if(summary)summary.textContent='No backup selected.';return;}try{parsed=DataPortability.validate(JSON.parse(await file.text()));const info=DataPortability.summary(parsed);if(summary)summary.textContent=`${info.creators.toLocaleString()} creator catalogues · ${info.posts.toLocaleString()} posts · ${info.directory.toLocaleString()} creator-directory records · ${info.postPresets} post presets · ${info.creatorPresets} creator presets`;if(confirm)confirm.disabled=false;status('Backup is ready to import.');}catch(error){if(summary)summary.textContent='The selected file could not be read.';status(error.message,true);}};
++      renderChoice();const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true});
++      backdrop.addEventListener('click',async(event)=>{const action=event.target.closest('[data-transfer-action]')?.dataset.transferAction;if(!action||busy)return;if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='choice')renderChoice();if(action==='show-import')renderImport();if(action==='choose-file')body.querySelector('[data-import-file]')?.click();if(action==='export'){busy=true;event.target.disabled=true;status('Preparing backup…');try{const payload=await DataPortability.download();const info=DataPortability.summary(payload);status(`Exported ${info.creators.toLocaleString()} creator catalogues and ${info.posts.toLocaleString()} posts.`);}catch(error){status(`Export failed: ${error.message}`,true);}finally{busy=false;if(event.target.isConnected)event.target.disabled=false;}}if(action==='import'){const catalogue=body.querySelector('[name="importCatalogue"]')?.checked===true,settings=body.querySelector('[name="importSettings"]')?.checked===true,presets=body.querySelector('[name="importPresets"]')?.checked===true;if(!catalogue&&!settings&&!presets){status('Select at least one type of data to import.',true);return;}busy=true;event.target.disabled=true;status('Importing backup…');try{const result=await DataPortability.importBackup(parsed,{catalogue,settings,presets,mode:body.querySelector('[name="importMode"]:checked')?.value||'merge'});status(`Import complete${result.catalogue?` · ${result.catalogue.written.toLocaleString()} catalogue records written`:''}. Reloading…`);setTimeout(()=>location.reload(),700);}catch(error){status(`Import failed: ${error.message}`,true);busy=false;if(event.target.isConnected)event.target.disabled=false;}}});
++      backdrop.addEventListener('change',(event)=>{if(event.target.matches('[data-import-file]'))loadFile(event.target.files?.[0]);if(event.target.name==='importCatalogue'){const section=body.querySelector('[data-import-catalogue-mode]');if(section)section.hidden=!event.target.checked;}});
++      backdrop.addEventListener('dragover',(event)=>{const zone=event.target.closest('[data-import-dropzone]');if(!zone)return;event.preventDefault();zone.classList.add('pmf-drag-active');});backdrop.addEventListener('dragleave',(event)=>event.target.closest('[data-import-dropzone]')?.classList.remove('pmf-drag-active'));backdrop.addEventListener('drop',(event)=>{const zone=event.target.closest('[data-import-dropzone]');if(!zone)return;event.preventDefault();zone.classList.remove('pmf-drag-active');loadFile(event.dataTransfer?.files?.[0]);});
++    },
++  };
++
+   const OverlayManager = {
+     stack: [],
+     scrollY: 0,
+@@ -5360,8 +5472,8 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
