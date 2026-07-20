@@ -2,11 +2,18 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.11.3**
+Current version: **0.11.4**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.11.4 backup integrity audit
+
+- Catalogue export now reads every IndexedDB store in one consistent transaction instead of taking separate store snapshots while scans or status writes may continue.
+- Import validates every selected data group before writing anything. Replace cannot clear local data when a backup is incomplete or malformed.
+- Backups move safely between `pawchive.pw` and `www.pawchive.pw`; imported creator/post identities, statuses, UI state, Favorite snapshots, and Pawchive URLs are remapped to the current hostname. Profiles that already contain both hostname variants are consolidated using the newer or more complete matching record.
+- Replace clears all catalogue stores, including empty stores from the backup. The memory-only fallback also carries creator UI state and native-Favorite snapshot membership.
 
 ## v0.11.3 backup and mobile corrections
 

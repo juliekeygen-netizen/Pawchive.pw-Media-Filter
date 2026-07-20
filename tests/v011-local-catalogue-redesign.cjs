@@ -15,8 +15,8 @@ const {
   CreatorCatalogueSummary,
 } = api;
 
-assert.equal(Config.version, '0.11.3');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+assert.equal(Config.version, '0.11.4');
+assert.match(originalSource, /\/\/ @version\s+0\.11\.4/);
 assert.deepEqual(
   JSON.parse(JSON.stringify(CreatorSortUI.modes)),
   [

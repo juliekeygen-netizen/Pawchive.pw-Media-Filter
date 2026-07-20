@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.11.3
+// @version      0.11.4
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.11.3',
+    version: '0.11.4',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -1116,6 +1116,7 @@
     metaMemory: new Map(),
     statusMemory: new Map(),
     favoriteSnapshotMemory:new Map(),
+    uiStateMemory:new Map(),
     creatorDirectoryMemory:new Map(),
     creatorStateMemory:new Map(),
     staleCreators: new Set(),
@@ -1588,7 +1589,7 @@
     },
     async getUIState(creatorKey) {
       const db = await Cache.open();
-      if (!db) return null;
+      if (!db) return Cache.uiStateMemory.get(String(creatorKey||''))||null;
       return new Promise((resolve, reject) => {
         const request = db.transaction('uiStates', 'readonly').objectStore('uiStates').get(creatorKey);
         request.onsuccess = () => resolve(request.result || null);
@@ -1597,7 +1598,7 @@
     },
     async putUIState(state) {
       const db = await Cache.open();
-      if (!db) return;
+      if (!db) { if(state?.creatorKey)Cache.uiStateMemory.set(String(state.creatorKey),Util.clone(state)); return; }
       await new Promise((resolve, reject) => {
         const transaction = db.transaction('uiStates', 'readwrite');
         transaction.objectStore('uiStates').put(state);
@@ -1702,6 +1703,7 @@
       });
     },
     async clearUIStates() {
+      Cache.uiStateMemory.clear();
       const db = await Cache.open(); if (!db) return;
       await new Promise((resolve, reject) => {
         const transaction = db.transaction('uiStates', 'readwrite'); transaction.objectStore('uiStates').clear();
@@ -3389,25 +3391,92 @@
     keyPaths:{posts:'key',creators:'creatorKey',uiStates:'creatorKey',postStatuses:'key',favoriteSnapshotEntries:'key',favoriteSyncMeta:'host',creatorDirectory:'creatorKey',creatorStates:'creatorKey'},
     auxiliarySettingKeys:[Config.postStatusFiltersKey,Config.creatorFilterStateKey,Config.creatorStatusFiltersKey,Config.creatorDirectoryModeKey],
     filename(){const stamp=new Date().toISOString().replace(/[:.]/g,'-');return`pawchive-media-filter-backup-${stamp}.json`;},
+    canonicalHost(value){const host=String(value||'').trim().toLowerCase();return Config.allowedHosts.has(host)?host:'';},
+    replaceKeyHost(value,fromHost,toHost){const text=String(value||'');return fromHost&&toHost&&fromHost!==toHost&&text.startsWith(`${fromHost}|`)?`${toHost}${text.slice(fromHost.length)}`:text;},
+    replaceUrlHost(value,fromHost,toHost){const text=String(value||'');if(!text||!fromHost||!toHost||fromHost===toHost)return text;try{const url=new URL(text,location.origin);if(url.hostname.toLowerCase()!==fromHost)return text;url.hostname=toHost;return url.href;}catch{return text;}},
     normalizeStoreRecord(store,record){
-      if(!record||typeof record!=='object')return null;
+      if(!record||typeof record!=='object'||Array.isArray(record))return null;
       if(store==='creatorDirectory')return CreatorDirectory.normalize(record);
       if(store==='creatorStates')return CreatorState.normalize(record);
       if(store==='postStatuses')return PostStatus.normalize(record);
       return Util.clone(record);
     },
-    async readStore(store){
-      const db=await Cache.open();
-      if(!db){
-        const memory={posts:Cache.memory,creators:Cache.metaMemory,postStatuses:Cache.statusMemory,creatorDirectory:Cache.creatorDirectoryMemory,creatorStates:Cache.creatorStateMemory}[store];
-        return memory?[...memory.values()].map(Util.clone):[];
+    remapRecordHost(store,raw,fromHost,toHost){
+      const record=Util.clone(raw);if(!record||typeof record!=='object'||fromHost===toHost)return record;
+      const mapKey=(key)=>DataPortability.replaceKeyHost(key,fromHost,toHost),mapUrl=(url)=>DataPortability.replaceUrlHost(url,fromHost,toHost);
+      if('creatorKey'in record)record.creatorKey=mapKey(record.creatorKey);
+      if('key'in record&&(store==='posts'||store==='postStatuses'||store==='favoriteSnapshotEntries'))record.key=mapKey(record.key);
+      if('domain'in record&&String(record.domain||'').toLowerCase()===fromHost)record.domain=toHost;
+      if('creatorUrl'in record)record.creatorUrl=mapUrl(record.creatorUrl);
+      if('postUrl'in record)record.postUrl=mapUrl(record.postUrl);
+      ['thumbnailUrl','avatarUrl','bannerUrl','backdropUrl'].forEach((field)=>{if(field in record)record[field]=mapUrl(record[field]);});
+      if(record.context&&typeof record.context==='object'){
+        if(String(record.context.domain||'').toLowerCase()===fromHost)record.context.domain=toHost;
+        if(record.context.creatorKey)record.context.creatorKey=mapKey(record.context.creatorKey);
+        if(record.context.postKey)record.context.postKey=mapKey(record.context.postKey);
+        if(record.context.creatorUrl)record.context.creatorUrl=mapUrl(record.context.creatorUrl);
+        if(record.context.postUrl)record.context.postUrl=mapUrl(record.context.postUrl);
       }
+      if(store==='favoriteSnapshotEntries'){
+        record.host=toHost;
+        record.postKey=mapKey(record.postKey);
+        record.hostSnapshot=`${toHost}|${record.snapshotId||''}`;
+        record.key=`${toHost}|${record.snapshotId||''}|${record.postKey||''}`;
+      }
+      if(store==='favoriteSyncMeta'){
+        record.host=toHost;
+        if(record.sourceUrl)record.sourceUrl=mapUrl(record.sourceUrl);
+      }
+      return record;
+    },
+    recordTimestamp(record={}){return Math.max(0,Number(record.updatedAt)||0,Number(record.scannedAt)||0,Number(record.completedAt)||0,Number(record.lastAttemptAt)||0,Number(record.catalogue?.updatedAt)||0,Number(record.catalogue?.creatorCardSummary?.computedAt)||0);},
+    mergeCollision(store,prior,incoming){
+      if(store==='creatorDirectory')return CreatorDirectory.merge(prior,incoming);
+      const priorTime=DataPortability.recordTimestamp(prior),incomingTime=DataPortability.recordTimestamp(incoming);
+      if(store==='posts'&&priorTime===incomingTime){const score=(record)=>Number(record?.missingStatsKnown===true)*100000+Math.max(0,Number(record?.attachmentCount)||0)*100+String(record?.contentText||record?.content||'').length;return score(incoming)>=score(prior)?incoming:prior;}
+      return incomingTime>=priorTime?incoming:prior;
+    },
+    dedupeCatalogueStores(catalogue){
+      const stores=catalogue?.stores&&typeof catalogue.stores==='object'?catalogue.stores:{};
+      DataPortability.catalogueStores.forEach((store)=>{if(!Array.isArray(stores[store]))return;const keyPath=DataPortability.keyPaths[store],unique=new Map();stores[store].forEach((record)=>{const key=String(record?.[keyPath]??'');if(!key)return;unique.set(key,unique.has(key)?DataPortability.mergeCollision(store,unique.get(key),record):record);});stores[store]=[...unique.values()];});
+      return catalogue;
+    },
+    remapCatalogueHost(catalogue,{sourceHost='',targetHost='',clone=true}={}){
+      const fromHost=DataPortability.canonicalHost(sourceHost),toHost=DataPortability.canonicalHost(targetHost);const next=clone?Util.clone(catalogue||{}):(catalogue&&typeof catalogue==='object'?catalogue:{});
+      if(!fromHost||!toHost||fromHost===toHost)return next;
+      const stores=next.stores&&typeof next.stores==='object'?next.stores:{};
+      DataPortability.catalogueStores.forEach((store)=>{if(Array.isArray(stores[store]))stores[store]=stores[store].map((record)=>DataPortability.remapRecordHost(store,record,fromHost,toHost));});
+      const sync=next.auxiliary?.[Config.favoriteSyncKey];if(sync&&typeof sync==='object'){sync.host=toHost;if(sync.sourceUrl)sync.sourceUrl=DataPortability.replaceUrlHost(sync.sourceUrl,fromHost,toHost);}
+      return DataPortability.dedupeCatalogueStores(next);
+    },
+    memoryStoreSnapshot(){
+      const stores={
+        posts:[...Cache.memory.values()].map(Util.clone),
+        creators:[...Cache.metaMemory.values()].map(Util.clone),
+        uiStates:[...Cache.uiStateMemory.values()].map(Util.clone),
+        postStatuses:[...Cache.statusMemory.values()].map(Util.clone),
+        favoriteSnapshotEntries:[],
+        favoriteSyncMeta:[],
+        creatorDirectory:[...Cache.creatorDirectoryMemory.values()].map(Util.clone),
+        creatorStates:[...Cache.creatorStateMemory.values()].map(Util.clone),
+      };
+      for(const [hostSnapshot,postKeys] of Cache.favoriteSnapshotMemory){const separator=String(hostSnapshot).indexOf('|');const host=separator>=0?String(hostSnapshot).slice(0,separator):String(location.hostname||'');const snapshotId=separator>=0?String(hostSnapshot).slice(separator+1):'';for(const postKey of postKeys||[])stores.favoriteSnapshotEntries.push({key:`${host}|${snapshotId}|${postKey}`,host,snapshotId,hostSnapshot:`${host}|${snapshotId}`,postKey:String(postKey)});}
+      const sync=GM_getValue(Config.favoriteSyncKey,null);if(sync?.host)stores.favoriteSyncMeta.push(Util.clone(sync));
+      return stores;
+    },
+    async readStore(store){
+      const db=await Cache.open();if(!db)return DataPortability.memoryStoreSnapshot()[store]||[];
       return new Promise((resolve,reject)=>{const request=db.transaction(store,'readonly').objectStore(store).getAll();request.onsuccess=()=>resolve((request.result||[]).map(Util.clone));request.onerror=()=>reject(request.error);});
     },
     async exportCatalogue(){
-      const stores={};
-      for(const store of DataPortability.catalogueStores)stores[store]=await DataPortability.readStore(store);
-      const auxiliary={};const favoriteSync=GM_getValue(Config.favoriteSyncKey,null);if(favoriteSync!=null)auxiliary[Config.favoriteSyncKey]=Util.clone(favoriteSync);
+      const db=await Cache.open();let stores={};
+      if(!db)stores=DataPortability.memoryStoreSnapshot();
+      else await new Promise((resolve,reject)=>{
+        const transaction=db.transaction(DataPortability.catalogueStores,'readonly');let failed=false;
+        DataPortability.catalogueStores.forEach((store)=>{const request=transaction.objectStore(store).getAll();request.onsuccess=()=>{stores[store]=(request.result||[]).map(Util.clone);};request.onerror=()=>{failed=true;reject(request.error);};});
+        transaction.oncomplete=()=>{if(!failed)resolve();};transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error||new Error('Catalogue export transaction aborted'));
+      });
+      const auxiliary={};const currentHost=DataPortability.canonicalHost(location.hostname);const favoriteSync=(stores.favoriteSyncMeta||[]).find((record)=>String(record?.host||'').toLowerCase()===currentHost)||GM_getValue(Config.favoriteSyncKey,null);if(favoriteSync!=null)auxiliary[Config.favoriteSyncKey]=Util.clone(favoriteSync);
       return{databaseVersion:Config.databaseVersion,stores,auxiliary};
     },
     exportSettings(){
@@ -3416,35 +3485,70 @@
       return{value:Util.clone(Settings.value),auxiliary};
     },
     exportPresets(){return{post:Util.clone(GM_getValue(Config.presetsKey,Presets.record||null)),creator:Util.clone(GM_getValue(Config.creatorPresetsKey,CreatorPresets.load()))};},
-    async buildBackup(){return{format:DataPortability.format,formatVersion:DataPortability.version,appVersion:Config.version,exportedAt:new Date().toISOString(),sourceHost:String(location.hostname||''),catalogue:await DataPortability.exportCatalogue(),settings:DataPortability.exportSettings(),presets:DataPortability.exportPresets()};},
+    async buildBackup(){return{format:DataPortability.format,formatVersion:DataPortability.version,appVersion:Config.version,exportedAt:new Date().toISOString(),sourceHost:DataPortability.canonicalHost(location.hostname)||String(location.hostname||''),catalogue:await DataPortability.exportCatalogue(),settings:DataPortability.exportSettings(),presets:DataPortability.exportPresets()};},
     validate(payload){
-      if(!payload||typeof payload!=='object'||payload.format!==DataPortability.format)throw new Error('This is not a Pawchive Media Filter backup.');
+      if(!payload||typeof payload!=='object'||Array.isArray(payload)||payload.format!==DataPortability.format)throw new Error('This is not a Pawchive Media Filter backup.');
       const version=Number(payload.formatVersion)||0;if(version<1||version>DataPortability.version)throw new Error(`Unsupported backup format version: ${version||'unknown'}.`);
+      if(payload.sourceHost&&!DataPortability.canonicalHost(payload.sourceHost))throw new Error('The backup came from an unsupported Pawchive host.');
       return payload;
+    },
+    validateImportSelection(payload,{catalogue=true,settings=true,presets=true}={}){
+      const data=DataPortability.validate(payload);
+      if(catalogue){
+        const stores=data.catalogue?.stores;if(!stores||typeof stores!=='object')throw new Error('The backup does not contain Catalogue data.');
+        for(const store of DataPortability.catalogueStores){
+          const records=stores[store];if(!Array.isArray(records))throw new Error(`The backup Catalogue is missing the ${store} store.`);
+          const keyPath=DataPortability.keyPaths[store],seen=new Set();
+          records.forEach((record,index)=>{if(!record||typeof record!=='object'||Array.isArray(record))throw new Error(`The ${store} store contains an invalid record at position ${index+1}.`);const key=String(record[keyPath]??'').trim();if(!key)throw new Error(`The ${store} store contains a record without ${keyPath}.`);if(seen.has(key))throw new Error(`The ${store} store contains duplicate key ${key}.`);seen.add(key);});
+        }
+      }
+      if(settings&&(!data.settings?.value||typeof data.settings.value!=='object'||Array.isArray(data.settings.value)))throw new Error('The backup does not contain valid Settings data.');
+      if(presets){
+        if(!data.presets||typeof data.presets!=='object')throw new Error('The backup does not contain Presets data.');
+        if(!data.presets.post||!Array.isArray(data.presets.post.presets))throw new Error('The backup does not contain valid post presets.');
+        if(!data.presets.creator||!Array.isArray(data.presets.creator.presets))throw new Error('The backup does not contain valid creator presets.');
+        [['post',data.presets.post.presets],['creator',data.presets.creator.presets]].forEach(([kind,list])=>{const ids=new Set();list.forEach((preset,index)=>{if(!preset||typeof preset!=='object'||Array.isArray(preset))throw new Error(`The backup contains an invalid ${kind} preset at position ${index+1}.`);const id=String(preset.id||'').trim();if(!id)throw new Error(`The backup contains a ${kind} preset without an ID.`);if(ids.has(id))throw new Error(`The backup contains duplicate ${kind} preset ID ${id}.`);ids.add(id);});});
+      }
+      return data;
+    },
+    prepareImport(payload,options={}){
+      const data=DataPortability.validateImportSelection(payload,options),sourceHost=DataPortability.canonicalHost(data.sourceHost),targetHost=DataPortability.canonicalHost(location.hostname);
+      if(options.catalogue===false||!sourceHost||!targetHost||sourceHost===targetHost)return data;
+      return{...data,catalogue:DataPortability.remapCatalogueHost(data.catalogue,{sourceHost,targetHost,clone:true})};
     },
     summary(payload){
       const data=DataPortability.validate(payload),stores=data.catalogue?.stores||{};
       return{posts:Array.isArray(stores.posts)?stores.posts.length:0,creators:Array.isArray(stores.creators)?stores.creators.length:0,directory:Array.isArray(stores.creatorDirectory)?stores.creatorDirectory.length:0,hasSettings:Boolean(data.settings?.value),postPresets:Array.isArray(data.presets?.post?.presets)?data.presets.post.presets.length:0,creatorPresets:Array.isArray(data.presets?.creator?.presets)?data.presets.creator.presets.length:0};
     },
     async download(){
-      const payload=await DataPortability.buildBackup();const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=DataPortability.filename();anchor.hidden=true;document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);return payload;
+      const payload=await DataPortability.buildBackup();const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=DataPortability.filename();anchor.hidden=true;document.body.append(anchor);anchor.click();anchor.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);return payload;
+    },
+    clearMemoryCatalogue(){Cache.memory.clear();Cache.metaMemory.clear();Cache.uiStateMemory.clear();Cache.statusMemory.clear();Cache.favoriteSnapshotMemory.clear();Cache.creatorDirectoryMemory.clear();Cache.creatorStateMemory.clear();Cache.staleCreators.clear();},
+    writeMemoryStore(store,records=[]){
+      const maps={posts:Cache.memory,creators:Cache.metaMemory,uiStates:Cache.uiStateMemory,postStatuses:Cache.statusMemory,creatorDirectory:Cache.creatorDirectoryMemory,creatorStates:Cache.creatorStateMemory};
+      if(store==='favoriteSnapshotEntries'){
+        let written=0;records.forEach((raw)=>{const record=DataPortability.normalizeStoreRecord(store,raw);if(!record?.hostSnapshot||!record?.postKey)return;const set=Cache.favoriteSnapshotMemory.get(String(record.hostSnapshot))||new Set();set.add(String(record.postKey));Cache.favoriteSnapshotMemory.set(String(record.hostSnapshot),set);written+=1;});return written;
+      }
+      if(store==='favoriteSyncMeta'){
+        const current=records.find((record)=>String(record?.host||'')===String(location.hostname||''))||records[0];if(current)GM_setValue(Config.favoriteSyncKey,Util.clone(current));return current?1:0;
+      }
+      const map=maps[store];if(!map)return 0;let written=0;records.forEach((raw)=>{const record=DataPortability.normalizeStoreRecord(store,raw),key=record?.[DataPortability.keyPaths[store]];if(key!=null&&String(key).trim()){map.set(String(key),record);written+=1;}});return written;
     },
     async writeCatalogue(catalogue,{mode='merge'}={}){
       const stores=catalogue?.stores&&typeof catalogue.stores==='object'?catalogue.stores:{};const names=DataPortability.catalogueStores.filter((store)=>Array.isArray(stores[store]));
       if(!names.length)return{written:0,stores:0};
       const db=await Cache.open();let written=0;
       if(!db){
-        if(mode==='replace'){Cache.memory.clear();Cache.metaMemory.clear();Cache.statusMemory.clear();Cache.favoriteSnapshotMemory.clear();Cache.creatorDirectoryMemory.clear();Cache.creatorStateMemory.clear();}
-        const maps={posts:Cache.memory,creators:Cache.metaMemory,postStatuses:Cache.statusMemory,creatorDirectory:Cache.creatorDirectoryMemory,creatorStates:Cache.creatorStateMemory};
-        names.forEach((store)=>{const map=maps[store];if(!map)return;(stores[store]||[]).forEach((raw)=>{const record=DataPortability.normalizeStoreRecord(store,raw),key=record?.[DataPortability.keyPaths[store]];if(key!=null){map.set(String(key),record);written+=1;}});});
+        if(mode==='replace'){DataPortability.clearMemoryCatalogue();GM_deleteValue(Config.favoriteSyncKey);}
+        names.forEach((store)=>{written+=DataPortability.writeMemoryStore(store,stores[store]||[]);});
       }else{
         await new Promise((resolve,reject)=>{
-          const transaction=db.transaction(names,'readwrite');
-          if(mode==='replace')names.forEach((store)=>transaction.objectStore(store).clear());
-          names.forEach((store)=>{const target=transaction.objectStore(store),keyPath=DataPortability.keyPaths[store];(stores[store]||[]).forEach((raw)=>{const record=DataPortability.normalizeStoreRecord(store,raw);if(record?.[keyPath]!=null){target.put(record);written+=1;}});});
+          const transactionStores=mode==='replace'?DataPortability.catalogueStores:names;const transaction=db.transaction(transactionStores,'readwrite');
+          if(mode==='replace')DataPortability.catalogueStores.forEach((store)=>transaction.objectStore(store).clear());
+          names.forEach((store)=>{const target=transaction.objectStore(store),keyPath=DataPortability.keyPaths[store];(stores[store]||[]).forEach((raw)=>{const record=DataPortability.normalizeStoreRecord(store,raw);if(record?.[keyPath]!=null&&String(record[keyPath]).trim()){target.put(record);written+=1;}});});
           transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error||new Error('Catalogue import transaction aborted'));
         });
-        Cache.memory.clear();Cache.metaMemory.clear();Cache.statusMemory.clear();Cache.favoriteSnapshotMemory.clear();Cache.creatorDirectoryMemory.clear();Cache.creatorStateMemory.clear();Cache.staleCreators.clear();
+        DataPortability.clearMemoryCatalogue();
       }
       const auxiliary=catalogue?.auxiliary&&typeof catalogue.auxiliary==='object'?catalogue.auxiliary:{};
       if(Object.prototype.hasOwnProperty.call(auxiliary,Config.favoriteSyncKey))GM_setValue(Config.favoriteSyncKey,Util.clone(auxiliary[Config.favoriteSyncKey]));else if(mode==='replace')GM_deleteValue(Config.favoriteSyncKey);
@@ -3457,13 +3561,12 @@
       PostStatusFilters.load();return true;
     },
     importPresets(payload){
-      let imported=false;
-      if(payload?.post&&typeof payload.post==='object'){GM_setValue(Config.presetsKey,Util.clone(payload.post));Presets.load(FilterEngine.createDefaultState());imported=true;}
-      if(payload?.creator&&typeof payload.creator==='object'){GM_setValue(Config.creatorPresetsKey,CreatorPresets.normalize(payload.creator));imported=true;}
-      return imported;
+      if(!payload?.post||!payload?.creator)return false;
+      const post={schemaVersion:Config.presetSchemaVersion,presets:payload.post.presets.map((preset,index)=>Presets.normalizePreset(preset,index?`Preset ${index+1}`:'Default')),updatedAt:Number(payload.post.updatedAt)||Date.now()};
+      const creator=CreatorPresets.normalize(payload.creator);GM_setValue(Config.presetsKey,post);GM_setValue(Config.creatorPresetsKey,creator);Presets.load(FilterEngine.createDefaultState());return true;
     },
     async importBackup(payload,{catalogue=true,settings=true,presets=true,mode='merge'}={}){
-      const data=DataPortability.validate(payload);const snapshot=CatalogueJobManager.snapshot();if((snapshot.active||[]).length||(snapshot.pending||[]).length)throw new Error('Finish or stop the creator queue before importing a backup.');
+      const snapshot=CatalogueJobManager.snapshot();if((snapshot.active||[]).length||(snapshot.pending||[]).length)throw new Error('Finish or stop the creator queue before importing a backup.');const options={catalogue,settings,presets},data=DataPortability.prepareImport(payload,options);
       const result={catalogue:null,settings:false,presets:false};
       if(catalogue)result.catalogue=await DataPortability.writeCatalogue(data.catalogue,{mode:mode==='replace'?'replace':'merge'});
       if(settings)result.settings=DataPortability.importSettings(data.settings);
@@ -3471,6 +3574,7 @@
       return result;
     },
   };
+
 
   const DataPortabilityUI = {
     open(opener){

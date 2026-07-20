@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.11.3 specification
+# Pawchive.pw Media Filter v0.11.4 specification
 
 ## Scope
 
@@ -6,7 +6,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.11.3`
+- Userscript and `Config.version`: `0.11.4`
 - Settings: `pmf-settings-v5`
 - Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
@@ -22,6 +22,14 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.11.4 backup-integrity contracts
+
+- IndexedDB catalogue export uses one read-only transaction containing all eight catalogue stores. The exported store set is therefore one consistent snapshot even when normal scan/status work is active.
+- Import preflights every selected group before writes. Format, selected groups, all catalogue stores, record key paths, duplicate store keys, and duplicate post/creator preset IDs must be valid before Merge or Replace starts.
+- A backup whose `sourceHost` is the other supported Pawchive hostname is remapped to the current hostname. The remap covers creator/post keys, directory/meta records, per-creator UI state, post/creator statuses, Favorite snapshot entries/meta, auxiliary Favorite-sync metadata, and Pawchive-owned URLs. Any collisions created by remapping a profile that already contains both host variants are consolidated using the newer record, with creator-directory field merging and post completeness as tie-breakers.
+- Replace clears every catalogue object store before writing the validated backup, including stores represented by empty arrays.
+- When IndexedDB is unavailable, the in-memory fallback exports/imports creator UI state and Favorite snapshot membership in addition to posts, creator metadata, statuses, directory records, and creator state.
 
 ## v0.11.3 portability and compact-mobile contracts
 
@@ -315,7 +323,7 @@ The custom toolbar button uses `aria-haspopup="menu"`, reports its expanded stat
 
 `postAttachmentBadgeSize` and `creatorAttachmentBadgeSize` are independent, default to `small`, and accept `small`, `medium`, or `big`. `postStatusBadgeSize` also defaults to `small`. The legacy `attachmentBadgeSize` key is migration input only and is removed from normalized active settings.
 
-Settings remain under `pmf-settings-v5` with `settingsSchemaVersion: 2`. Migration backs up raw pre-schema-2 data to `pmf-settings-backup-pre-schema-2`, maps a legacy shared size into both split fields unless a valid split value already exists, and is idempotent.
+Settings remain under `pmf-settings-v5` with `settingsSchemaVersion: 5`. The current migration chain preserves explicit values and keeps the raw pre-schema-4 backup at `pmf-settings-backup-pre-schema-4`; legacy shared attachment size remains migration input only.
 
 `AttachmentBadgeSizing` owns normalization, preview, restore, commit, root classes, metrics, geometry refresh, and creator-rail estimates.
 

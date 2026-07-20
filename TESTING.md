@@ -1,4 +1,14 @@
-# Pawchive.pw Media Filter v0.11.3 testing
+# Pawchive.pw Media Filter v0.11.4 testing
+
+## v0.11.4 backup-integrity audit matrix
+
+Run `node tests/v0114-portability-audit.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 53 executable tests.
+
+1. Export while a catalogue scan or status refresh is active. Confirm the backup completes and can be imported without mismatched creator/post/Favorite state.
+2. Export on `www.pawchive.pw`, import on `pawchive.pw` (and the reverse), reload, and confirm the same creators, posts, statuses, presets, and Favorite snapshot are visible without duplicate host-prefixed records.
+3. Attempt to import a deliberately incomplete backup in Replace mode. Confirm PMF rejects it before any existing catalogue data is removed.
+4. Import a valid backup whose empty stores should replace non-empty local stores. Confirm Replace clears those old records; confirm Merge keeps unmatched local records.
+5. With IndexedDB unavailable, verify creator-page UI state and Favorite snapshot membership are included in the exported JSON and restored into the memory fallback.
 
 ## v0.11.3 portability and compact-mobile matrix
 

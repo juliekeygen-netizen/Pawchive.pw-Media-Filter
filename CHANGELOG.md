@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.4
+
+- Audited v0.11.3 backup/restore and changed IndexedDB export to one read-only transaction spanning every catalogue store, preventing scans or status writes from producing a cross-store half-snapshot.
+- Added complete preflight validation for selected Catalogue, Settings, and Presets groups before any import write; malformed stores, missing keys, duplicate records, and duplicate preset IDs are rejected before Replace can clear data.
+- Added automatic `pawchive.pw` ↔ `www.pawchive.pw` identity remapping during import so creator/post keys, statuses, UI state, Favorite snapshots, and Pawchive URLs remain visible on either supported hostname; pre-existing two-host duplicates are consolidated using the newer or more complete record.
+- Made Replace clear every catalogue store even when restoring empty arrays, and completed memory-only fallback backup/restore for creator UI state and native-Favorite snapshot membership.
+- Kept Favorite-sync auxiliary metadata consistent with the same IndexedDB snapshot and hardened imported post-preset normalization.
+- Added focused v0.11.4 portability audit coverage; 53 executable tests now pass.
+
 ## 0.11.3
 
 - Compacted Native directory pagination on phones to First, Previous, current page, Next, and Last so the creator list no longer gains an oversized multi-row page strip.

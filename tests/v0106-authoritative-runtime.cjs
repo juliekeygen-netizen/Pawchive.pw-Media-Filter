@@ -8,7 +8,7 @@ const {
   CatalogueJobManager, Paginator, MissingAttachmentMaintenance,
 } = loaded.api;
 
-assert.equal(Config.version, '0.11.3');
+assert.equal(Config.version, '0.11.4');
 assert.equal((originalSource.match(/const CreatorBulkUI =/g) || []).length, 1);
 assert.equal((originalSource.match(/CreatorBulkUI\.open\s*=/g) || []).length, 0);
 assert.equal((originalSource.match(/SettingsUI\.open\s*=/g) || []).length, 0);
