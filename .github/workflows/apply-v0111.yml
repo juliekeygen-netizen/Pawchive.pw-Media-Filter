@@ -1,0 +1,70 @@
+name: Apply Pawchive v0.10.11
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0111/**'
+      - '.github/workflows/apply-v0111.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0111-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out current master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          git checkout -B master origin/master
+
+      - name: Assemble and verify patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .pawchive-v0111/part?? > /tmp/pawchive-v0111.patch
+          test "$(sha256sum /tmp/pawchive-v0111.patch | awk '{print $1}')" = "b7ea1bc04faec4cbba5fc56ebfa41b8e9f46c5fe2dbcfcfc0a9027679149f8a5"
+          git apply --check /tmp/pawchive-v0111.patch
+          git apply /tmp/pawchive-v0111.patch
+
+      - name: Validate userscript
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 46
+          git diff --check
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .pawchive-v0111
+          rm -f .github/workflows/apply-v0111.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.10.11 artists navigation and responsive catalogue'
+          git push origin HEAD:master
