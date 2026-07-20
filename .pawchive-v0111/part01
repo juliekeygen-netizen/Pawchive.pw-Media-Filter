@@ -1,0 +1,91 @@
+ // @namespace    pawchive-pw-media-filter
+-// @version      0.10.10
++// @version      0.10.11
+ // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
+ // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
+ // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
+@@ -22,7 +22,7 @@
+ 
+   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+   const Config = Object.freeze({
+-    version: '0.10.10',
++    version: '0.10.11',
+     schemaVersion: 2,
+     pageSize: 50,
+     filteredPageSize: 50,
+@@ -2830,7 +2830,7 @@
+     measure(grid) {
+       const rects=ArtistsDOM.creatorCards({grid},{nativeOnly:true}).map((info)=>info.card.getBoundingClientRect?.()).filter((rect)=>rect?.width>=120);const x=[...new Set(rects.map((rect)=>Math.round(rect.left)))];const style=globalThis.getComputedStyle?.(grid);return{gridWidth:Math.round(grid.getBoundingClientRect?.().width||0),columnCount:Math.max(1,x.length),cardWidth:Util.clamp(CreatorGridGeometry.median(rects.map((rect)=>Math.round(rect.width))),180,720),cardHeight:Util.clamp(CreatorGridGeometry.median(rects.map((rect)=>Math.round(rect.height))),60,400),columnGap:Util.clamp(parseFloat(style?.columnGap)||8,0,40),rowGap:Util.clamp(parseFloat(style?.rowGap)||8,0,40)};
+     },
+-    apply(grid,geometry={}){if(!grid)return;const columns=Math.max(1,Math.floor(Number(geometry.columnCount)||1));grid.style.setProperty('--pmf-native-creator-card-width',`${Util.clamp(Number(geometry.cardWidth)||310,180,720)}px`);grid.style.setProperty('--pmf-native-creator-card-height',`${Util.clamp(Number(geometry.cardHeight)||100,60,400)}px`);grid.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;grid.style.columnGap=`${Util.clamp(Number(geometry.columnGap)||8,0,40)}px`;grid.style.rowGap=`${Util.clamp(Number(geometry.rowGap)||8,0,40)}px`;},
++    apply(grid,geometry={}){if(!grid)return;const columns=Math.max(1,Math.floor(Number(geometry.columnCount)||1));const wideDesktop=Number(globalThis.innerWidth||globalThis.window?.innerWidth||0)>=2200;const nativeHeight=Util.clamp(Number(geometry.cardHeight)||100,60,400);const cardHeight=wideDesktop?Util.clamp(Math.max(108,Math.round(nativeHeight*1.16)),60,400):nativeHeight;grid.style.setProperty('--pmf-native-creator-card-width',`${Util.clamp(Number(geometry.cardWidth)||310,180,720)}px`);grid.style.setProperty('--pmf-native-creator-card-height',`${cardHeight}px`);grid.style.gridTemplateColumns=`repeat(${columns},minmax(0,1fr))`;grid.style.columnGap=`${Util.clamp(Number(geometry.columnGap)||8,0,40)}px`;grid.style.rowGap=`${Util.clamp(Number(geometry.rowGap)||8,0,40)}px`;},
+   };
+ 
+   const NativeArtistsVisibility = {
+@@ -2856,11 +2856,11 @@
+       const chosen=new Map();candidates.forEach((candidate)=>{const prior=chosen.get(candidate.role);if(!prior||candidate.current&&!prior.current||candidate.anchor&&!prior.anchor&&!prior.current||!candidate.disabled&&prior.disabled&&!prior.current)chosen.set(candidate.role,candidate);});
+       return[...chosen.values()].sort((a,b)=>a.index-b.index);
+     },
+-    render(native,host,{includeCount=true}={}){
++    render(native,host,{includeCount=true,pendingRole='',navigationPending=false}={}){
+       host?.replaceChildren?.();if(!native||!host)return false;
+       const items=NativePaginatorMirror.items(native);if(!items.length)return false;
+       if(includeCount){const small=native.querySelector('small');if(small){const count=small.cloneNode(true);count.classList.add('pmf-filtered-count');host.append(count);}}
+-      const menu=document.createElement('div');menu.className='pmf-page-controls';items.forEach(({index,label,disabled,current})=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.nativePaginatorIndex=String(index);button.disabled=disabled;if(current){button.setAttribute('aria-current','page');button.classList.add('pmf-current-page');}menu.append(button);});host.append(menu);return true;
++      const menu=document.createElement('div');menu.className='pmf-page-controls';items.forEach(({index,label,role,disabled,current})=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.nativePaginatorIndex=String(index);button.dataset.nativePaginatorRole=role;button.disabled=disabled||navigationPending;if(current||pendingRole&&role===pendingRole){button.setAttribute('aria-current','page');button.classList.add('pmf-current-page');}if(pendingRole&&role===pendingRole){button.classList.add('pmf-pending-page');button.setAttribute('aria-busy','true');}menu.append(button);});host.append(menu);return true;
+     },
+     activate(native,index){const candidate=NativePaginatorMirror.items(native).find((item)=>item.index===Number(index));if(!candidate||candidate.disabled)return false;candidate.item.click();return true;},
+     activateRole(native,role){const candidate=NativePaginatorMirror.items(native).find((item)=>item.role===role&&!item.disabled);if(!candidate)return false;candidate.item.click();return true;},
+@@ -2877,8 +2877,31 @@
+     activate(found,type,value){
+       const source=type==='service'?found?.serviceControl:found?.sortControl;if(!source)return false;if(type==='sort'){const next=NativeArtistsProxy.nextSort(source.value,found?.directionControl?.value,value);if(found?.directionControl)found.directionControl.value=next.direction;source.value=next.mode;}else source.value=value;source.dispatchEvent(new Event('input',{bubbles:true}));source.dispatchEvent(new Event('change',{bubbles:true}));return true;
+     },
+-    paginator(found,host){return NativePaginatorMirror.render(found?.paginators?.[0],host);},
+-    activatePage(found,index){return NativePaginatorMirror.activate(found?.paginators?.[0],index);},
++    paginator(found,host){return NativeArtistsPageCoordinator.render(found,host);},
++    activatePage(found,index){return NativeArtistsPageCoordinator.navigate(found,index);},
++  };
++
++  const NativeArtistsPageCoordinator = {
++    pending:null,
++    sequence:0,
++    fallbackTimer:null,
++    currentCandidate(found,index){return NativePaginatorMirror.items(found?.paginators?.[0]).find((item)=>item.index===Number(index))||null;},
++    render(found,host){return NativePaginatorMirror.render(found?.paginators?.[0],host,{pendingRole:NativeArtistsPageCoordinator.pending?.role||'',navigationPending:Boolean(NativeArtistsPageCoordinator.pending)});},
++    renderAll(found=CreatorIndexUI.found){[CreatorIndexUI.paginator,CreatorIndexUI.bottomPaginator].forEach((host)=>{const mirror=host?.querySelector?.('.pmf-native-paginator-mirror');if(mirror)NativeArtistsPageCoordinator.render(found,mirror);});},
++    navigate(found,index){
++      if(NativeArtistsPageCoordinator.pending)return false;
++      const candidate=NativeArtistsPageCoordinator.currentCandidate(found,index);if(!candidate||candidate.disabled)return false;
++      const sequence=++NativeArtistsPageCoordinator.sequence;NativeArtistsPageCoordinator.pending={sequence,role:candidate.role,index:candidate.index,label:candidate.label,startedAt:Date.now()};NativeArtistsPageCoordinator.renderAll(found);
++      const activated=NativePaginatorMirror.activate(found?.paginators?.[0],candidate.index);if(!activated){NativeArtistsPageCoordinator.reset({render:true});return false;}
++      Logger.info({operation:'native-artists-page-navigation',sequence,role:candidate.role,label:candidate.label});queueMicrotask(()=>{if(ArtistsPageController.mounted())ArtistsPageController.requestRefresh('native-paginator-click');});
++      clearTimeout(NativeArtistsPageCoordinator.fallbackTimer);NativeArtistsPageCoordinator.fallbackTimer=setTimeout(()=>{if(NativeArtistsPageCoordinator.pending?.sequence!==sequence)return;NativeArtistsPageCoordinator.reset({render:true});if(ArtistsPageController.mounted())ArtistsPageController.requestRefresh('native-paginator-timeout');},4000);NativeArtistsPageCoordinator.fallbackTimer?.unref?.();return true;
++    },
++    reconcile(found,{force=false}={}){
++      const pending=NativeArtistsPageCoordinator.pending;if(!pending){NativeArtistsPageCoordinator.renderAll(found);return false;}
++      const current=NativePaginatorMirror.items(found?.paginators?.[0]).find((item)=>item.current);const settled=force||Boolean(current&&current.role===pending.role)||Date.now()-pending.startedAt>3500;
++      if(settled)NativeArtistsPageCoordinator.reset({render:false});NativeArtistsPageCoordinator.renderAll(found);return settled;
++    },
++    reset({render=false}={}){clearTimeout(NativeArtistsPageCoordinator.fallbackTimer);NativeArtistsPageCoordinator.fallbackTimer=null;NativeArtistsPageCoordinator.pending=null;if(render)NativeArtistsPageCoordinator.renderAll();},
+   };
+ 
+   const AttachmentBadgeSizing = {
+@@ -5948,6 +5971,9 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
+         once: true
+       });
+     },
++    setLocalGridVisible(visible){
++      const grid=CreatorIndexUI.grid;if(!grid)return;grid.hidden=!visible;grid.setAttribute('aria-hidden',String(!visible));if(visible)grid.style.removeProperty('display');else grid.style.setProperty('display','none','important');
++    },
+     setMode(value) {
+       const mode = CreatorDirectoryMode.save(value);
+       if (mode === CreatorIndexUI.mode) return;
+@@ -5974,7 +6000,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
+       NativeArtistsVisibility.apply(CreatorIndexUI.nativeSnapshot, CreatorIndexUI.mode, {
+         proxiesReady: ready
+       });
+-      CreatorIndexUI.grid.hidden = CreatorIndexUI.mode === 'native';
++      CreatorIndexUI.setLocalGridVisible(CreatorIndexUI.mode === 'catalogue');
+       CreatorIndexUI.stateNode.hidden = true;
+       if (refresh) CreatorIndexUI.render();
+     },
