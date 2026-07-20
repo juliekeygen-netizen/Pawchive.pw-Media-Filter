@@ -1,0 +1,68 @@
+name: Apply Pawchive v0.11.4
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0114/pr-trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0114-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply audited v0.11.4 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin master "$GITHUB_HEAD_REF"
+          git checkout -B master origin/master
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "34fa29b5da9ff6adf975115ea01bf4d8632ef9b5"
+          grep -q '@version      0.11.3' pawchive-pw-media-filter.user.js
+          git show "origin/$GITHUB_HEAD_REF:.pawchive-v0114/patch.b64" | base64 -d | gzip -d > /tmp/pawchive-v0114.patch
+          test "$(sha256sum /tmp/pawchive-v0114.patch | awk '{print $1}')" = "15d35366e4c6490af3298e84f4280e97d33df2d006890e4082de18ff47b6acb5"
+          git apply --check /tmp/pawchive-v0114.patch
+          git apply /tmp/pawchive-v0114.patch
+
+      - name: Validate v0.11.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 53
+          git diff --check
+          grep -q '@version      0.11.4' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.11.4'" pawchive-pw-media-filter.user.js
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-v0114.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.11.4 backup integrity audit findings'
+          git push origin HEAD:master
