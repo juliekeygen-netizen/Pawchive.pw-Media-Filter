@@ -1,0 +1,88 @@
+-      const draft=Util.clone(Settings.value);const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-settings-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Media Filter settings');const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Media Filter settings'));const close=SettingsUI.action('×','cancel');close.className='pmf-icon-close';header.append(close);const layout=SettingsUI.el('div','pmf-settings-layout');const nav=SettingsUI.el('nav');const content=SettingsUI.el('div','pmf-settings-content');const panels=[SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft)];[['general','General'],['default-detection','Default detection'],['scanning','Scanning'],['data','Data & performance']].forEach(([key,label])=>{const button=SettingsUI.action(label,'tab');button.dataset.creatorSettingsTab=key;nav.append(button);});content.append(...panels);layout.append(nav,content);const footer=SettingsUI.el('footer');footer.append(SettingsUI.action('Reset all settings','reset'),SettingsUI.el('span'),SettingsUI.action('Cancel','cancel'));const save=SettingsUI.action('Save & apply','save');save.className='pmf-primary';footer.append(save);dialog.append(header,layout,footer);backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);
++      const draft=Util.clone(Settings.value);const backdrop=SettingsUI.el('div','pmf-modal-backdrop');const dialog=SettingsUI.el('section','pmf-dialog pmf-settings-dialog pmf-surface');dialog.setAttribute('role','dialog');dialog.setAttribute('aria-modal','true');dialog.setAttribute('aria-label','Media Filter settings');const header=SettingsUI.el('header');header.append(SettingsUI.el('strong','','Media Filter settings'));const close=SettingsUI.action('×','cancel');close.className='pmf-icon-close';header.append(close);const layout=SettingsUI.el('div','pmf-settings-layout');const nav=SettingsUI.el('nav');const content=SettingsUI.el('div','pmf-settings-content');const panels=[SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft)];[['general','General'],['default-detection','Default detection'],['scanning','Scanning'],['data','Data & performance']].forEach(([key,label])=>{const button=SettingsUI.action(label,'tab');button.dataset.creatorSettingsTab=key;nav.append(button);});content.append(...panels);layout.append(nav,content);const footer=SettingsUI.el('footer');footer.append(SettingsUI.el('span'),SettingsUI.action('Cancel','cancel'));const save=SettingsUI.action('Save & apply','save');save.className='pmf-primary';footer.append(save);dialog.append(header,layout,footer);backdrop.append(dialog);CreatorIndexUI.root.append(backdrop);
+       const show=(name)=>{let activeButton=null;nav.querySelectorAll('button').forEach((button)=>{const selected=button.dataset.creatorSettingsTab===name;button.classList.toggle('pmf-active',selected);if(selected)activeButton=button;});content.querySelectorAll('[data-pmf-settings-panel]').forEach((panel)=>panel.hidden=panel.dataset.pmfSettingsPanel!==name);if(globalThis.matchMedia?.('(max-width: 760px)')?.matches)queueMicrotask(()=>activeButton?.scrollIntoView?.({block:'nearest',inline:'center',behavior:'smooth'}));};show('general');let committed=false,unsubscribe=null;const overlay=OverlayManager.open({node:dialog,root:backdrop,opener,modal:true,onClose:()=>{unsubscribe?.();if(!committed)CreatorIndexUI.render();}});unsubscribe=SettingsUI.bindMaintenance(backdrop);
+-      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-creator-settings-tab]')?.dataset.creatorSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)show(tab);if(child)CreatorSettingsUI.openChild(child,draft,event.target);if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='reset'){Object.assign(draft,Util.clone(DefaultSettings));CreatorSettingsUI.preview(draft);}if(action==='save'){const next=SettingsUI.collect(dialog,draft);Settings.save(next);committed=true;OverlayManager.close(overlay,'save');CreatorIndexUI.render();}if(action==='update-missing-attachment-metadata')MissingAttachmentMaintenance.openScopeDialog(event.target);if(action==='stop-missing-attachment-metadata')MissingAttachmentMaintenance.stop();if(action==='resume-missing-attachment-metadata')SettingsUI.runMaintenance(MissingAttachmentMaintenance.resume());if(action==='retry-failed-missing-attachment-metadata')SettingsUI.runMaintenance(MissingAttachmentMaintenance.retryFailed());if(action==='repair-creator-profile-metadata')SettingsUI.runMaintenance(CreatorProfileRepairManager.run());if(action==='stop-creator-profile-repair')CreatorProfileRepairManager.stop();if(action==='resume-creator-profile-repair')SettingsUI.runMaintenance(CreatorProfileRepairManager.resume());if(action==='retry-failed-creator-profile-repair')SettingsUI.runMaintenance(CreatorProfileRepairManager.retryFailed());});
++      backdrop.addEventListener('click',(event)=>{const action=event.target.closest('[data-settings-action]')?.dataset.settingsAction;const tab=event.target.closest('[data-creator-settings-tab]')?.dataset.creatorSettingsTab;const child=event.target.closest('[data-settings-child]')?.dataset.settingsChild;if(tab)show(tab);if(child)CreatorSettingsUI.openChild(child,draft,event.target);if(action==='cancel')OverlayManager.close(overlay,'cancel');if(action==='data-portability')DataPortabilityUI.open(event.target);if(action==='reset'){Object.assign(draft,Util.clone(DefaultSettings));content.replaceChildren(SettingsUI.buildGeneral(draft),SettingsUI.buildDetection(draft),SettingsUI.buildScanning(draft),SettingsUI.buildData(draft));show('data');CreatorSettingsUI.preview(draft);}if(action==='save'){const next=SettingsUI.collect(dialog,draft);Settings.save(next);committed=true;OverlayManager.close(overlay,'save');CreatorIndexUI.render();}if(action==='update-missing-attachment-metadata')MissingAttachmentMaintenance.openScopeDialog(event.target);if(action==='stop-missing-attachment-metadata')MissingAttachmentMaintenance.stop();if(action==='resume-missing-attachment-metadata')SettingsUI.runMaintenance(MissingAttachmentMaintenance.resume());if(action==='retry-failed-missing-attachment-metadata')SettingsUI.runMaintenance(MissingAttachmentMaintenance.retryFailed());if(action==='repair-creator-profile-metadata')SettingsUI.runMaintenance(CreatorProfileRepairManager.run());if(action==='stop-creator-profile-repair')CreatorProfileRepairManager.stop();if(action==='resume-creator-profile-repair')SettingsUI.runMaintenance(CreatorProfileRepairManager.resume());if(action==='retry-failed-creator-profile-repair')SettingsUI.runMaintenance(CreatorProfileRepairManager.retryFailed());});
+       backdrop.addEventListener('change',()=>{Object.assign(draft,SettingsUI.collect(dialog,draft));CreatorSettingsUI.preview(draft);});
+     },
+     openChild(name,draft,opener) {
+@@ -7123,6 +7241,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
+     .pmf-creator-status-badge{display:grid;place-items:center;border:1px solid currentColor;border-radius:3px;background:#111d;box-sizing:border-box}.pmf-creator-status-badge svg{width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:2}.pmf-creator-status-badge.pmf-creator-status-favorited{color:#ffd25b}.pmf-creator-status-badge.pmf-creator-status-liked{color:#ff5d9e}.pmf-creator-status-badge.pmf-creator-status-hidden{color:#397dc4}.pmf-creator-status-size-small{width:18px;height:18px}.pmf-creator-status-size-medium{width:22px;height:22px}.pmf-creator-status-size-big{width:27px;height:27px}
+     .pmf-creator-card-has-rail [data-pmf-creator-content]{padding-right:var(--pmf-creator-rail-width,0)!important}
+     .pmf-hidden-creator-dimmed img,.pmf-hidden-creator-dimmed [style*="background"]{filter:saturate(var(--pmf-seen-saturate,.55)) brightness(var(--pmf-seen-brightness,.72));opacity:var(--pmf-seen-opacity,.72)}.pmf-hidden-creator-dim-low{--pmf-seen-saturate:.72;--pmf-seen-brightness:.86;--pmf-seen-opacity:.84}.pmf-hidden-creator-dim-medium{--pmf-seen-saturate:.52;--pmf-seen-brightness:.74;--pmf-seen-opacity:.74}.pmf-hidden-creator-dim-high{--pmf-seen-saturate:.25;--pmf-seen-brightness:.56;--pmf-seen-opacity:.58}
++    .pmf-data-transfer-body{display:flex;flex-direction:column;gap:14px;min-height:0;overflow:auto;padding:18px}.pmf-transfer-choice{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pmf-import-file-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}.pmf-import-file-row input[readonly]{min-width:0}.pmf-import-dropzone{display:grid;place-items:center;min-height:92px;padding:14px;border:2px dashed var(--pmf-border);border-radius:6px;color:var(--pmf-muted);text-align:center}.pmf-import-dropzone.pmf-drag-active{border-color:var(--pmf-accent);background:#6a2d171f;color:var(--pmf-text)}.pmf-data-transfer-body .pmf-error{color:#ffaaa0}.pmf-data-transfer-dialog{width:min(620px,calc(100vw - 32px))}
+     .pmf-field-availability{text-align:center}.pmf-field-availability .pmf-availability-row{display:block!important;margin:9px auto!important;text-align:center!important}.pmf-availability-note{display:block;color:var(--pmf-muted);text-align:center}
+     #pmf-creator-early-shell{width:min(920px,calc(100% - 24px));margin:12px auto;padding:22px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;color:var(--pmf-muted);border:1px solid var(--pmf-border);border-radius:6px;background:var(--pmf-panel)}#pmf-creator-early-shell strong{color:var(--pmf-text)}
+     .pmf-creator-queue-panel{max-height:min(480px,calc(100vh - 220px));overflow:auto;overscroll-behavior:contain}.pmf-queue-tabs{display:flex;justify-content:center;gap:8px;border-bottom:1px solid var(--pmf-border);margin-bottom:10px}.pmf-queue-tabs button{border:0;background:transparent;color:var(--pmf-muted);padding:7px 12px}.pmf-queue-tabs button.pmf-active{color:var(--pmf-accent);border-bottom:2px solid var(--pmf-accent)}.pmf-queue-progress{display:grid;gap:5px;text-align:center;padding:9px;border-left:3px solid var(--pmf-success);background:#18231e}.pmf-queue-progress progress{width:100%;accent-color:var(--pmf-success)}.pmf-queue-batch{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;align-items:center;margin-top:8px;padding:8px;border:1px solid var(--pmf-border);background:var(--pmf-panel)}.pmf-queue-batch>span{justify-self:end;color:var(--pmf-muted)}.pmf-queue-batch>progress{width:100%;grid-column:1/-1}.pmf-queue-batch>button{grid-column:2;grid-row:3}.pmf-queue-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--pmf-border)}.pmf-queue-row div{display:flex;flex-direction:column}.pmf-queue-row span{display:flex;gap:5px}.pmf-queue-row button{min-height:28px}.pmf-bulk-dialog .pmf-confirm-body{display:grid;gap:16px}.pmf-bulk-dialog .pmf-confirm-body section{padding:12px;border:1px solid var(--pmf-border);border-radius:5px;background:#191e21}.pmf-bulk-dialog h3{margin:0 0 10px;color:var(--pmf-accent);font-size:12px;text-transform:uppercase}.pmf-bulk-scope{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0}.pmf-bulk-scope span{display:flex;flex-direction:column;gap:3px}.pmf-bulk-scope small{color:var(--pmf-muted)}.pmf-bulk-scope input[type="number"]{width:82px}.pmf-bulk-dialog [data-bulk-preview]{max-height:210px;overflow:auto;margin:8px 0 0}.pmf-bulk-dialog [data-bulk-preview] li{display:flex;justify-content:space-between;gap:14px;padding:5px 0}.pmf-bulk-dialog [data-bulk-preview] small{color:var(--pmf-muted)}
+@@ -7548,6 +7667,13 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
+       .pmf-aggregate-expression>span,.pmf-advanced-sort-expression>span{display:none}
+       .pmf-aggregate-expression input,.pmf-aggregate-expression select,.pmf-advanced-sort-expression select{grid-column:1!important;grid-row:auto!important;width:100%}
+       .pmf-date-fields,.pmf-date-fields.pmf-between{grid-template-columns:minmax(0,1fr);gap:10px}
++      .pmf-bulk-dialog{height:calc(100dvh - 10px);max-height:calc(100dvh - 10px)}
++      .pmf-bulk-dialog .pmf-confirm-body{min-height:0;overflow:auto;align-content:start;padding:12px}
++      .pmf-bulk-dialog .pmf-confirm-body section:last-child{min-height:0;max-height:190px;display:flex;flex-direction:column;overflow:hidden}
++      .pmf-bulk-dialog [data-bulk-preview]{min-height:0;max-height:108px;overflow:auto;margin-top:4px;padding-right:8px}
++      .pmf-bulk-dialog>footer{position:relative;z-index:2;background:var(--pmf-surface-3)}
++      .pmf-native-paginator-mirror .pmf-page-controls{display:grid;grid-template-columns:repeat(5,minmax(42px,1fr));width:min(100%,310px);gap:6px}
++      .pmf-native-paginator-mirror .pmf-page-controls button{min-width:0;padding-left:6px;padding-right:6px}
+       .pmf-bulk-scope{grid-template-columns:auto minmax(0,1fr);align-items:start}
+       .pmf-bulk-scope input[type="number"]{grid-column:2;width:100%}
+       .pmf-queue-batch,.pmf-queue-row{grid-template-columns:minmax(0,1fr)}
+@@ -7556,6 +7682,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
+     }
+     @media(max-width:430px){
+       .pmf-dialog>header strong{font-size:15px}
++      .pmf-data-transfer-body{padding:12px}.pmf-transfer-choice,.pmf-import-file-row{grid-template-columns:minmax(0,1fr)}.pmf-data-transfer-dialog{height:calc(100dvh - 10px)}.pmf-import-dropzone{min-height:76px}
+       .pmf-settings-content{padding-left:10px;padding-right:10px}
+       .pmf-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 42px}
+       .pmf-creator-index-toolbar .pmf-controls,.pmf-creator-index-toolbar .pmf-native-proxy-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 42px}
+diff --git a/tests/aspect-ratio-options-v082.cjs b/tests/aspect-ratio-options-v082.cjs
+index 8a40400..5ed9952 100644
+--- a/tests/aspect-ratio-options-v082.cjs
++++ b/tests/aspect-ratio-options-v082.cjs
+@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
+ const { api, stored, originalSource } = loadUserscript();
+ const { Config, Settings, CompactThumbnailRatio, UI } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ 
+ Settings.load();
+ assert.equal(Settings.value.compactThumbnailAspectRatio, '1-1');
+diff --git a/tests/corrective-architecture-settings-v083.cjs b/tests/corrective-architecture-settings-v083.cjs
+index aaf6b5e..9bf4371 100644
+--- a/tests/corrective-architecture-settings-v083.cjs
++++ b/tests/corrective-architecture-settings-v083.cjs
+@@ -9,7 +9,7 @@ const {
+   PostStatusStateCoordinator, PostPageController, Lifecycle, SettingsUI,
+ } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
++assert.equal(Config.version, '0.11.3');
+ assert.equal(Config.schemaVersion, 2);
+ assert.equal(Config.databaseVersion, 5);
+ 
+diff --git a/tests/creator-directory-modes-v0102.cjs b/tests/creator-directory-modes-v0102.cjs
+index 88a2112..8ad6b72 100644
+--- a/tests/creator-directory-modes-v0102.cjs
++++ b/tests/creator-directory-modes-v0102.cjs
+@@ -10,8 +10,8 @@ const {
+   NativeArtistsProxy, CreatorCardReconstructor, CreatorIndexUI,
+ } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
+-assert.match(originalSource, /\/\/ @version\s+0\.11\.2/);
++assert.equal(Config.version, '0.11.3');
++assert.match(originalSource, /\/\/ @version\s+0\.11\.3/);
+ assert.equal(CreatorDirectoryMode.load(), 'native');
+ assert.equal(CreatorDirectoryMode.normalize('bad-value'), 'native');
+ assert.equal(CreatorDirectoryMode.save('catalogue'), 'catalogue');
+diff --git a/tests/creator-index-corrective-v0101.cjs b/tests/creator-index-corrective-v0101.cjs
+index 435681d..f4850aa 100644
+--- a/tests/creator-index-corrective-v0101.cjs
++++ b/tests/creator-index-corrective-v0101.cjs
+@@ -10,8 +10,8 @@ const {
+   ArtistsDOM, CreatorGridGeometry, CreatorBulkSelection, CatalogueJobManager, CatalogueModel,
+ } = api;
+ 
+-assert.equal(Config.version, '0.11.2');
