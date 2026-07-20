@@ -10,12 +10,12 @@ const {
   ArtistsDOM, CreatorGridGeometry, CreatorBulkSelection, CatalogueJobManager, CatalogueModel,
 } = api;
 
-assert.equal(Config.version, '0.10.9');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.9/);
+assert.equal(Config.version, '0.10.10');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
 assert.equal(Config.databaseVersion, 5);
-assert.equal(Settings.schema.version, 4);
+assert.equal(Settings.schema.version, 5);
 const migrated = Settings.migrate({ settingsSchemaVersion:3 });
-assert.equal(migrated.settingsSchemaVersion, 4);
+assert.equal(migrated.settingsSchemaVersion, 5);
 assert.equal(migrated.creatorCardBadgeCountMode, 'posts');
 assert.equal(Settings.normalize({ creatorCardBadgeCountMode:'attachments' }).creatorCardBadgeCountMode, 'attachments');
 

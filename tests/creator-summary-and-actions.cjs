@@ -25,12 +25,12 @@ const catalogue = {
 const posts = [
   {
     id:'a', scanSchemaVersion:Config.schemaVersion, cacheSources:{catalogue:true,scan:false},
-    videoCount:2, imageCount:1, archiveCount:0, projectFileCount:1, externalLinkCount:3,
+    videoCount:2, imageCount:1, archiveCount:0, projectFileCount:1, externalLinkCount:3, mediaDownloadLinkCount:3,
   },
   {
     id:'b', scanSchemaVersion:Config.schemaVersion, cacheSources:{catalogue:true,scan:true},
     videoCount:0, imageCount:4, archiveCount:2, projectFileCount:0,
-    hasProjectFiles:true, externalLinkCount:1,
+    hasProjectFiles:true, externalLinkCount:1, mediaDownloadLinkCount:1,
   },
   {
     id:'scan-only', scanSchemaVersion:Config.schemaVersion, cacheSources:{catalogue:false,scan:true},

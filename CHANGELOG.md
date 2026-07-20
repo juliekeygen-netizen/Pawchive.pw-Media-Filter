@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.10.10
+
+- Unified external-link creator summaries and badges with the same scope and known-host rules used by post filtering and post badges.
+- Added local stored-post reclassification fingerprints so detection-setting changes refresh existing Catalogue records without destructive rescans.
+- Updated default known hosts and added focused English, Japanese, Simplified Chinese, and Traditional Chinese project-file keywords with schema-5 migration.
+- Preserved Pawchive's current native sort direction when changing sort fields.
+- Added synchronized bottom paginators and reliable Left/Right Arrow paging for creator directories and creator post results.
+- Added a local missing-attachment inventory to Data & performance.
+- Increased adaptive missing-metadata capacity to five structured workers and two HTML workers, with structured-capability bypass and existing scheduler/rate-limit protection.
+- Merged creator API profile/artwork fields into directory snapshots used by bulk scanning.
+- Made creator/all Catalogue clearing stop and await active writers, reset stale missing-metadata checkpoints, clear retained sessions, and refresh the mounted creator directory without exposing a creator-only action on `/artists`.
+- Added v0.10.10 regression coverage; 45 executable tests now pass.
+
 ## 0.10.9
 
 - Kept compatible creator attachment totals visible while aggregate-affecting settings trigger background summary recomputation.

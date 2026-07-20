@@ -1,4 +1,4 @@
-# Pawchive.pw Media Filter v0.10.9 specification
+# Pawchive.pw Media Filter v0.10.10 specification
 
 ## Scope
 
@@ -6,9 +6,9 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.10.9`
+- Userscript and `Config.version`: `0.10.10`
 - Settings: `pmf-settings-v5`
-- Settings schema: 4; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
+- Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
 - Post schema: 2
 - IndexedDB: `pawchive-media-filter`, version 5
@@ -21,6 +21,18 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+
+## v0.10.10 consistency and navigation contracts
+
+- External-link post matching, post-card badges, creator-summary counts, creator-card badges, creator filters, and creator sorts must all derive from the same selected external-link scope. `media-download` uses `mediaDownloadLinkCount`; `any` uses `externalLinkCount`.
+- Classification-affecting settings include file extensions, project keywords/evidence, known hosts, and the classification logic version. Existing complete Catalogue posts with an old fingerprint are reclassified locally before authoritative creator-summary recomputation.
+- Settings schema 5 changes only untouched prior default hosts/keywords. User-customized lists remain unchanged. Keyword parsing accepts comma- or line-separated values and CJK phrases do not depend on Latin word boundaries.
+- Native sort-field changes preserve Pawchive's current native direction. Selecting the same sort field again reverses it.
+- `/artists` Native and Catalogue modes and creator post pages expose functional top and bottom pagination. Left/Right Arrow paging is ignored inside form controls, editable content, or overlays.
+- The missing-attachment inventory is a local IndexedDB cursor count and reports known complete, known missing, unknown, and total stored Catalogue posts without network requests.
+- Missing-attachment maintenance has at most five structured workers and two HTML workers. The shared scheduler still spaces request starts and applies global 429 cooldown. After repeated zero-hit samples for a host/service, structured lookup is bypassed for the remainder of the page session.
+- Native all-creator API records merge any supplied profile identity/artwork into existing directory records. Creator profile repair remains the explicit operation for optional identity/artwork gaps.
+- Creator/all Catalogue clearing cancels pending maintenance, stops and awaits active Catalogue and repair writers, resets the missing-attachment checkpoint, removes retained creator-session data, and refreshes a mounted `/artists` view. Clear-all preserves creator-directory records, creator/post status, presets, and global settings. The creator-only clear action is unavailable outside an active creator page.
 
 ## v0.10.9 live-test contracts
 

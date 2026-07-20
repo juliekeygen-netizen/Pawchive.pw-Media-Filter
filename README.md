@@ -2,11 +2,25 @@
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.10.9**
+Current version: **0.10.10**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.10.10 filter consistency, navigation, defaults, and maintenance visibility
+
+Creator-card External links totals now use the same **External-link scope** and **Known media and download hosts** rules as creator-page post filtering and post-card badges. Stored posts carry a classification fingerprint; changing extensions, project keywords, project evidence, or known hosts reclassifies existing Catalogue records in place and refreshes creator summaries without clearing and rescanning the Catalogue.
+
+The default media/download host list no longer includes `redgifs.com`. Project-file keyword defaults are reduced to the requested English terms and add explicit Japanese, Simplified Chinese, and Traditional Chinese PSD/PSB/CLIP, project/source, editable, and layered-file phrases. Settings schema 5 migrates only untouched prior defaults and preserves customized lists.
+
+Native alphabetical selection preserves Pawchive's current direction instead of silently forcing ascending order. Creator-directory and creator-post results now have synchronized bottom paginators, and unmodified Left/Right Arrow keys page Local Catalogue and creator post results without invoking Pawchive's hidden native refresh handler.
+
+Data & performance now reports stored missing-attachment metadata inventory: known/no-missing, known/missing, unknown, and total posts. Missing-metadata maintenance can use up to five structured workers and two adaptive HTML workers, remembers when a service's structured endpoint cannot provide the field, and bypasses repeated unhelpful detail requests. The global request scheduler and 429 cooldown remain authoritative.
+
+Native creator API snapshots now merge any supplied names, favorite counts, avatars, banners, and service labels into existing directory records before bulk jobs are queued. Missing optional profile artwork that the API does not provide remains repairable through **Repair creator profile metadata**.
+
+Catalogue clearing now stops and awaits active Catalogue/maintenance writers before deleting local rows, resets the missing-attachment checkpoint, clears retained creator sessions, and refreshes `/artists`. **Clear this creator’s full catalogue scan** appears only on an actual creator page. Clearing all Catalogue scans preserves creator-directory identity records, local Favorite/Like/Hidden/Seen state, presets, and global settings.
 
 ## v0.10.9 live-test fixes
 

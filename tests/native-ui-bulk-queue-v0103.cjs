@@ -8,8 +8,8 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config, Util, CatalogueJobManager, CreatorBulkSelection, NativeArtistsProxy } = api;
 
-assert.equal(Config.version, '0.10.9');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.9/);
+assert.equal(Config.version, '0.10.10');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
 for (const [name, source] of [
   ['userscript', originalSource],
   ...['README.md', 'SPEC.md', 'TESTING.md'].map((name) => [
@@ -58,7 +58,7 @@ assert.equal(
 
 assert.equal(NativeArtistsProxy.nextSort('favorited', 'desc', 'favorited').direction, 'asc');
 assert.equal(NativeArtistsProxy.nextSort('favorited', 'asc', 'name').direction, 'asc');
-assert.equal(NativeArtistsProxy.nextSort('name', 'asc', 'favorited').direction, 'desc');
+assert.equal(NativeArtistsProxy.nextSort('name', 'asc', 'favorited').direction, 'asc');
 
 CatalogueJobManager.shutdown();
 CatalogueJobManager.maintenanceActive = true;

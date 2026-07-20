@@ -10,8 +10,8 @@ const {
   NativeArtistsProxy, CreatorCardReconstructor, CreatorIndexUI,
 } = api;
 
-assert.equal(Config.version, '0.10.9');
-assert.match(originalSource, /\/\/ @version\s+0\.10\.9/);
+assert.equal(Config.version, '0.10.10');
+assert.match(originalSource, /\/\/ @version\s+0\.10\.10/);
 assert.equal(CreatorDirectoryMode.load(), 'native');
 assert.equal(CreatorDirectoryMode.normalize('bad-value'), 'native');
 assert.equal(CreatorDirectoryMode.save('catalogue'), 'catalogue');
@@ -129,11 +129,11 @@ assert.equal(proxySortDirection.textContent, '▲');
 assert.equal(NativeArtistsProxy.activate(found, 'service', 'fanbox'), true);
 assert.equal(service.dispatched, 2);
 assert.equal(NativeArtistsProxy.nextSort('name', 'asc', 'name').direction, 'desc');
-assert.equal(NativeArtistsProxy.nextSort('favorited', 'desc', 'name').direction, 'asc');
+assert.equal(NativeArtistsProxy.nextSort('favorited', 'desc', 'name').direction, 'desc');
 
 const pageLink = element('a');
 pageLink.dataset.value = '50';
-paginator.querySelectorAll = (selector) => selector === 'a[data-value],li' ? [pageLink] : [];
+paginator.querySelectorAll = (selector) => selector === 'a[data-value],button[data-value],li' ? [pageLink] : [];
 assert.equal(NativeArtistsProxy.activatePage(found, 0), true);
 assert.equal(pageLink.clicked, 1);
 
@@ -142,7 +142,7 @@ const paginatorItem = (tag, label, { current = false, disabled = false } = {}) =
   item.textContent = label;
   item.dataset.value = label;
   item.matches = (selector) => (
-    (selector === 'a[data-value]' && tag === 'a')
+    (selector.includes('a[data-value]') && tag === 'a')
     || (selector.includes('pagination-button-current') && current)
     || (selector.includes('pagination-button-disabled') && disabled)
     || (selector === 'li,.pagination-button-disabled' && (tag === 'li' || disabled))
@@ -156,7 +156,7 @@ const nextAnchor = paginatorItem('a', '>');
 const lastWrapper = paginatorItem('li', '>>');
 const lastAnchor = paginatorItem('a', '>>');
 paginator.querySelector = () => null;
-paginator.querySelectorAll = (selector) => selector === 'a[data-value],li'
+paginator.querySelectorAll = (selector) => selector === 'a[data-value],button[data-value],li'
   ? [duplicateOneWrapper, duplicateOneAnchor, nextWrapper, nextAnchor, lastWrapper, lastAnchor]
   : [];
 const mirrorHost = element();

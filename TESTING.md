@@ -1,4 +1,18 @@
-# Pawchive.pw Media Filter v0.10.9 testing
+# Pawchive.pw Media Filter v0.10.10 testing
+
+## v0.10.10 consistency and navigation matrix
+
+Run `tests/v01010-consistency-navigation-defaults.cjs` and the complete suite; 45 executable tests must pass.
+
+1. In External-link scope, switch between **Media and download links** and **Any external link**. For one scanned creator, compare creator-card External links totals, the creator-page External links filter, post-card badges, creator filters, and sort values. Every surface must use the same scope.
+2. Confirm the defaults omit `redgifs.com`; save comma-separated project keywords and verify English, Japanese, Simplified Chinese, and Traditional Chinese project-file phrases match after reload. Customized lists must survive the schema-5 migration.
+3. On Native directory, keep the native direction descending, change the sort field to Alphabetical Order, and compare against Pawchive with the userscript disabled. The direction and ordering must remain native-authoritative. Choosing Alphabetical Order again must reverse it.
+4. Exercise first/previous/page/next/last at both top and bottom of Native creators, Local Catalogue, creator native posts, and creator filtered posts. Both controls must stay synchronized. Left/Right Arrow must page except while focus is in an input, textarea, select, button, editable node, or modal.
+5. Open Data & performance and verify the missing-attachment inventory satisfies `known = no-missing + missing` and `total = known + unknown`. Run First N maintenance and confirm the inventory refreshes after completion.
+6. During maintenance, confirm at most five structured workers and two HTML fallbacks are active, request starts remain scheduler-spaced, 429 triggers cooldown/concurrency reduction, and a repeatedly unhelpful structured endpoint is bypassed.
+7. Change known hosts or project keywords after a completed scan. Existing records and creator badges must refresh without clearing the Catalogue or refetching all list pages.
+8. Start bulk scans from Native all-results selection and verify API-supplied name, favorite count, avatar, and banner survive into Local cards. Run Creator profile repair for remaining weak/optional records.
+9. Start a creator scan and a missing-attachment update, then use the relevant clear action. Confirm all writers settle before deletion, the maintenance checkpoint disappears, cleared rows do not reappear, retained creator pages do not restore stale posts, `/artists` refreshes, and the creator-only clear action is absent from `/artists` Settings.
 
 ## v0.10.9 live-test regression matrix
 

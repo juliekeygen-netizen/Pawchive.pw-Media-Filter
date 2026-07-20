@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.10.9
+// @version      0.10.10
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.10.9',
+    version: '0.10.10',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -71,7 +71,7 @@
     likelyHosts: [
       'youtube.com', 'youtu.be', 'vimeo.com', 'mega.nz', 'drive.google.com',
       'dropbox.com', 'pixeldrain.com', 'pixeldrain.net', 'gofile.io',
-      'mediafire.com', 'streamable.com', 'redgifs.com',
+      'mediafire.com', 'streamable.com',
     ],
   });
 
@@ -79,10 +79,17 @@
     'PSD', 'Photoshop', 'PSB', 'CLIP', 'Clip Studio', 'CSP', 'SAI', 'Krita',
     'source file', 'project file',
     'Blender', 'BLEND', 'Maya', 'C4D', 'Cinema 4D', 'ZBrush',
+    // Japanese project/source-file phrases.
+    'PSDファイル', 'PSBファイル', 'CLIPファイル', 'プロジェクトファイル',
+    'ソースファイル', '元データ', '編集可能ファイル', 'レイヤー付きファイル',
+    // Simplified and Traditional Chinese project/source-file phrases.
+    'PSD文件', 'PSB文件', 'CLIP文件', '项目文件', '工程文件', '源文件',
+    '分层文件', '可编辑文件', 'PSD檔案', 'PSB檔案', 'CLIP檔案', '專案檔案',
+    '工程檔案', '原始檔案', '分層檔案', '可編輯檔案',
   ]);
 
   const DefaultSettings = Object.freeze({
-    settingsSchemaVersion: 4,
+    settingsSchemaVersion: 5,
     compactCardScale: 'big',
     compactThumbnailAspectRatio: '1-1',
     postAttachmentBadgeSize: 'small',
@@ -238,7 +245,7 @@
     value: Util.clone(DefaultSettings),
     initialized:false,
     schema:Object.freeze({
-      version:4,
+      version:5,
       sizeValues:Object.freeze(['small','medium','big']),
       legacySharedAttachmentSize:'attachmentBadgeSize',
       splitAttachmentSizes:Object.freeze(['postAttachmentBadgeSize','creatorAttachmentBadgeSize']),
@@ -275,6 +282,24 @@
           : 'posts';
         next.settingsSchemaVersion=4;
       }
+      if(version<5){
+        const previousHosts=[
+          'youtube.com','youtu.be','vimeo.com','mega.nz','drive.google.com','dropbox.com',
+          'pixeldrain.com','pixeldrain.net','gofile.io','mediafire.com','streamable.com','redgifs.com'
+        ];
+        const previousKeywords=[
+          'PSD','Photoshop','PSB','CLIP','Clip Studio','CSP','SAI','Krita',
+          'source file','project file','Blender','BLEND','Maya','C4D','Cinema 4D','ZBrush'
+        ];
+        const sameList=(left,right,{lower=false,split=false}={})=>{
+          const normalize=(values)=>(values||[]).flatMap((value)=>split?String(value).split(/[\n,]+/):[value]).map((value)=>String(value).trim()).filter(Boolean).map((value)=>lower?value.toLocaleLowerCase():value);
+          return JSON.stringify(normalize(left))===JSON.stringify(normalize(right));
+        };
+        // Migrate only untouched old defaults. Customized lists remain exactly as saved.
+        if(sameList(source.knownHosts,previousHosts,{lower:true}))next.knownHosts=[...DefaultSettings.knownHosts];
+        if(sameList(source.projectKeywords,previousKeywords,{split:true}))next.projectKeywords=[...DefaultSettings.projectKeywords];
+        next.settingsSchemaVersion=5;
+      }
       return next;
     },
     normalize(source = {}) {
@@ -291,7 +316,7 @@
         imageExtensions: extensions(safe.imageExtensions, DefaultSettings.imageExtensions),
         archiveExtensions: extensions(safe.archiveExtensions, DefaultSettings.archiveExtensions),
         projectExtensions: extensions(safe.projectExtensions, DefaultSettings.projectExtensions, true),
-        projectKeywords: Util.unique((safe.projectKeywords || DefaultSettings.projectKeywords).map((value) => String(value).trim()).filter(Boolean)),
+        projectKeywords: Util.unique((safe.projectKeywords || DefaultSettings.projectKeywords).flatMap((value) => String(value).split(/[\n,]+/)).map((value) => value.trim()).filter(Boolean)),
         projectEvidence: {
           attachmentFilenames: safe.projectEvidence?.attachmentFilenames !== false,
           title: safe.projectEvidence?.title !== false,
@@ -667,6 +692,23 @@
     },
   };
 
+  const PostClassification = {
+    fingerprint(settings=Settings.value) {
+      const normalized=(values)=>Util.unique((values||[]).map((value)=>String(value).trim().toLocaleLowerCase()).filter(Boolean)).sort();
+      return JSON.stringify({
+        schemaVersion:Config.schemaVersion,
+        videoExtensions:normalized(settings.videoExtensions),
+        imageExtensions:normalized(settings.imageExtensions),
+        archiveExtensions:normalized(settings.archiveExtensions),
+        projectExtensions:normalized(settings.projectExtensions),
+        projectKeywords:normalized(settings.projectKeywords),
+        projectEvidence:{...settings.projectEvidence},
+        knownHosts:normalized(settings.knownHosts),
+        logicVersion:3,
+      });
+    },
+  };
+
   const ExternalLinkDetector = {
     normalize(raw, baseUrl) {
       try {
@@ -714,6 +756,13 @@
         likelyMediaLinks: mediaDownloadLinks,
       };
     },
+    countForScope(post, scope=Settings.value.externalLinkScope) {
+      if(scope==='any')return Math.max(0,Number(post?.externalLinkCount ?? post?.externalLinks?.length)||0);
+      return Math.max(0,Number(post?.mediaDownloadLinkCount ?? post?.likelyMediaLinkCount ?? post?.mediaDownloadLinks?.length ?? post?.likelyMediaLinks?.length)||0);
+    },
+    matchesScope(post, scope=Settings.value.externalLinkScope) {
+      return ExternalLinkDetector.countForScope(post,scope)>0;
+    },
   };
 
   const ProjectDetector = {
@@ -721,7 +770,11 @@
       return PawchiveData.normalizeTags(raw, { provided:raw !== undefined }).tags;
     },
     keywordRegex(keyword) {
-      const escaped = String(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const raw=String(keyword||'');
+      const escaped = raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // CJK text is commonly followed immediately by particles or other Han/Kana.
+      // Word-boundary guards would miss phrases such as プロジェクトファイルを配布.
+      if(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(raw))return new RegExp(escaped,'iu');
       return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, 'iu');
     },
     matches(text, keywords = Settings.value.projectKeywords) {
@@ -903,6 +956,7 @@
       return {
         key: `${context.creatorKey}|${id}`,
         creatorKey: context.creatorKey,
+        classificationFingerprint: PostClassification.fingerprint(),
         id,
         service,
         creatorId,
@@ -1194,6 +1248,26 @@
         Logger.warn('Could not count selected Catalogue posts.', error);
         return 0;
       });
+    },
+    async countMissingAttachmentStats({ creatorKeys = [] } = {}) {
+      const totals={total:0,known:0,unknown:0,missing:0,complete:0};
+      let cursor=null;
+      let rounds=0;
+      do{
+        const result=await Cache.scanCataloguePostChunk({cursor,creatorKeys,scanLimit:2000});
+        for(const post of result.records){
+          totals.total+=1;
+          const known=post?.missingStatsKnown===true&&(Number(post.missingStatsParserVersion)||0)>=PostMissingStats.parserVersion;
+          if(!known){totals.unknown+=1;continue;}
+          totals.known+=1;
+          if(post.hasMissingStats===true)totals.missing+=1;else totals.complete+=1;
+        }
+        cursor=result.cursor;
+        rounds+=1;
+        if(result.done)break;
+        if(rounds%10===0)await new Promise((resolve)=>setTimeout(resolve,0));
+      }while(cursor);
+      return totals;
     },
     async scanCataloguePostChunk({ cursor = null, creatorKeys = [], scanLimit = 500, signal } = {}) {
       if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -1984,7 +2058,7 @@
       const results = categories.map((category) => ({
         videos: Boolean(post.hasVideo), images: Boolean(post.hasImages), archives: Boolean(post.hasArchives),
         projectFiles: Boolean(post.hasProjectFiles),
-        externalLinks: state.externalLinks.scope === 'any' ? Boolean(post.hasExternalLinks) : Boolean(post.mediaDownloadLinkCount || post.hasLikelyExternalMedia),
+        externalLinks: ExternalLinkDetector.matchesScope(post,state.externalLinks.scope),
         customExtensions: FilterEngine.customExtensionCount(post, state) > 0,
       })[category]);
       return state.media.matchMode === 'all' ? results.every(Boolean) : results.some(Boolean);
@@ -2532,14 +2606,8 @@
       return JSON.stringify({
         version:CreatorCatalogueSummary.version,
         schemaVersion:Config.schemaVersion,
-        videoExtensions:normalized(settings.videoExtensions),
-        imageExtensions:normalized(settings.imageExtensions),
-        archiveExtensions:normalized(settings.archiveExtensions),
-        projectExtensions:normalized(settings.projectExtensions),
-        projectKeywords:Util.unique((settings.projectKeywords||[]).map((value)=>String(value).trim().toLocaleLowerCase())).sort(),
-        projectEvidence:{...settings.projectEvidence},
+        postClassificationFingerprint:PostClassification.fingerprint(settings),
         externalLinkScope:settings.externalLinkScope,
-        knownHosts:Util.unique((settings.knownHosts||[]).map((value)=>String(value).trim().toLocaleLowerCase())).sort(),
         excludePostsWithMissingAttachments:settings.excludePostsWithMissingAttachments===true,
         missingStatsParserVersion:2,
         mediaLinkLogicVersion:2,
@@ -2578,7 +2646,7 @@
     },
     compute(posts,catalogueState={},now=Date.now(),options={}) {
       const stored=CreatorCatalogueSummary.cataloguePosts(posts),usable=CreatorCatalogueSummary.aggregatePosts(stored);const excludedMissingAttachmentPostCount=stored.length-usable.length;const safe=(value)=>Math.max(0,Number(value)||0);const media={videos:{posts:0,attachments:0},images:{posts:0,attachments:0},archives:{posts:0,attachments:0},projectFiles:{posts:0,attachments:0},externalLinks:{posts:0,links:0}};
-      let earliestPublishedAt=null,latestPublishedAt=null;const publishedTimestamps=[];usable.forEach((post)=>{[['videos','videoCount'],['images','imageCount'],['archives','archiveCount']].forEach(([type,key])=>{const count=safe(post[key]);media[type].attachments+=count;if(count>0)media[type].posts+=1;});const projectAttachments=safe(post.projectFileCount);media.projectFiles.attachments+=projectAttachments;if(projectAttachments>0||post.hasProjectFiles===true)media.projectFiles.posts+=1;const links=safe(post.externalLinkCount);media.externalLinks.links+=links;if(links>0)media.externalLinks.posts+=1;const stamp=Date.parse(post.published||post.publishedAt||'');if(Number.isFinite(stamp)){publishedTimestamps.push(stamp);earliestPublishedAt=earliestPublishedAt==null?stamp:Math.min(earliestPublishedAt,stamp);latestPublishedAt=latestPublishedAt==null?stamp:Math.max(latestPublishedAt,stamp);}});
+      let earliestPublishedAt=null,latestPublishedAt=null;const publishedTimestamps=[];usable.forEach((post)=>{[['videos','videoCount'],['images','imageCount'],['archives','archiveCount']].forEach(([type,key])=>{const count=safe(post[key]);media[type].attachments+=count;if(count>0)media[type].posts+=1;});const projectAttachments=safe(post.projectFileCount);media.projectFiles.attachments+=projectAttachments;if(projectAttachments>0||post.hasProjectFiles===true)media.projectFiles.posts+=1;const links=ExternalLinkDetector.countForScope(post,Settings.value.externalLinkScope);media.externalLinks.links+=links;if(links>0)media.externalLinks.posts+=1;const stamp=Date.parse(post.published||post.publishedAt||'');if(Number.isFinite(stamp)){publishedTimestamps.push(stamp);earliestPublishedAt=earliestPublishedAt==null?stamp:Math.min(earliestPublishedAt,stamp);latestPublishedAt=latestPublishedAt==null?stamp:Math.max(latestPublishedAt,stamp);}});
       const evaluation=CatalogueModel.evaluateCoverage(catalogueState);const counts=Object.fromEntries(Object.entries(media).map(([key,value])=>[key,value.attachments??value.links??0]));
       const dynamic=CreatorFilterEngine.normalizeState(options.filterState||{});const customExtensionAggregates={};const extensionValues=dynamic.media.customExtensions?.extensions||[];if(extensionValues.length){const aggregate=CreatorCatalogueSummary.customExtensionAggregate(usable,extensionValues);customExtensionAggregates[aggregate.fingerprint]=aggregate;}
       const customRuleAggregates={};dynamic.customRules.filter((rule)=>rule.enabled).forEach((rule)=>{const aggregate=CreatorCatalogueSummary.customRuleAggregate(usable,rule);customRuleAggregates[aggregate.fingerprint]=aggregate;});
@@ -2595,8 +2663,24 @@
       const statuses=await Cache.getCreatorStatuses(context.creatorKey);const host=context.domain||String(context.creatorKey).split('|')[0]||location.hostname;const snapshotMeta=await Cache.getFavoriteSyncMeta(host);const snapshotMembership=await Cache.getFavoriteSnapshotKeys(host,snapshotMeta?.activeSnapshotId);const filterState=CreatorFilterEngine.normalizeState(GM_getValue(Config.creatorFilterStateKey,{}));
       return CreatorCatalogueSummary.compute(posts,catalogueState,Date.now(),{statuses,snapshotMeta,snapshotMembership,filterState});
     },
+    async reclassifyStored(context,posts=[]) {
+      const fingerprint=PostClassification.fingerprint();
+      const refreshed=[];
+      const output=[];
+      for(const post of posts||[]){
+        if(post?.cacheSources?.catalogue!==true||post.scanSchemaVersion!==Config.schemaVersion||post.completeness==='unresolved'){output.push(post);continue;}
+        if(post.classificationFingerprint===fingerprint){output.push(post);continue;}
+        const next=PostNormalizer.normalize(PostNormalizer.rawFromStored(post),context,post.thumbnailUrl);
+        if(!next){output.push(post);continue;}
+        next.completeness=post.completeness;
+        const merged=Cache.mergePost(post,next);
+        output.push(merged);refreshed.push(merged);
+      }
+      if(refreshed.length)await Cache.putPosts(refreshed);
+      return output;
+    },
     async recomputeAndPersist(context,catalogueState=null) {
-      const posts=await Cache.getCreatorPosts(context.creatorKey);const meta=await Cache.getMeta(context.creatorKey)||{creatorKey:context.creatorKey};const state=catalogueState||CatalogueModel.normalize(meta,{restoreTransient:false}).catalogue;const summary=await CreatorCatalogueSummary.computeAuthoritative(context,posts,state);
+      let posts=await Cache.getCreatorPosts(context.creatorKey);posts=await CreatorCatalogueSummary.reclassifyStored(context,posts);const meta=await Cache.getMeta(context.creatorKey)||{creatorKey:context.creatorKey};const state=catalogueState||CatalogueModel.normalize(meta,{restoreTransient:false}).catalogue;const summary=await CreatorCatalogueSummary.computeAuthoritative(context,posts,state);
       await Cache.patchMeta(context.creatorKey,{catalogue:{...state,storedPostCount:summary.sourcePostCount,creatorCardSummary:summary}});
       return summary;
     },
@@ -2764,21 +2848,37 @@
     restore(snapshot){snapshot?.elements?.forEach(({element,hidden,display,displayPriority,ariaHidden})=>{if(!element?.isConnected)return;element.hidden=hidden;if(display)element.style.setProperty('display',display,displayPriority);else element.style.removeProperty('display');if(ariaHidden==null)element.removeAttribute('aria-hidden');else element.setAttribute('aria-hidden',ariaHidden);delete element.dataset.pmfNativeHidden;});if(snapshot?.searchInput?.isConnected)snapshot.searchInput.placeholder=snapshot.searchPlaceholder;},
   };
 
+  const NativePaginatorMirror = {
+    role(label,index=0){const value=String(label||'').trim();if(['<<','«','⏮'].includes(value))return'first';if(['<','‹','←'].includes(value))return'previous';if(['>','›','→'].includes(value))return'next';if(['>>','»','⏭'].includes(value))return'last';if(/^\d+$/.test(value))return`page:${value}`;return`other:${index}`;},
+    items(native){
+      const scope=native?.querySelector?.('menu')||native;const nodes=[...scope?.querySelectorAll?.('a[data-value],button[data-value],li')||[]];
+      const candidates=nodes.map((item,index)=>{const label=String(item.textContent||'').trim();return{item,index,label,role:NativePaginatorMirror.role(label,index),anchor:item.matches('a[data-value],button[data-value]'),disabled:item.matches('li,.pagination-button-disabled,[disabled],[aria-disabled="true"]'),current:item.matches('.pagination-button-current,[aria-current="page"]')};});
+      const chosen=new Map();candidates.forEach((candidate)=>{const prior=chosen.get(candidate.role);if(!prior||candidate.current&&!prior.current||candidate.anchor&&!prior.anchor&&!prior.current||!candidate.disabled&&prior.disabled&&!prior.current)chosen.set(candidate.role,candidate);});
+      return[...chosen.values()].sort((a,b)=>a.index-b.index);
+    },
+    render(native,host,{includeCount=true}={}){
+      host?.replaceChildren?.();if(!native||!host)return false;
+      const items=NativePaginatorMirror.items(native);if(!items.length)return false;
+      if(includeCount){const small=native.querySelector('small');if(small){const count=small.cloneNode(true);count.classList.add('pmf-filtered-count');host.append(count);}}
+      const menu=document.createElement('div');menu.className='pmf-page-controls';items.forEach(({index,label,disabled,current})=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.nativePaginatorIndex=String(index);button.disabled=disabled;if(current){button.setAttribute('aria-current','page');button.classList.add('pmf-current-page');}menu.append(button);});host.append(menu);return true;
+    },
+    activate(native,index){const candidate=NativePaginatorMirror.items(native).find((item)=>item.index===Number(index));if(!candidate||candidate.disabled)return false;candidate.item.click();return true;},
+    activateRole(native,role){const candidate=NativePaginatorMirror.items(native).find((item)=>item.role===role&&!item.disabled);if(!candidate)return false;candidate.item.click();return true;},
+  };
+
   const NativeArtistsProxy = {
     options(source,{service=false}={}){return[...source?.options||[]].map((option)=>({value:option.value,label:service&&option.value===''?'Any service':String(option.textContent||option.value).trim()}));},
     label(source,{service=false}={}){const option=[...source?.options||[]].find((item)=>item.value===source.value);return service&&source?.value===''?'Any service':String(option?.textContent||source?.value||'').trim();},
     defaultDirection(mode){return['name','service'].includes(String(mode))?'asc':'desc';},
-    nextSort(currentMode,currentDirection,selectedMode){const same=String(currentMode)===String(selectedMode);return{mode:String(selectedMode),direction:same?(String(currentDirection)==='asc'?'desc':'asc'):NativeArtistsProxy.defaultDirection(selectedMode)};},
+    nextSort(currentMode,currentDirection,selectedMode){const direction=String(currentDirection)==='asc'?'asc':'desc';const same=String(currentMode)===String(selectedMode);return{mode:String(selectedMode),direction:same?(direction==='asc'?'desc':'asc'):direction};},
     sync(found,host){
       if(!found||!host||!found.serviceControl||!found.sortControl||!found.directionControl)return false;const service=host.querySelector('[data-creator-index-action="native-service"]'),sort=host.querySelector('[data-creator-index-action="native-sort"]');if(!service||!sort)return false;service.querySelector('[data-proxy-label]').textContent=NativeArtistsProxy.label(found.serviceControl,{service:true});sort.querySelector('[data-proxy-label]').textContent=`Sort: ${NativeArtistsProxy.label(found.sortControl)}`;sort.querySelector('[data-proxy-direction]').textContent=(found.directionControl.value||'desc')==='asc'?'▲':'▼';return true;
     },
     activate(found,type,value){
       const source=type==='service'?found?.serviceControl:found?.sortControl;if(!source)return false;if(type==='sort'){const next=NativeArtistsProxy.nextSort(source.value,found?.directionControl?.value,value);if(found?.directionControl)found.directionControl.value=next.direction;source.value=next.mode;}else source.value=value;source.dispatchEvent(new Event('input',{bubbles:true}));source.dispatchEvent(new Event('change',{bubbles:true}));return true;
     },
-    paginator(found,host){
-      host.replaceChildren();const native=found?.paginators?.[0];if(!native)return false;const small=native.querySelector('small');const candidates=[...native.querySelectorAll('a[data-value],li')].map((item,index)=>{const label=String(item.textContent||'').trim();const role=label==='<<'?'first':label==='<'?'previous':label==='>'?'next':label==='>>'?'last':/^\d+$/.test(label)?`page:${label}`:`other:${index}`;return{item,index,label,role,anchor:item.matches('a[data-value]'),disabled:item.matches('li,.pagination-button-disabled'),current:item.matches('.pagination-button-current,[aria-current="page"]')};});const chosen=new Map();candidates.forEach((candidate)=>{const prior=chosen.get(candidate.role);if(!prior||candidate.current&&!prior.current||candidate.anchor&&!prior.anchor&&!prior.current||!candidate.disabled&&prior.disabled&&!prior.current)chosen.set(candidate.role,candidate);});const ordered=[...chosen.values()].sort((a,b)=>a.index-b.index);const menu=document.createElement('div');menu.className='pmf-page-controls';ordered.forEach(({index,label,disabled,current})=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.dataset.nativePaginatorIndex=String(index);button.disabled=disabled;if(current)button.setAttribute('aria-current','page');menu.append(button);});if(small){const count=small.cloneNode(true);count.classList.add('pmf-filtered-count');host.append(count);}host.append(menu);return true;
-    },
-    activatePage(found,index){const source=[...found?.paginators?.[0]?.querySelectorAll?.('a[data-value],li')||[]][Number(index)];if(!source||source.matches('li,.pagination-button-disabled'))return false;source.click();return true;},
+    paginator(found,host){return NativePaginatorMirror.render(found?.paginators?.[0],host);},
+    activatePage(found,index){return NativePaginatorMirror.activate(found?.paginators?.[0],index);},
   };
 
   const AttachmentBadgeSizing = {
@@ -2961,9 +3061,10 @@
     subscribe(listener){CatalogueJobManager.listeners.add(listener);listener(CatalogueJobManager.snapshot());return()=>CatalogueJobManager.listeners.delete(listener);},
     notify(){const snapshot=CatalogueJobManager.snapshot();CatalogueJobManager.listeners.forEach((listener)=>{try{listener(snapshot);}catch(error){Logger.warn('Catalogue job subscriber failed.',error);}});},
     setConcurrency(value){CatalogueJobManager.concurrency=[1,2].includes(Number(value))?Number(value):1;CatalogueJobManager.notify();CatalogueJobManager.pump();return CatalogueJobManager.concurrency;},
-    acquireMaintenanceSlot(){if(!CatalogueJobManager.maintenanceActive&&CatalogueJobManager.activeJobs.size<CatalogueJobManager.concurrency){CatalogueJobManager.maintenanceActive=true;CatalogueJobManager.notify();return Promise.resolve();}return new Promise((resolve)=>CatalogueJobManager.maintenanceWaiters.push(resolve));},
+    acquireMaintenanceSlot(){if(!CatalogueJobManager.maintenanceActive&&CatalogueJobManager.activeJobs.size<CatalogueJobManager.concurrency){CatalogueJobManager.maintenanceActive=true;CatalogueJobManager.notify();return Promise.resolve();}return new Promise((resolve,reject)=>CatalogueJobManager.maintenanceWaiters.push({resolve,reject}));},
     releaseMaintenanceSlot(){CatalogueJobManager.maintenanceActive=false;CatalogueJobManager.notify();CatalogueJobManager.pump();},
-    grantMaintenance(){if(CatalogueJobManager.maintenanceActive||!CatalogueJobManager.maintenanceWaiters.length||CatalogueJobManager.activeJobs.size>=CatalogueJobManager.concurrency)return false;CatalogueJobManager.maintenanceActive=true;CatalogueJobManager.maintenanceWaiters.shift()?.();CatalogueJobManager.notify();return true;},
+    grantMaintenance(){if(CatalogueJobManager.maintenanceActive||!CatalogueJobManager.maintenanceWaiters.length||CatalogueJobManager.activeJobs.size>=CatalogueJobManager.concurrency)return false;CatalogueJobManager.maintenanceActive=true;CatalogueJobManager.maintenanceWaiters.shift()?.resolve?.();CatalogueJobManager.notify();return true;},
+    cancelMaintenanceWaiters(reason='Maintenance operation cancelled.'){const waiters=CatalogueJobManager.maintenanceWaiters.splice(0);waiters.forEach((waiter)=>waiter.reject?.(new DOMException(reason,'AbortError')));return waiters.length;},
     createBatch({id=`creator-batch-${Date.now()}-${++CatalogueJobManager.batchSequence}`,label='Creator batch',total=0,cleanupIdle=true}={}){if(cleanupIdle&&!CatalogueJobManager.activeJobs.size&&!CatalogueJobManager.pendingJobs.length)CatalogueJobManager.clearCompleted({notify:false,persist:false});const batch={id:String(id),label:String(label),total:Math.max(0,Number(total)||0),waiting:0,active:0,completed:0,complete:0,failed:0,stopped:0,removed:0,terminalJobs:{},createdAt:Date.now(),updatedAt:Date.now()};CatalogueJobManager.batches.set(batch.id,batch);CatalogueJobManager.persistSession();return batch;},
     normalizeBatch(batch={}){const terminalJobs=batch.terminalJobs&&typeof batch.terminalJobs==='object'?{...batch.terminalJobs}:{};const completed=Math.max(0,Number(batch.completed??batch.complete)||0);return{...batch,total:Math.max(0,Number(batch.total)||0),waiting:Math.max(0,Number(batch.waiting)||0),active:Math.max(0,Number(batch.active)||0),completed,complete:completed,failed:Math.max(0,Number(batch.failed)||0),stopped:Math.max(0,Number(batch.stopped)||0),removed:Math.max(0,Number(batch.removed)||0),terminalJobs};},
     recordTerminal(job,status=job?.status){if(!job?.batchId||!['complete','failed','stopped','interrupted','removed'].includes(status))return false;const current=CatalogueJobManager.batches.get(job.batchId)||CatalogueJobManager.createBatch({id:job.batchId,label:job.batchLabel,cleanupIdle:false});Object.assign(current,CatalogueJobManager.normalizeBatch(current));CatalogueJobManager.batches.set(current.id,current);if(current.terminalJobs[job.id])return false;const field=status==='complete'?'completed':status==='failed'?'failed':status==='removed'?'removed':'stopped';current.terminalJobs[job.id]=field;current[field]+=1;current.complete=current.completed;current.total=Math.max(current.total,current.completed+current.failed+current.stopped+current.removed);current.updatedAt=Date.now();return true;},
@@ -2985,6 +3086,8 @@
     },
     stop(creatorKey){const job=CatalogueJobManager.activeForCreator(creatorKey);if(!job)return false;job.controller?.abort();return true;},
     removeQueued(creatorKey){const job=CatalogueJobManager.queuedForCreator(creatorKey);if(!job)return false;CatalogueJobManager.pendingJobs=CatalogueJobManager.pendingJobs.filter((item)=>item!==job);CatalogueJobManager.queuedByCreator.delete(creatorKey);job.status='removed';CatalogueJobManager.updateBatch(job.batchId);CatalogueJobManager.recordTerminal(job,'removed');CatalogueJobManager.updateBatch(job.batchId);CatalogueJobManager.persistSession();CatalogueJobManager.notify();return true;},
+    async cancelAndForget(creatorKey){const key=String(creatorKey||'');if(!key)return false;const active=CatalogueJobManager.activeForCreator(key);if(active){active.shutdown=true;active.controller?.abort();}const queued=CatalogueJobManager.queuedForCreator(key);if(queued){CatalogueJobManager.pendingJobs=CatalogueJobManager.pendingJobs.filter((item)=>item!==queued);CatalogueJobManager.queuedByCreator.delete(key);}if(active?.done)await Promise.allSettled([active.done]);CatalogueJobManager.activeJobs.delete(key);CatalogueJobManager.recentJobs.delete(key);for(const batch of CatalogueJobManager.batches.values()){if(active?.id&&batch.terminalJobs)delete batch.terminalJobs[active.id];if(queued?.id&&batch.terminalJobs)delete batch.terminalJobs[queued.id];CatalogueJobManager.updateBatch(batch.id);}CatalogueJobManager.persistSession();CatalogueJobManager.notify();CatalogueJobManager.pump();return Boolean(active||queued);},
+    async cancelAllAndForget(){const active=[...CatalogueJobManager.activeJobs.values()];active.forEach((job)=>{job.shutdown=true;job.controller?.abort();});CatalogueJobManager.pendingJobs=[];CatalogueJobManager.queuedByCreator.clear();CatalogueJobManager.cancelMaintenanceWaiters('Catalogue data is being cleared.');await Promise.allSettled(active.map((job)=>job.done).filter(Boolean));CatalogueJobManager.activeJobs.clear();CatalogueJobManager.recentJobs.clear();CatalogueJobManager.batches.clear();CatalogueJobManager.suspendedDescriptors=[];CatalogueJobManager.suspendedSettlement=Promise.resolve();try{globalThis.sessionStorage?.removeItem(Config.creatorQueueSessionKey);}catch{}CatalogueJobManager.notify();return active.length;},
     moveToTop(creatorKey){const index=CatalogueJobManager.pendingJobs.findIndex((job)=>job.creatorKey===creatorKey);if(index<=0)return index===0;const [job]=CatalogueJobManager.pendingJobs.splice(index,1);job.queueOrder=Math.min(0,...CatalogueJobManager.pendingJobs.map((item)=>Number(item.queueOrder)||0))-1;CatalogueJobManager.pendingJobs.unshift(job);CatalogueJobManager.persistSession();CatalogueJobManager.notify();return true;},
     batchCounts(batchId){const batch=CatalogueJobManager.updateBatch(batchId);if(!batch)return{total:0,active:0,waiting:0,completed:0,complete:0,failed:0,stopped:0,removed:0,finished:0,remaining:0};const finished=batch.completed+batch.failed+batch.stopped+batch.removed;return{...batch,finished,remaining:batch.active+batch.waiting};},
     aggregate(snapshot=CatalogueJobManager.snapshot()){const batches=snapshot.batches||[];if(batches.length){const counts=batches.map((batch)=>CatalogueJobManager.batchCounts(batch.id));return counts.reduce((sum,item)=>({total:sum.total+item.total,active:sum.active+item.active,waiting:sum.waiting+item.waiting,completed:sum.completed+item.completed,failed:sum.failed+item.failed,stopped:sum.stopped+item.stopped,removed:sum.removed+item.removed,finished:sum.finished+item.finished,remaining:sum.remaining+item.remaining}),{total:0,active:0,waiting:0,completed:0,failed:0,stopped:0,removed:0,finished:0,remaining:0});}const recent=snapshot.recent||[],completed=recent.filter((job)=>job.status==='complete').length,failed=recent.filter((job)=>job.status==='failed').length,stopped=recent.filter((job)=>['stopped','interrupted'].includes(job.status)).length,active=(snapshot.active||[]).length,waiting=(snapshot.pending||[]).length,finished=completed+failed+stopped;return{total:finished+active+waiting,active,waiting,completed,failed,stopped,removed:0,finished,remaining:active+waiting};},
@@ -3221,7 +3324,7 @@ sync() {
         const extensions = (post.fileExtensions || []).filter((ext) => App.filterState.customExtensions.values.includes(ext));
         return { present: count > 0, count, icon: Icons.file, noun: 'custom-extension attachment', extensions: Util.unique(extensions) };
       }
-      const count = App.filterState.externalLinks.scope === 'any' ? post.externalLinkCount : post.mediaDownloadLinkCount;
+      const count = ExternalLinkDetector.countForScope(post,App.filterState.externalLinks.scope);
       return { present: count > 0, count, icon: Icons.link, noun: App.filterState.externalLinks.scope === 'any' ? 'external link' : 'media/download link', extensions: [] };
     },
     create(post, category, { allowKeywordProject = true } = {}) {
@@ -3892,24 +3995,16 @@ sync() {
       if (rememberedPage !== App.filteredPage) App.persistUIState();
       const start = count ? (App.filteredPage - 1) * pageSize + 1 : 0;
       const end = Math.min(count, App.filteredPage * pageSize);
-      App.ui.filteredCount.textContent = count ? `Showing ${start}–${end} of ${count}` : 'Showing 0 of 0';
-      const controls = App.ui.filteredControls;
-      controls.replaceChildren();
-      const add = (label, action, page, disabled, aria) => {
-        const button = document.createElement('button');
-        button.type = 'button'; button.textContent = label; button.disabled = disabled;
-        button.setAttribute('aria-label', aria);button.dataset.pmfPageAction=action;
-        if(action==='page')button.dataset.pmfPage=String(page);
-        controls.append(button);
+      const renderInto=(countNode,controls,host)=>{
+        if(!countNode||!controls)return;
+        countNode.textContent=count?`Showing ${start}–${end} of ${count}`:'Showing 0 of 0';controls.replaceChildren();
+        const add=(label,action,page,disabled,aria)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.setAttribute('aria-label',aria);button.dataset.pmfPageAction=action;if(action==='page')button.dataset.pmfPage=String(page);controls.append(button);};
+        add('«','first',1,App.filteredPage===1,'First filtered page');add('‹','previous',0,App.filteredPage===1,'Previous filtered page');
+        for(const page of Paginator.pageButtons(App.filteredPage,totalPages,Paginator.windowSize(Number(host?.clientWidth)||800))){add(String(page),'page',page,page===App.filteredPage,`Filtered page ${page}`);controls.lastElementChild.classList.toggle('pmf-current-page',page===App.filteredPage);}
+        add('›','next',0,App.filteredPage===totalPages,'Next filtered page');add('»','last',totalPages,App.filteredPage===totalPages,'Last filtered page');
       };
-      add('«','first',1,App.filteredPage===1,'First filtered page');
-      add('‹','previous',0,App.filteredPage===1,'Previous filtered page');
-      for (const page of Paginator.pageButtons(App.filteredPage,totalPages,Paginator.windowSize())) {
-        add(String(page),'page',page,page===App.filteredPage,`Filtered page ${page}`);
-        controls.lastElementChild.classList.toggle('pmf-current-page', page === App.filteredPage);
-      }
-      add('›','next',0,App.filteredPage===totalPages,'Next filtered page');
-      add('»','last',totalPages,App.filteredPage===totalPages,'Last filtered page');
+      renderInto(App.ui.filteredCount,App.ui.filteredControls,App.ui.paginator);
+      if(App.ui.paginatorBottom){if(!App.ui.filteredCountBottom.isConnected||!App.ui.paginatorBottom.contains(App.ui.filteredCountBottom))App.ui.paginatorBottom.replaceChildren(App.ui.filteredCountBottom,App.ui.filteredControlsBottom);renderInto(App.ui.filteredCountBottom,App.ui.filteredControlsBottom,App.ui.paginatorBottom);}
     },
   };
 
@@ -3945,7 +4040,17 @@ sync() {
     listeners: new Set(),
     htmlActive: 0,
     htmlWaiters: [],
+    structuredCapabilities: new Map(),
     scanChunkSize: 500,
+    maxConcurrency(){return Util.clamp(Number(Settings.value.concurrency)||3,1,5);},
+    htmlConcurrency(){return Math.min(2,MissingAttachmentMaintenance.maxConcurrency());},
+    capabilityKey(post){return `${location.hostname}|${String(post?.service||'')}`;},
+    noteStructuredCapability(post,known,{unsupported=false}={}){
+      const key=MissingAttachmentMaintenance.capabilityKey(post);const prior=MissingAttachmentMaintenance.structuredCapabilities.get(key)||{samples:0,hits:0,misses:0,unsupported:false};
+      const next={...prior,samples:prior.samples+1,hits:prior.hits+(known?1:0),misses:prior.misses+(known?0:1),unsupported:prior.unsupported||unsupported};
+      if(!next.unsupported&&next.samples>=8&&next.hits===0)next.unsupported=true;
+      MissingAttachmentMaintenance.structuredCapabilities.set(key,next);return next;
+    },
     checkpoint() {
       return GM_getValue(Config.missingAttachmentMaintenanceKey, null);
     },
@@ -4148,10 +4253,13 @@ sync() {
     async fetchStructured(post, signal) {
       const stored = PostMissingStats.fromRaw(post);
       if (stored.missingStatsKnown && (Number(stored.missingStatsParserVersion) || 0) >= PostMissingStats.parserVersion) return stored;
+      const capability=MissingAttachmentMaintenance.structuredCapabilities.get(MissingAttachmentMaintenance.capabilityKey(post));
+      if(capability?.unsupported)return null;
       const url = new URL(`/api/v1/${post.service}/user/${post.creatorId}/post/${post.id}`, location.origin).href;
       await CatalogueRequestScheduler.waitTurn({ signal, operation: 'missing-attachment-maintenance', creatorKey: post.creatorKey, requestKind: 'post-detail-api' });
       const response = await fetch(url, { credentials: 'same-origin', signal, headers: { Accept: 'application/json' } });
-      if (response.status === 404 || response.status === 405) return null;
+      if (response.status === 405) { MissingAttachmentMaintenance.noteStructuredCapability(post,false,{unsupported:true}); return null; }
+      if (response.status === 404) { MissingAttachmentMaintenance.noteStructuredCapability(post,false); return null; }
       if (response.status === 429) {
         CatalogueRequestScheduler.applyRateLimit(Number(response.headers.get('Retry-After')) * 1000 || Config.defaultRateLimitDelayMs, { creatorKey: post.creatorKey, requestKind: 'post-detail-api' });
         const error = new Error('Pawchive rate limited post metadata.');
@@ -4169,10 +4277,11 @@ sync() {
       }
       const raw = await response.json();
       const missing = PostMissingStats.fromRaw(raw?.post || raw);
+      MissingAttachmentMaintenance.noteStructuredCapability(post,missing.missingStatsKnown);
       return missing.missingStatsKnown ? missing : null;
     },
     async acquireHtmlSlot(signal) {
-      while (MissingAttachmentMaintenance.htmlActive >= 1) {
+      while (MissingAttachmentMaintenance.htmlActive >= MissingAttachmentMaintenance.htmlConcurrency()) {
         await new Promise((resolve, reject) => {
           const waiter = { resolve, reject };
           MissingAttachmentMaintenance.htmlWaiters.push(waiter);
@@ -4326,7 +4435,7 @@ sync() {
             await MissingAttachmentMaintenance.flushWrites(state, task.creatorKey, false);
             state.successfulSinceRateLimit += 1;
             state.consecutiveFailures = 0;
-            if (state.successfulSinceRateLimit >= 20 && state.detailConcurrency < Math.min(3, Number(Settings.value.concurrency) || 3)) {
+            if (state.successfulSinceRateLimit >= 20 && state.detailConcurrency < MissingAttachmentMaintenance.maxConcurrency()) {
               state.detailConcurrency += 1;
               state.successfulSinceRateLimit = 0;
             }
@@ -4369,7 +4478,7 @@ sync() {
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
       };
-      await Promise.all(Array.from({ length: Math.min(3, Math.max(1, tasks.length)) }, (_, index) => worker(index)));
+      await Promise.all(Array.from({ length: Math.min(MissingAttachmentMaintenance.maxConcurrency(), Math.max(1, tasks.length)) }, (_, index) => worker(index)));
       for (const creatorKey of [...state.pendingWrites.keys()]) await MissingAttachmentMaintenance.flushWrites(state, creatorKey, true);
       MissingAttachmentMaintenance.maybePersist(state, true);
     },
@@ -4411,7 +4520,7 @@ sync() {
           recentCompletedAt: [...(saved?.recentCompletedAt || [])],
           startedAt: Number(saved?.startedAt) || Date.now(),
           stopped: false,
-          detailConcurrency: Util.clamp(Number(saved?.detailConcurrency) || Math.min(3, Number(Settings.value.concurrency) || 3), 1, Math.max(1, Number(Settings.value.concurrency) || 3)),
+          detailConcurrency: Util.clamp(Number(saved?.detailConcurrency) || MissingAttachmentMaintenance.maxConcurrency(), 1, MissingAttachmentMaintenance.maxConcurrency()),
           successfulSinceRateLimit: 0,
           consecutiveFailures: 0,
           currentCreator: '',
@@ -4478,6 +4587,18 @@ sync() {
       state.controller.abort();
       MissingAttachmentMaintenance.notify();
     },
+    async cancelAndReset() {
+      const state = MissingAttachmentMaintenance.active;
+      const settlement = state?.promise;
+      if (state) MissingAttachmentMaintenance.stop();
+      if (settlement) {
+        try { await settlement; }
+        catch (error) { if (error?.name !== 'AbortError') Logger.warn('Missing metadata cancellation did not settle cleanly.', error); }
+      }
+      GM_deleteValue(Config.missingAttachmentMaintenanceKey);
+      MissingAttachmentMaintenance.active = null;
+      MissingAttachmentMaintenance.notify();
+    },
     resume() { return MissingAttachmentMaintenance.run({ resume: true }); },
     retryFailed() { return MissingAttachmentMaintenance.run({ retryFailed: true }); },
     scopeLabel(scope) {
@@ -4489,7 +4610,7 @@ sync() {
       dialog.setAttribute('role', 'dialog');
       dialog.setAttribute('aria-modal', 'true');
       dialog.setAttribute('aria-label', 'Update missing-attachment metadata');
-      dialog.innerHTML = `<header><strong>Update missing-attachment metadata</strong><button class="pmf-icon-close" data-maintenance-scope-action="cancel">×</button></header><div class="pmf-editor-body"><section class="pmf-settings-section"><h3>Scope</h3><div class="pmf-settings-row"><span>Update</span>${SettingsUI.select('missingScope','current-creator',[['current-creator','Current creator'],['current-page','Current Local catalogue page'],['first','First N unknown posts'],['all','All unknown posts']]).outerHTML}</div><div class="pmf-settings-row" data-first-limit hidden><span>Maximum posts</span><input type="number" name="missingLimit" min="1" max="10000" value="100"></div><p class="pmf-help" data-scope-help>Structured post details are checked first. HTML is downloaded only when needed.</p></section></div><footer><span></span><button data-maintenance-scope-action="cancel">Cancel</button><button class="pmf-primary" data-maintenance-scope-action="start">Start update</button></footer>`;
+      dialog.innerHTML = `<header><strong>Update missing-attachment metadata</strong><button class="pmf-icon-close" data-maintenance-scope-action="cancel">×</button></header><div class="pmf-editor-body"><section class="pmf-settings-section"><h3>Scope</h3><div class="pmf-settings-row"><span>Update</span>${SettingsUI.select('missingScope','current-creator',[['current-creator','Current creator'],['current-page','Current Local catalogue page'],['first','First N unknown posts'],['all','All unknown posts']]).outerHTML}</div><div class="pmf-settings-row" data-first-limit hidden><span>Maximum posts</span><input type="number" name="missingLimit" min="1" max="10000" value="100"></div><p class="pmf-help" data-scope-help>Structured post details are checked first. After repeated unsupported responses for a service, the updater skips that redundant request and goes directly to HTML. HTML fallback uses up to two adaptive workers.</p></section></div><footer><span></span><button data-maintenance-scope-action="cancel">Cancel</button><button class="pmf-primary" data-maintenance-scope-action="start">Start update</button></footer>`;
       backdrop.append(dialog);
       (CreatorIndexUI.root || App.ui?.settings || document.body).append(backdrop);
       const overlay = OverlayManager.open({ node: dialog, root: backdrop, opener, modal: true });
@@ -4499,7 +4620,7 @@ sync() {
       const sync = () => {
         const selectedScope = select.value;
         limitRow.hidden = selectedScope !== 'first';
-        help.textContent = selectedScope === 'all' ? 'The updater streams bounded IndexedDB chunks and never loads the complete library into memory. You will confirm a stored-post upper bound before it starts.' : 'Structured post details are checked first. HTML is downloaded only when needed.';
+        help.textContent = selectedScope === 'all' ? 'The updater streams bounded IndexedDB chunks and never loads the complete library into memory. You will confirm a stored-post upper bound before it starts.' : 'Structured post details are checked first. After repeated unsupported responses for a service, the updater skips that redundant request and goes directly to HTML. HTML fallback uses up to two adaptive workers.';
       };
       select.addEventListener('change', sync);
       sync();
@@ -4689,7 +4810,8 @@ sync() {
       for(const field of ['favorite','liked','seen']){const button=document.createElement('button');button.type='button';button.dataset.pmfQuickStatus=field;button.setAttribute('aria-pressed','false');button.innerHTML=`<span class="pmf-quick-status-main">${PostStatus.icon(field)}</span><span class="pmf-quick-status-negate">${Icons.x}</span>`;statusFilters.append(button);}
       const filteredControls=document.createElement('div');filteredControls.className='pmf-page-controls';paginator.append(statusFilters,filteredCount,filteredControls);App.dom.grid.insertAdjacentElement('beforebegin',paginator);
       const grid=UI.own(document.createElement('div'));grid.className=`${App.dom.grid.className} pmf-filter-grid`;grid.hidden=true;App.dom.grid.insertAdjacentElement('afterend',grid);
-      App.ui={root,toolbar,controls,filterButton,sortButton,scanButton,settingsButton,statusLeft,statusActions,statusRight,progress,progressBar,details,paginator,filteredCount,statusFilters,filteredControls,grid,filterPopover:null,editor:null,settings:null,sortMenu:null};UI.bind();UI.updateFilterButton();UI.updateSortButton();UI.updateQuickStatusFilters();
+      const paginatorBottom=UI.own(document.createElement('div'));paginatorBottom.className='pmf-filtered-paginator pmf-bottom-paginator';paginatorBottom.hidden=true;const filteredCountBottom=document.createElement('small');filteredCountBottom.className='pmf-filtered-count';const filteredControlsBottom=document.createElement('div');filteredControlsBottom.className='pmf-page-controls';paginatorBottom.append(filteredCountBottom,filteredControlsBottom);grid.insertAdjacentElement('afterend',paginatorBottom);
+      App.ui={root,toolbar,controls,filterButton,sortButton,scanButton,settingsButton,statusLeft,statusActions,statusRight,progress,progressBar,details,paginator,filteredCount,statusFilters,filteredControls,paginatorBottom,filteredCountBottom,filteredControlsBottom,grid,filterPopover:null,editor:null,settings:null,sortMenu:null};UI.bind();UI.updateFilterButton();UI.updateSortButton();UI.updateQuickStatusFilters();
     },
     updateFilterButton(){if(!App.ui)return;App.ui.filterButton.textContent=UI.filterLabel();App.ui.filterButton.setAttribute('aria-label',`Media filters: ${UI.filterLabel()}`);},
     selectSettingsTab(name){App.ui.settings.querySelectorAll('[data-pmf-settings-tab]').forEach(button=>button.classList.toggle('pmf-active',button.dataset.pmfSettingsTab===name));App.ui.settings.querySelectorAll('[data-pmf-settings-panel]').forEach(panel=>{panel.hidden=panel.dataset.pmfSettingsPanel!==name;});queueMicrotask(()=>App.ui?.settings?.querySelectorAll(`[data-pmf-settings-panel="${name}"] textarea`).forEach(UI.autoSizeTextarea));},
@@ -4788,10 +4910,17 @@ sync() {
       App.ui.scanButton.addEventListener('click', () => Catalogue.primaryAction(), { signal });
       App.ui.settingsButton.addEventListener('click', () => UI.openSettings(), { signal });
       App.ui.details.addEventListener('click',(event)=>{const retry=event.target.closest('[data-pmf-retry-incomplete]');if(!retry||retry.disabled)return;Catalogue.retryIncompleteMetadata();},{signal});
-      App.ui.filteredControls.addEventListener('click', (event) => {
-        const button=event.target.closest('button[data-pmf-page-action]');if(!button||button.disabled)return;
-        Paginator.activate(button.dataset.pmfPageAction,button.dataset.pmfPage);
-      }, { signal });
+      const activateFilteredPage=(event)=>{const button=event.target.closest('button[data-pmf-page-action]');if(!button||button.disabled)return;Paginator.activate(button.dataset.pmfPageAction,button.dataset.pmfPage);};
+      App.ui.filteredControls.addEventListener('click',activateFilteredPage,{signal});
+      App.ui.filteredControlsBottom.addEventListener('click',activateFilteredPage,{signal});
+      App.ui.paginatorBottom.addEventListener('click',(event)=>{const index=event.target.closest('[data-native-paginator-index]')?.dataset.nativePaginatorIndex;if(index!==undefined)NativePaginatorMirror.activate(App.dom.topPaginator,index);},{signal});
+      document.addEventListener('keydown',(event)=>{
+        if(!['ArrowLeft','ArrowRight'].includes(event.key)||event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||OverlayManager.top())return;
+        const target=event.target;if(target?.closest?.('input,textarea,select,button,[contenteditable="true"],[role="textbox"]'))return;
+        const role=event.key==='ArrowRight'?'next':'previous';
+        const changed=App.cataloguePostCount()?Paginator.activate(role):NativePaginatorMirror.activateRole(App.dom.topPaginator,role);
+        if(changed){event.preventDefault();event.stopImmediatePropagation();}
+      },{capture:true,signal});
       App.ui.statusFilters.addEventListener('click',(event)=>{
         const button=event.target.closest('[data-pmf-quick-status]');if(!button)return;const field=button.dataset.pmfQuickStatus;
         PostStatusFilters.cycle(field);App.filteredPage=1;App.filteredFirstResultIndex=0;App.filteredAnchorId='';App.render();UI.updateQuickStatusFilters();
@@ -4983,8 +5112,28 @@ sync() {
       App.creatorMeta=meta;App.catalogueState=CatalogueModel.normalize(meta||{});App.catalog=new Map(posts.map((post)=>[String(post.id),post]));App.totalPosts=Math.max(0,Number(meta?.totalPosts)||posts.length);App.totalPages=Math.max(0,Number(meta?.totalPages)||Math.ceil(App.totalPosts/Config.pageSize));App.addNativeStubs();App.persistUIState();App.render();
     },
     confirmClear(kind) {
-      const configs={'catalogue-creator':{title:"Clear this creator's full catalogue scan?",paragraphs:["This deletes this creator's locally stored posts, page coverage, summary, retry state, and update timestamps. Presets and other creators are not affected."],label:'Clear creator scan',creator:true},'catalogue-all':{title:'Clear all full catalogue scans?',paragraphs:['This deletes every locally stored creator catalogue. Presets and global settings are not affected.'],label:'Clear all scans',creator:false}};const config=configs[kind];if(!config)return;
-      UI.confirmDialog({title:config.title,paragraphs:config.paragraphs,confirmLabel:config.label,danger:true,onConfirm:async()=>{if(config.creator){const key=App.context?.creatorKey;CatalogueJobManager.stop(key);CatalogueJobManager.removeQueued(key);await Cache.clearCreatorCatalogue(key);}else{CatalogueJobManager.shutdown();await Cache.clearAllCatalogues();}UI.closeSettings();await UI.reloadCurrentCreatorData();UI.flash(config.creator?'Creator scan cleared':'All full catalogue scans cleared');}});
+      const configs={'catalogue-creator':{title:"Clear this creator's full catalogue scan?",paragraphs:["This deletes this creator's locally stored posts, page coverage, summary, retry state, and update timestamps. Any running missing-attachment update is stopped and its checkpoint is reset. Presets and other creators are not affected."],label:'Clear creator scan',creator:true},'catalogue-all':{title:'Clear all full catalogue scans?',paragraphs:['This deletes every locally stored creator catalogue. Active catalogue and maintenance work is stopped first. The missing-attachment update checkpoint is reset. Presets, creator-directory records, status data, and global settings are not affected.'],label:'Clear all scans',creator:false}};const config=configs[kind];if(!config)return;
+      UI.confirmDialog({title:config.title,paragraphs:config.paragraphs,confirmLabel:config.label,danger:true,onConfirm:async()=>{
+        const key=config.creator?App.context?.creatorKey:'';
+        if(config.creator&&!key){UI.flash('Open a creator page before clearing a creator scan.');return;}
+        CatalogueJobManager.cancelMaintenanceWaiters('Catalogue data is being cleared.');
+        if(config.creator)await CatalogueJobManager.cancelAndForget(key);
+        else await CatalogueJobManager.cancelAllAndForget();
+        await MissingAttachmentMaintenance.cancelAndReset();
+        await CreatorProfileRepairManager.stopAndWait();
+        if(config.creator){
+          await Cache.clearCreatorCatalogue(key);
+          CreatorSessionCache.sessions.delete(key);
+          if(CreatorSessionCache.activeKey===key)CreatorSessionCache.activeKey='';
+        }else{
+          await Cache.clearAllCatalogues();
+          CreatorSessionCache.clear();
+        }
+        UI.closeSettings();
+        await UI.reloadCurrentCreatorData();
+        if(ArtistsPageController.mounted())await ArtistsPageController.requestRefresh('catalogue-clear');
+        UI.flash(config.creator?'Creator scan cleared':'All full catalogue scans cleared');
+      }});
     },
     openBadgeSettings(trigger,kind='posts') {
       const creator=kind==='creators';const status=kind==='status';const storageKey=status?'settingsStatusBadgeTypes':creator?'settingsCreatorBadgeTypes':'settingsBadgeTypes';const initial=status?Settings.value.postStatusBadges.types:creator?Settings.value.creatorCardBadges.types:Settings.value.catalogueBadges.types;const types=App.ui[storageKey]||Util.clone(initial);App.ui[storageKey]=types;const backdrop=document.createElement('div');backdrop.className='pmf-modal-backdrop';const checked=(value)=>value?'checked':'';const choices=status?[['favorited','Favorited'],['liked','Liked'],['seen','Seen']]:[['videos','Videos'],['images','Images'],['archives','Archives'],['projectFiles','Project files'],['externalLinks','External links']];
@@ -5022,7 +5171,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     autoSizeTextarea(textarea) { const maxHeight = 220; textarea.style.height = 'auto'; const measured = textarea.scrollHeight; textarea.style.height = `${Math.min(maxHeight, Math.max(76, measured))}px`; textarea.style.overflowY = measured >= maxHeight ? 'auto' : 'hidden'; },
     async saveSettings() {
       const dialog = App.ui.settings; const error = dialog.querySelector('.pmf-settings-error'); const extensionValues = {}; let invalid = [];
-      const classificationSnapshot=(settings)=>JSON.stringify({videoExtensions:settings.videoExtensions,imageExtensions:settings.imageExtensions,archiveExtensions:settings.archiveExtensions,projectExtensions:settings.projectExtensions,projectEvidence:settings.projectEvidence,projectKeywords:settings.projectKeywords,knownHosts:settings.knownHosts});const previousClassification=classificationSnapshot(Settings.value);const previousFingerprint=CreatorCatalogueSummary.fingerprint();
+      const classificationSnapshot=(settings)=>PostClassification.fingerprint(settings);const previousClassification=classificationSnapshot(Settings.value);const previousFingerprint=CreatorCatalogueSummary.fingerprint();
       for (const name of ['videoExtensions','imageExtensions','archiveExtensions','projectExtensions']) { const result = Util.normalizeExtensions(dialog.querySelector(`[name="${name}"]`).value); extensionValues[name] = result.values; dialog.querySelector(`[data-pmf-validation="${name}"]`).textContent = result.invalid.length ? `Invalid: ${result.invalid.join(', ')}` : ''; invalid = invalid.concat(result.invalid); }
       if (invalid.length || ['videoExtensions','imageExtensions','archiveExtensions'].some((name)=>!extensionValues[name].length)) { error.textContent = 'Correct invalid or empty video, image, and archive extension lists.'; return; }
       const evidenceNames = ['attachmentFilenames','title','tags','content']; const next = { ...extensionValues, displayMode: dialog.querySelector('[name="displayMode"]:checked')?.value || 'compact', compactCardScale:dialog.querySelector('[name="compactCardScale"]')?.value||'big', compactThumbnailAspectRatio:dialog.querySelector('[name="compactThumbnailAspectRatio"]')?.value||'1-1', attachmentBadgeSize:dialog.querySelector('[name="attachmentBadgeSize"]')?.value||'small', confirmCreatorCardScan:dialog.querySelector('[name="confirmCreatorCardScan"]').checked, rememberFilters: dialog.querySelector('[name="rememberFilters"]').checked, rememberSearch: dialog.querySelector('[name="rememberSearch"]').checked, rememberFilteredPage: dialog.querySelector('[name="rememberFilteredPage"]').checked, projectEvidence: Object.fromEntries(evidenceNames.map((name) => [name, dialog.querySelector(`[name="project-${name}"]`).checked])), projectKeywords: Util.unique(dialog.querySelector('[name="projectKeywords"]').value.split(/\n+/).map((x) => x.trim()).filter(Boolean)), externalLinkScope: dialog.querySelector('[name="externalLinkScope"]:checked')?.value || 'media-download', knownHosts: Util.unique(dialog.querySelector('[name="knownHosts"]').value.split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean)), concurrency: Util.clamp(Util.parseInteger(dialog.querySelector('[name="concurrency"]').value, 5), 1, 10), retryFailed: dialog.querySelector('[name="retryFailed"]').checked, catalogueBadges:{alwaysShow:dialog.querySelector('[name="catalogueBadgesAlways"]').checked,types:Util.clone(App.ui.settingsBadgeTypes||Settings.value.catalogueBadges.types)},creatorCardBadges:{enabled:dialog.querySelector('[name="creatorCardBadgesEnabled"]').checked,types:Util.clone(App.ui.settingsCreatorBadgeTypes||Settings.value.creatorCardBadges.types)},seenCardTreatment:{enabled:dialog.querySelector('[name="seenCardTreatmentEnabled"]')?.checked===true,strength:dialog.querySelector('[name="seenCardTreatmentStrength"]')?.value||'medium'} };
@@ -5113,11 +5262,31 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         GlobalUI.flash(error?.message || 'The maintenance action failed.');
       });
     },
+    async refreshMissingInventory(root) {
+      const target=root?.querySelector?.('[data-missing-attachment-inventory]');
+      if(!target)return null;
+      const token=String((Number(target.dataset.inventoryToken)||0)+1);
+      target.dataset.inventoryToken=token;
+      target.textContent='Missing-attachment metadata inventory: counting stored posts…';
+      try{
+        const totals=await Cache.countMissingAttachmentStats();
+        if(!target.isConnected||target.dataset.inventoryToken!==token)return totals;
+        target.textContent=`Missing-attachment metadata: ${totals.known} known (${totals.complete} with no missing attachments · ${totals.missing} with missing attachments) · ${totals.unknown} unknown · ${totals.total} stored posts`;
+        return totals;
+      }catch(error){
+        Logger.warn('Could not count missing-attachment metadata inventory.',error);
+        if(target.isConnected&&target.dataset.inventoryToken===token)target.textContent='Missing-attachment metadata inventory could not be counted.';
+        return null;
+      }
+    },
     bindMaintenance(root) {
+      let priorMissingRunning=null;
       const update = () => {
         const missing = MissingAttachmentMaintenance.snapshot();
         const repair = CreatorProfileRepairManager.snapshot();
         const status = root.querySelector('[data-maintenance-status]');
+        if(priorMissingRunning===null||(priorMissingRunning&&!missing.running))SettingsUI.refreshMissingInventory(root);
+        priorMissingRunning=missing.running;
         root.querySelectorAll('[data-settings-action="update-missing-attachment-metadata"]').forEach((button) => button.hidden = missing.running);
         root.querySelectorAll('[data-settings-action="stop-missing-attachment-metadata"]').forEach((button) => button.hidden = !missing.running);
         root.querySelectorAll('[data-settings-action="resume-missing-attachment-metadata"]').forEach((button) => button.hidden = missing.running || !missing.stopped || !missing.remaining);
@@ -5248,7 +5417,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     buildData(draft) {
       const panel = SettingsUI.panel('data', 'Data & performance');
       const requests = SettingsUI.section('Requests');
-      requests.append(SettingsUI.row('Optional detail request concurrency', SettingsUI.select('concurrency', String(draft.concurrency), Array.from({
+      requests.append(SettingsUI.row('Optional detail / metadata concurrency', SettingsUI.select('concurrency', String(draft.concurrency), Array.from({
         length: 10
       }, (_, index) => [String(index + 1), String(index + 1)]))), SettingsUI.toggle('retryFailed', draft.retryFailed, 'Retry failed optional detail requests'));
       const favorites = SettingsUI.section('Native Favorites');
@@ -5256,15 +5425,15 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       actions.append(SettingsUI.action('Synchronize native favorites now', 'sync-favorites'), SettingsUI.action('Stop synchronization', 'stop-favorites'));
       favorites.append(actions);
       const stored = SettingsUI.section('Stored Catalogue');
+      const inventory=SettingsUI.el('p','pmf-help');inventory.dataset.missingAttachmentInventory='true';inventory.textContent='Missing-attachment metadata inventory: counting stored posts…';
+      const maintenanceHelp=SettingsUI.el('p','pmf-help','Update checks unknown missing-attachment status. Resume continues a stopped update. Retry failed processes only retryable failures. Creator repair fills weak names, profile URLs, avatars, banners, service labels, and public favorite counts without deleting catalogue posts.');
       const clear = SettingsUI.el('div', 'pmf-settings-actions');
-      clear.append(SettingsUI.action('Update missing-attachment metadata', 'update-missing-attachment-metadata'), SettingsUI.action('Stop metadata update', 'stop-missing-attachment-metadata'), SettingsUI.action('Resume metadata update', 'resume-missing-attachment-metadata'), SettingsUI.action('Retry failed metadata', 'retry-failed-missing-attachment-metadata'), SettingsUI.action('Repair creator profile metadata', 'repair-creator-profile-metadata'), SettingsUI.action('Stop creator repair', 'stop-creator-profile-repair'), SettingsUI.action('Resume creator repair', 'resume-creator-profile-repair'), SettingsUI.action('Retry failed creator repair', 'retry-failed-creator-profile-repair'), SettingsUI.action("Clear this creator's full catalogue scan", 'clear-creator', {
-        danger: true
-      }), SettingsUI.action('Clear all full catalogue scans', 'clear-all', {
-        danger: true
-      }));
+      clear.append(SettingsUI.action('Update missing-attachment metadata', 'update-missing-attachment-metadata'), SettingsUI.action('Stop metadata update', 'stop-missing-attachment-metadata'), SettingsUI.action('Resume metadata update', 'resume-missing-attachment-metadata'), SettingsUI.action('Retry failed metadata', 'retry-failed-missing-attachment-metadata'), SettingsUI.action('Repair creator profile metadata', 'repair-creator-profile-metadata'), SettingsUI.action('Stop creator repair', 'stop-creator-profile-repair'), SettingsUI.action('Resume creator repair', 'resume-creator-profile-repair'), SettingsUI.action('Retry failed creator repair', 'retry-failed-creator-profile-repair'));
+      if(App.context?.creatorKey)clear.append(SettingsUI.action("Clear this creator's full catalogue scan", 'clear-creator', { danger: true }));
+      clear.append(SettingsUI.action('Clear all full catalogue scans', 'clear-all', { danger: true }));
       const status = SettingsUI.el('p', 'pmf-maintenance-status');
       status.dataset.maintenanceStatus = 'true';
-      stored.append(clear, status);
+      stored.append(inventory, maintenanceHelp, clear, status);
       panel.append(requests, favorites, stored);
       return panel;
     },
@@ -5356,7 +5525,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         imageExtensions: readExtensions('imageExtensions'),
         archiveExtensions: readExtensions('archiveExtensions'),
         projectExtensions: readExtensions('projectExtensions'),
-        projectKeywords: String(get('projectKeywords')?.value || draft.projectKeywords.join('\n')).split(/\n+/).map((value) => value.trim()).filter(Boolean),
+        projectKeywords: String(get('projectKeywords')?.value || draft.projectKeywords.join('\n')).split(/[\n,]+/).map((value) => value.trim()).filter(Boolean),
         knownHosts: String(get('knownHosts')?.value || draft.knownHosts.join('\n')).split(/[\s,]+/).filter(Boolean),
         projectEvidence: Object.fromEntries(Object.keys(draft.projectEvidence).map((key) => [key, get(`project-${key}`)?.checked ?? draft.projectEvidence[key]])),
         catalogueBadges: {
@@ -5507,8 +5676,19 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         if (action === 'child-back') SettingsUI.renderParent('general');
         if (action === 'cancel') UI.closeSettings('cancel');
         if (action === 'save') {
+          const previousClassification=PostClassification.fingerprint(Settings.value);
+          const previousSummaryFingerprint=CreatorCatalogueSummary.fingerprint(Settings.value);
           App.ui.settingsDraft = SettingsUI.collect(dialog, App.ui.settingsDraft);
           Settings.save(App.ui.settingsDraft);
+          const classificationChanged=previousClassification!==PostClassification.fingerprint(Settings.value);
+          const aggregateChanged=previousSummaryFingerprint!==CreatorCatalogueSummary.fingerprint(Settings.value);
+          App.filterState.externalLinks.scope=Settings.value.externalLinkScope;
+          if(classificationChanged)await App.reclassifyCatalog();
+          const coverage=CatalogueModel.evaluateCoverage(App.catalogueState.catalogue);
+          if(App.context&&coverage.coverageComplete&&(aggregateChanged||!CreatorCatalogueSummary.valid(App.catalogueState.catalogue.creatorCardSummary,App.catalogueState.catalogue))){
+            App.catalogueState.catalogue.creatorCardSummary=await CreatorCatalogueSummary.computeAuthoritative(App.context,[...App.catalog.values()],App.catalogueState.catalogue);
+            await Catalogue.persist(App.context.creatorKey);
+          }
           App.ui.settingsPreview.committed = true;
           CompactLayoutEngine.restorePreview({
             apply: false
@@ -5584,6 +5764,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     grid: null,
     stateNode: null,
     paginator: null,
+    bottomPaginator: null,
     queuePanel: null,
     queueButton: null,
     found: null,
@@ -5652,14 +5833,16 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       const grid = document.createElement('div');
       grid.className = 'pmf-creator-index-grid';
       grid.dataset.pmfOwned = 'true';
+      const bottomPaginator=document.createElement('div');bottomPaginator.className='pmf-filtered-paginator pmf-creator-index-paginator pmf-bottom-paginator';bottomPaginator.dataset.pmfOwned='true';bottomPaginator.dataset.pmfInstance=INSTANCE_ID;
       root.append(toolbar, paginator, state, grid);
-      found.grid.insertAdjacentElement('beforebegin', root);
+      found.grid.insertAdjacentElement('beforebegin', root);found.grid.insertAdjacentElement('afterend',bottomPaginator);
       CreatorGridGeometry.apply(grid, CreatorIndexUI.nativeGeometry);
       Object.assign(CreatorIndexUI, {
         root,
         modeSelector,
         toolbar,
         paginator,
+        bottomPaginator,
         stateNode: state,
         grid
       });
@@ -5672,6 +5855,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         else CreatorIndexUI.handle(event);
       });
       root.addEventListener('change', (event) => CreatorIndexUI.handleChange(event));
+      bottomPaginator.addEventListener('click',(event)=>CreatorIndexUI.handle(event));
       CreatorIndexUI.unsubscribe = CatalogueJobManager.subscribe((snapshot) => CreatorQueuePanel.render(snapshot));
       CreatorIndexUI.applyMode({
         refresh: false
@@ -5711,23 +5895,17 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       return button;
     },
     buildPaginator() {
-      CreatorIndexUI.paginator.replaceChildren();
-      const quick = document.createElement('div');
-      quick.className = 'pmf-quick-status-filters';
-      quick.setAttribute('aria-label', 'Creator status filters');
-      if (CreatorIndexUI.mode === 'native') quick.append(CreatorIndexUI.quickButton('native-scanned', Icons.check, 'Hide scanned creators on this Pawchive page'));
-      else [
-        ['favorite', Icons.star, 'Favorite creator filter'],
-        ['liked', Icons.heart, 'Like creator filter'],
-        ['hidden', Icons.eye, 'Hidden creator filter']
-      ].forEach(([field, icon, label]) => quick.append(CreatorIndexUI.quickButton(field, icon, label)));
+      CreatorIndexUI.paginator.replaceChildren();CreatorIndexUI.bottomPaginator?.replaceChildren();
+      const quick = document.createElement('div');quick.className='pmf-quick-status-filters';quick.setAttribute('aria-label','Creator status filters');
+      if(CreatorIndexUI.mode==='native')quick.append(CreatorIndexUI.quickButton('native-scanned',Icons.check,'Hide scanned creators on this Pawchive page'));else[['favorite',Icons.star,'Favorite creator filter'],['liked',Icons.heart,'Like creator filter'],['hidden',Icons.eye,'Hidden creator filter']].forEach(([field,icon,label])=>quick.append(CreatorIndexUI.quickButton(field,icon,label)));
       CreatorIndexUI.paginator.append(quick);
-      if (CreatorIndexUI.mode === 'native') {
-        const mirror = document.createElement('div');
-        mirror.className = 'pmf-native-paginator-mirror';
-        CreatorIndexUI.paginator.append(mirror);
-        NativeArtistsProxy.paginator(CreatorIndexUI.found, mirror);
-      } else CreatorIndexUI.paginator.insertAdjacentHTML('beforeend', '<small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>');
+      if(CreatorIndexUI.mode==='native'){
+        const topMirror=document.createElement('div');topMirror.className='pmf-native-paginator-mirror';CreatorIndexUI.paginator.append(topMirror);NativeArtistsProxy.paginator(CreatorIndexUI.found,topMirror);
+        const bottomMirror=document.createElement('div');bottomMirror.className='pmf-native-paginator-mirror';CreatorIndexUI.bottomPaginator?.append(bottomMirror);NativeArtistsProxy.paginator(CreatorIndexUI.found,bottomMirror);
+      }else{
+        CreatorIndexUI.paginator.insertAdjacentHTML('beforeend','<small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>');
+        CreatorIndexUI.bottomPaginator?.insertAdjacentHTML('beforeend','<small class="pmf-filtered-count"></small><div class="pmf-page-controls"></div>');
+      }
       CreatorIndexUI.updateQuickFilters();
     },
     bindSearch() {
@@ -5960,8 +6138,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       if (summary) summary.textContent = 'Native directory · Pawchive controls';
       CreatorIndexUI.setState('ready', '');
       NativeArtistsProxy.sync(CreatorIndexUI.found, CreatorIndexUI.toolbar);
-      const mirror = CreatorIndexUI.paginator.querySelector('.pmf-native-paginator-mirror');
-      if (mirror) NativeArtistsProxy.paginator(CreatorIndexUI.found, mirror);
+      [CreatorIndexUI.paginator,CreatorIndexUI.bottomPaginator].forEach((host)=>{const mirror=host?.querySelector?.('.pmf-native-paginator-mirror');if(mirror)NativeArtistsProxy.paginator(CreatorIndexUI.found,mirror);});
       CreatorIndexUI.updateQuickFilters();
     },
     renderCatalogue() {
@@ -6000,29 +6177,10 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       else CreatorIndexUI.setState(records.length ? 'ready' : 'empty', records.length ? '' : 'No local Catalogue creators match the current search and filters.');
       const matches = CreatorIndexUI.toolbar.querySelector('[data-creator-matches]');
       const summary = CreatorIndexUI.toolbar.querySelector('[data-creator-summary]');
-      const count = CreatorIndexUI.paginator.querySelector('.pmf-filtered-count');
-      const controls = CreatorIndexUI.paginator.querySelector('.pmf-page-controls');
       if (matches) matches.textContent = `✓ ${records.length} Catalogue creators`;
       if (summary) summary.textContent = CreatorIndexUI.refreshing ? `Refreshing local catalogue… · ${CreatorIndexUI.records.length} cached` : `Catalogue · ${CreatorIndexUI.records.length} stored`;
-      if (count) count.textContent = records.length ? `Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}` : 'Showing 0 of 0';
-      if (controls) {
-        controls.replaceChildren();
-        const add = (label, page, disabled, action) => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.textContent = label;
-          button.disabled = disabled;
-          button.dataset.creatorPage = String(page);
-          button.dataset.creatorPageAction = action;
-          if (action === 'page' && page === CreatorIndexUI.page) button.setAttribute('aria-current', 'page');
-          controls.append(button);
-        };
-        add('«', 1, CreatorIndexUI.page === 1, 'first');
-        add('‹', CreatorIndexUI.page - 1, CreatorIndexUI.page === 1, 'previous');
-        for (const page of Paginator.pageButtons(CreatorIndexUI.page, totalPages, Paginator.windowSize(Number(CreatorIndexUI.paginator?.clientWidth) || 800))) add(String(page), page, page === CreatorIndexUI.page, 'page');
-        add('›', CreatorIndexUI.page + 1, CreatorIndexUI.page === totalPages, 'next');
-        add('»', totalPages, CreatorIndexUI.page === totalPages, 'last');
-      }
+      const renderPaginator=(host)=>{const count=host?.querySelector?.('.pmf-filtered-count');const controls=host?.querySelector?.('.pmf-page-controls');if(count)count.textContent=records.length?`Showing ${start+1}–${Math.min(records.length,start+visible.length)} of ${records.length}`:'Showing 0 of 0';if(!controls)return;controls.replaceChildren();const add=(label,page,disabled,action)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.dataset.creatorPage=String(page);button.dataset.creatorPageAction=action;if(action==='page'&&page===CreatorIndexUI.page){button.setAttribute('aria-current','page');button.classList.add('pmf-current-page');}controls.append(button);};add('«',1,CreatorIndexUI.page===1,'first');add('‹',CreatorIndexUI.page-1,CreatorIndexUI.page===1,'previous');for(const page of Paginator.pageButtons(CreatorIndexUI.page,totalPages,Paginator.windowSize(Number(host?.clientWidth)||800)))add(String(page),page,page===CreatorIndexUI.page,'page');add('›',CreatorIndexUI.page+1,CreatorIndexUI.page===totalPages,'next');add('»',totalPages,CreatorIndexUI.page===totalPages,'last');};
+      renderPaginator(CreatorIndexUI.paginator);renderPaginator(CreatorIndexUI.bottomPaginator);
       CreatorIndexUI.updateQuickFilters();
       CreatorIndexUI.retainSession();
     },
@@ -6075,12 +6233,8 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         NativeArtistsProxy.activatePage(CreatorIndexUI.found, paginatorIndex);
         return;
       }
-      const page = event.target.closest('[data-creator-page]')?.dataset.creatorPage;
-      if (page) {
-        CreatorIndexUI.page = Number(page);
-        CreatorIndexUI.render();
-        return;
-      }
+      const pageButton=event.target.closest('[data-creator-page]');
+      if(pageButton){const records=CreatorIndexUI.filteredRecords();const totalPages=Math.max(1,Math.ceil(records.length/CreatorIndexUI.pageSize));const action=pageButton.dataset.creatorPageAction||'page';CreatorIndexUI.page=Util.clamp(Paginator.targetForAction(action,pageButton.dataset.creatorPage,CreatorIndexUI.page,totalPages),1,totalPages);CreatorIndexUI.render();return;}
       const action = event.target.closest('[data-creator-index-action]')?.dataset.creatorIndexAction;
       if (action === 'native-service' || action === 'native-sort') {
         NativeControlMenu.open(action, event.target.closest('button'));
@@ -6128,6 +6282,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       });
       if (restoreNative) NativeArtistsVisibility.restore(CreatorIndexUI.nativeSnapshot);
       CreatorIndexUI.modeSelector?.remove();
+      CreatorIndexUI.bottomPaginator?.remove();
       CreatorIndexUI.root?.remove();
       Object.assign(CreatorIndexUI, {
         root: null,
@@ -6136,6 +6291,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
         grid: null,
         stateNode: null,
         paginator: null,
+        bottomPaginator: null,
         queuePanel: null,
         queueButton: null,
         found: null,
@@ -6222,9 +6378,63 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
 
   const NativeCreatorDirectorySource = {
     cache:null,
-    async creators(signal){if(NativeCreatorDirectorySource.cache)return NativeCreatorDirectorySource.cache;const response=await fetch('/api/v1/creators',{signal,credentials:'same-origin'});if(!response.ok)throw new Error(`Native creator directory request failed (${response.status}).`);const data=await response.json();NativeCreatorDirectorySource.cache=Array.isArray(data)?data:[];return NativeCreatorDirectorySource.cache;},
-    compare(a,b,field){const numeric=['indexed','updated','favorited','popularity','favorites'].includes(String(field));const value=(item)=>numeric?Number(item[field]??item.favorited??item.favorite_count) || 0:String(item[field]??item.name??'').toLocaleLowerCase();const left=value(a),right=value(b);return typeof left==='string'?left.localeCompare(right,undefined,{numeric:true,sensitivity:'base'}):left-right;},
-    async records(signal){const found=CreatorIndexUI.found,service=found?.serviceControl?.value||'',field=found?.sortControl?.value||'favorited',direction=found?.directionControl?.value||'desc',query=String(CreatorIndexUI.searchInput?.value||'').trim().toLocaleLowerCase(),existing=new Map([...CreatorIndexUI.records,...CreatorIndexUI.nativeRecords].map((record)=>[record.directory.creatorKey,record]));let creators=[...await NativeCreatorDirectorySource.creators(signal)];creators=creators.filter((creator)=>(!service||creator.service===service)&&(!query||String(creator.name||'').toLocaleLowerCase().includes(query))).sort((a,b)=>NativeCreatorDirectorySource.compare(a,b,field)*(direction==='asc'?1:-1));return creators.map((creator)=>{const creatorKey=`${location.hostname}|${creator.service}|${creator.id}`,known=existing.get(creatorKey);if(known)return known;return{directory:CreatorDirectory.normalize({creatorKey,domain:location.hostname,service:creator.service,creatorId:String(creator.id),creatorName:creator.name||String(creator.id),creatorUrl:`${location.origin}/${creator.service}/user/${creator.id}`,publicFavoriteCount:creator.favorited,indexedAt:Number(creator.indexed)*1000,updatedAt:Number(creator.updated)*1000}),meta:null,state:CreatorState.empty(creatorKey),summary:null,catalogueState:'unscanned',scanned:false};});},
+    async creators(signal){
+      if(NativeCreatorDirectorySource.cache)return NativeCreatorDirectorySource.cache;
+      const response=await fetch('/api/v1/creators',{signal,credentials:'same-origin'});
+      if(!response.ok)throw new Error(`Native creator directory request failed (${response.status}).`);
+      const data=await response.json();
+      NativeCreatorDirectorySource.cache=Array.isArray(data)?data:[];
+      return NativeCreatorDirectorySource.cache;
+    },
+    compare(a,b,field){
+      const numeric=['indexed','updated','favorited','popularity','favorites'].includes(String(field));
+      const value=(item)=>numeric?Number(item[field]??item.favorited??item.favorite_count)||0:String(item[field]??item.name??'').toLocaleLowerCase();
+      const left=value(a),right=value(b);
+      return typeof left==='string'?left.localeCompare(right,undefined,{numeric:true,sensitivity:'base'}):left-right;
+    },
+    directoryFromApi(creator={}){
+      const creatorKey=`${location.hostname}|${creator.service}|${creator.id}`;
+      const avatarUrl=String(creator.icon||creator.avatar||creator.avatar_url||creator.thumbnail||creator.thumbnail_url||'');
+      const bannerUrl=String(creator.banner||creator.banner_url||creator.background||creator.background_url||creator.cover||creator.cover_url||'');
+      return CreatorDirectory.normalize({
+        creatorKey,
+        domain:location.hostname,
+        service:creator.service,
+        serviceLabel:creator.service_name||creator.service_label||'',
+        creatorId:String(creator.id),
+        creatorName:creator.name||String(creator.id),
+        creatorUrl:`${location.origin}/${creator.service}/user/${creator.id}`,
+        avatarUrl,
+        thumbnailUrl:avatarUrl,
+        bannerUrl,
+        backdropUrl:bannerUrl,
+        avatarSource:avatarUrl?'native-creators-api':'',
+        bannerSource:bannerUrl?'native-creators-api':'',
+        publicFavoriteCount:creator.favorited??creator.favorite_count,
+        indexedAt:Number(creator.indexed)*1000,
+        updatedAt:Number(creator.updated)*1000,
+        source:'native-creators-api',
+        quality:avatarUrl||bannerUrl?70:55,
+      });
+    },
+    async records(signal){
+      const found=CreatorIndexUI.found;
+      const service=found?.serviceControl?.value||'';
+      const field=found?.sortControl?.value||'favorited';
+      const direction=found?.directionControl?.value||'desc';
+      const query=String(CreatorIndexUI.searchInput?.value||'').trim().toLocaleLowerCase();
+      const existing=new Map([...CreatorIndexUI.records,...CreatorIndexUI.nativeRecords].map((record)=>[record.directory.creatorKey,record]));
+      let creators=[...await NativeCreatorDirectorySource.creators(signal)];
+      creators=creators
+        .filter((creator)=>(!service||creator.service===service)&&(!query||String(creator.name||'').toLocaleLowerCase().includes(query)))
+        .sort((a,b)=>NativeCreatorDirectorySource.compare(a,b,field)*(direction==='asc'?1:-1));
+      return creators.map((creator)=>{
+        const incoming=NativeCreatorDirectorySource.directoryFromApi(creator);
+        const known=existing.get(incoming.creatorKey);
+        if(known)return{...known,directory:CreatorDirectory.merge(known.directory,incoming)};
+        return{directory:incoming,meta:null,state:CreatorState.empty(incoming.creatorKey),summary:null,catalogueState:'unscanned',scanned:false};
+      });
+    },
   };
 
   const CreatorProfileRepairManager = {
@@ -6533,6 +6743,15 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       state.controller.abort();
       CreatorProfileRepairManager.notify();
     },
+    async stopAndWait() {
+      const state = CreatorProfileRepairManager.active;
+      const settlement = state?.promise;
+      if (state) CreatorProfileRepairManager.stop();
+      if (settlement) {
+        try { await settlement; }
+        catch (error) { if (error?.name !== 'AbortError') Logger.warn('Creator profile repair cancellation did not settle cleanly.', error); }
+      }
+    },
     resume() { return CreatorProfileRepairManager.run({ resume: true }); },
     retryFailed() { return CreatorProfileRepairManager.run({ retryFailed: true }); },
   };
@@ -6585,6 +6804,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       AttachmentBadgeSizing.applyAll({reason:'artists-mount'});await Cache.migrateCatalogueOnly();if(!guard())return false;if(ArtistsPageController.health(page)){await ArtistsPageController.refresh();return guard();}ArtistsPageController.cleanup();if(!guard())return false;const found=ArtistsDOM.find();if(!found)return false;
       ArtistsPageController.page=page;ArtistsPageController.found=found;ArtistsPageController.controller=new AbortController();const signal=ArtistsPageController.controller.signal;const generation=++ArtistsPageController.generation;try{CreatorIndexUI.mount(found);}catch(error){CreatorIndexUI.cleanup();NativeArtistsVisibility.restore(CreatorIndexUI.nativeSnapshot);throw error;}
       const contextMenu=(event)=>ArtistsPageController.handleContextMenu(event);const keyboardMenu=(event)=>{if(event.key==='ContextMenu'||event.shiftKey&&event.key==='F10'){const card=event.target.closest?.('[data-pmf-creator-key]');if(card&&ArtistsPageController.cardByElement.has(card)){event.preventDefault();ArtistsPageController.openAction(ArtistsPageController.cardByElement.get(card));}}};[CreatorIndexUI.grid,found.grid].forEach((grid)=>{grid.addEventListener('contextmenu',contextMenu,{signal});grid.addEventListener('keydown',keyboardMenu,{signal});});
+      document.addEventListener('keydown',(event)=>{if(CreatorIndexUI.mode!=='catalogue'||!['ArrowLeft','ArrowRight'].includes(event.key)||event.defaultPrevented||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey||OverlayManager.top())return;const target=event.target;if(target?.closest?.('input,textarea,select,button,[contenteditable="true"],[role="textbox"]'))return;const records=CreatorIndexUI.filteredRecords();const totalPages=Math.max(1,Math.ceil(records.length/CreatorIndexUI.pageSize));const next=Util.clamp(CreatorIndexUI.page+(event.key==='ArrowRight'?1:-1),1,totalPages);if(next===CreatorIndexUI.page)return;event.preventDefault();event.stopImmediatePropagation();CreatorIndexUI.page=next;CreatorIndexUI.render();},{capture:true,signal});
       const schedule=Util.debounce(()=>{if(generation===ArtistsPageController.generation)ArtistsPageController.requestRefresh('native-mutation');},120);ArtistsPageController.observer=new MutationObserver((mutations)=>{if(ArtistsPageController.renderingOwnedUi)return;if(mutations.some(ArtistsPageController.isRelevantNativeMutation))schedule();});ArtistsPageController.observer.observe(found.grid,{childList:true,subtree:true});window.addEventListener('resize',()=>{CreatorGridGeometry.apply(CreatorIndexUI.grid,CreatorIndexUI.nativeGeometry);CreatorCardBadgeRenderer.refreshReservations(CreatorIndexUI.grid,'window-resize');},{signal});signal.addEventListener('abort',()=>schedule.cancel(),{once:true});
       ArtistsPageController.unsubscribeJob=CatalogueJobManager.subscribe(()=>ArtistsPageController.renderJobs());ArtistsPageController.unsubscribeSettings=SettingsEvents.subscribe((event)=>{if(!ArtistsPageController.mounted())return;CatalogueJobManager.setConcurrency(event.current.catalogueConcurrentJobs);AttachmentBadgeSizing.applyAll({reason:'settings-event'});ArtistsPageController.renderBadgesFromCurrentState();if((event.changed||[]).some((key)=>['excludePostsWithMissingAttachments','videoExtensions','imageExtensions','archiveExtensions','projectExtensions','projectEvidence','projectKeywords','externalLinkScope','knownHosts'].includes(key)))ArtistsPageController.requestRefresh('aggregate-settings-change');Logger.info({operation:'creator-badge-settings-applied',enabled:event.current.creatorCardBadges.enabled,enabledTypes:CreatorCardBadgeRenderer.enabledTypes(event.current.creatorCardBadges),visibleCardCount:ArtistsPageController.cards.length,changed:event.changed});});try{await ArtistsPageController.requestRefresh('mount');}catch(error){CreatorIndexUI.setState('error',`Could not load the creator index: ${error.message}`);Logger.error('Could not load the creator index.',error);return guard();}if(!guard()){ArtistsPageController.cleanup();return false;}if(Logger.debug)Logger.info({operation:'artists-page-mounted',pageKey:page.pageKey,creatorCardCount:ArtistsPageController.cards.length});return true;
     },
@@ -6748,7 +6968,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       if (App.cataloguePostCount()) App.renderCompact(); else App.renderNative(); App.renderStatus(); UI.renderErrors();});
     },
     renderCompact() {
-      const matches = App.matchingPosts(); App.dom.grid.hidden = true; App.ui.grid.hidden = false; App.ui.paginator.hidden = false; App.dom.countNodes.forEach((node) => { node.hidden = true; }); App.dom.menuNodes.forEach((node) => { node.hidden = true; }); if (App.dom.bottomPaginator) App.dom.bottomPaginator.hidden = true;
+      const matches = App.matchingPosts(); App.dom.grid.hidden = true; App.ui.grid.hidden = false; App.ui.paginator.hidden = false; App.ui.paginatorBottom.hidden=false; App.dom.countNodes.forEach((node) => { node.hidden = true; }); App.dom.menuNodes.forEach((node) => { node.hidden = true; }); if (App.dom.bottomPaginator) App.dom.bottomPaginator.hidden = true;
       const sizingReason=CompactGridScale.pendingReason||'render';CompactGridScale.pendingReason='';CompactLayoutEngine.apply({reason:sizingReason,verify:false});
       if(App.filteredAnchorId)App.restoreAnchorPage();else App.restoreFirstResultPage(matches.length);Paginator.render(matches.length);const pageSize=App.filteredPageSize();const start=(App.filteredPage-1)*pageSize;App.filteredFirstResultIndex=start;App.filteredAnchorId=matches[start]?.id||App.filteredAnchorId;App.ui.grid.replaceChildren();const pagePosts=matches.slice(start,start+pageSize);
       if (!pagePosts.length) { const empty = document.createElement('div'); empty.className = 'pmf-empty'; empty.innerHTML = '<strong>No matching posts</strong><span>Adjust filters, search, or sorting.</span>'; App.ui.grid.append(empty); }
@@ -6758,7 +6978,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     },
     renderNative() {
       CompactThumbnailRatio.clearOwnedStyles();CardRenderer.clearCropDebug();
-      App.dom.grid.hidden = false; App.ui.grid.hidden = true; App.ui.paginator.hidden = true; App.dom.countNodes.forEach((node) => { node.hidden = false; }); App.dom.menuNodes.forEach((node) => { node.hidden = false; }); if (App.dom.bottomPaginator) App.dom.bottomPaginator.hidden = false;
+      App.dom.grid.hidden = false; App.ui.grid.hidden = true; App.ui.paginator.hidden = true; App.dom.countNodes.forEach((node) => { node.hidden = false; }); App.dom.menuNodes.forEach((node) => { node.hidden = false; }); if (App.dom.bottomPaginator) App.dom.bottomPaginator.hidden = true;const mirrored=NativePaginatorMirror.render(App.dom.topPaginator,App.ui.paginatorBottom);App.ui.paginatorBottom.hidden=!mirrored;
       [...App.dom.grid.querySelectorAll('article.post-card[data-id]')].forEach((card) => { const post = App.catalog.get(String(card.dataset.id)); card.classList.remove('pmf-dimmed','pmf-hidden-card'); BadgeRenderer.apply(card, post);StatusBadgeRenderer.apply(card,post);SeenCardTreatment.apply(card,post); });
     },
     renderStatus() {
