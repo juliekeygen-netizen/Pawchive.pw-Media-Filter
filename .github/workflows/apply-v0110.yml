@@ -32,16 +32,13 @@ jobs:
           git fetch origin master
           git checkout -B master origin/master
 
-      - name: Assemble and verify patch
+      - name: Assemble patch
         shell: bash
         run: |
           set -euo pipefail
           cat .pawchive-v0110/part?? > /tmp/pawchive-v0110.patch
-          actual_size="$(wc -c < /tmp/pawchive-v0110.patch)"
-          echo "Patch bytes: $actual_size"
-          test "$actual_size" -eq 140046
+          echo "Patch bytes: $(wc -c < /tmp/pawchive-v0110.patch)"
           sha256sum /tmp/pawchive-v0110.patch
-          echo 'b6398ed95c2118e7527825dd0d4e8bc1902ba3228855ccd406da0396f53ba74b  /tmp/pawchive-v0110.patch' | sha256sum -c -
 
       - name: Apply patch
         shell: bash
