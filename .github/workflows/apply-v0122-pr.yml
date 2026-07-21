@@ -32,7 +32,15 @@ jobs:
           git checkout -B master origin/master
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "6afee31c44f223b8d7ad77fbe10cc92e17b0f098"
           grep -q '@version      0.12.1' pawchive-pw-media-filter.user.js
-          awk '/^\/Td6WFo/{capture=1} /^PATCH_B64$/{capture=0} capture{print}' .github/workflows/apply-v0122.yml > /tmp/pawchive-v0122.patch.xz.b64
+          awk '
+            /^[[:space:]]*\/Td6WFo/ { capture=1 }
+            capture {
+              line=$0
+              sub(/^[[:space:]]*/, "", line)
+              if (line == "PATCH_B64") exit
+              print line
+            }
+          ' .github/workflows/apply-v0122.yml > /tmp/pawchive-v0122.patch.xz.b64
           test "$(sha256sum /tmp/pawchive-v0122.patch.xz.b64 | awk '{print $1}')" = "291a1a039d23a0a019bee5dca0df76f18929b2575200c852bfc3d0c76db4a9c9"
           base64 -d /tmp/pawchive-v0122.patch.xz.b64 > /tmp/pawchive-v0122.patch.xz
           test "$(sha256sum /tmp/pawchive-v0122.patch.xz | awk '{print $1}')" = "8023de54eccf8c119df0a667ef470d7448021eb1b66ab13e9a2a60b6c2715b56"
