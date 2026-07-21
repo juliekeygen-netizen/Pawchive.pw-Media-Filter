@@ -1,18 +1,32 @@
-# Pawchive.pw Media Filter v0.11.6 specification
+# Pawchive.pw Media Filter v0.12.1 specification
+
+## v0.12.1 Popular lifecycle and maintenance-runner contracts
+
+- Popular native-control discovery must reject any candidate that is the native grid, contains the native grid, contains native post cards, or contains a paginator subtree. Period links may still be read from beside/inside a native paginator before that paginator is hidden.
+- A Popular mount is tied to both the Lifecycle route generation and an inner AbortController. Cache reads for period metadata, observations, posts, statuses, Favorites, and UI state must verify the current `pageKey` after every await. An obsolete mount may not append roots, hide native content, or overwrite the active period.
+- Native and Local mode buttons expose one explicit selected state immediately on mount. Native keeps Pawchive cards visible; Local hides only the captured native grid and renders the saved period snapshot.
+- The custom period panel uses Pawchive's discovered Previous/Next URLs whenever available. PMF must not infer calendar boundaries when a real native link exists.
+- Popular native pagination exposes First, Previous, numbered pages, Next, and Last and navigates through full period URLs preserving `date` and `period`.
+- Native `All posts` and `Sort: Popular` controls are disabled, muted, and struck through. Queue state is left-aligned. The primary action is Scan for no stored entries, Resume for a partial/working snapshot, and Update for a completed snapshot.
+- `?pmf_maintenance=watch-missing|resume-missing|retry-missing|start-missing` starts the corresponding missing-attachment operation after Settings and queue state are loaded.
+- `watch-missing` resumes outstanding work, retries retryable failures, and performs a bounded inventory check no more than once every five minutes after completion so newly added unknown posts can start another all-unknown pass.
+- The PowerShell runner must use the existing browser profile, launch a real minimized Chromium app window, disable background throttling/background mode, keep Windows awake unless disabled, and explain that a fully browser-free process cannot directly share Tampermonkey/IndexedDB state.
+- The untouched schema-5 known-host default migrates to include `iframely.net`; customized host lists are not modified.
+
 
 ## Scope
 
-The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. It augments Pawchive creator pages, post pages, and `/artists`. It stores normalized post metadata and user-controlled status locally and never downloads media files.
+The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. It augments Pawchive creator pages, post pages, `/artists`, and `/posts/popular`. It stores normalized post metadata and user-controlled status locally and never downloads media files.
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.11.6`
+- Userscript and `Config.version`: `0.12.1`
 - Settings: `pmf-settings-v5`
-- Settings schema: 5; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
+- Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
 - Post schema: 2
 - Creator-card summary schema: 5
-- IndexedDB: `pawchive-media-filter`, version 5
+- IndexedDB: `pawchive-media-filter`, version 6
 - Creator directory store: `creatorDirectory`, keyed by `creatorKey`
 - Creator state store: `creatorStates`, keyed by `creatorKey`
 - Post-status store: `postStatuses`, keyed by domain/service/creator/post with a `creatorKey` index
@@ -22,6 +36,20 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Missing-attachment checkpoint key: `pmf-missing-attachment-maintenance-v1`; payload schema 3
 - Creator-profile repair checkpoint key: `pmf-creator-profile-repair-v1`; payload schema 2
 - Favorite snapshots: `favoriteSnapshotEntries` and `favoriteSyncMeta`
+- Popular period stores: `popularPeriods` keyed by `periodKey`, `popularEntries` keyed by period plus post key, and `popularUiStates` keyed by `periodKey`
+- Popular queue session: `pmf-popular-queue-v1`
+
+## v0.12.0 Popular Posts contracts
+
+- `/posts/popular` and its dated `period=day|week|month` URLs are first-class routes. A period key is hostname + `popular` + period + canonical date; page offsets do not create separate local periods.
+- Native mode owns scanning and updating. Its filter and sort controls are visible but disabled as **All posts** and **Sort: Popular**. Pawchive's actual Day / Week / Month and previous / next URLs remain authoritative, and native page controls are mirrored through PMF's compact paginator.
+- Each scan walks every native result page for the selected period, captures rank and the displayed favorite count, and stores one period-entry observation per post. Shared post metadata remains in the normal `posts` store and is not duplicated per period.
+- Complete existing posts are reused. New or incomplete posts receive normal detail metadata through the shared request scheduler. Every successfully observed Popular card is marked known-no-missing at that observation time; later direct checks may supersede that evidence.
+- Update replaces the selected period's membership with the newly observed run, refreshes rank/favorite values, and removes stale period entries. Interrupted runs remain resumable through stored offsets and run IDs.
+- Popular jobs are keyed by period rather than creator, support multiple queued periods, persist through reload, and share the creator queue's maintenance slot/rate-limit scheduler.
+- Local mode uses the shared post filter/preset/status/card engines and a period-specific saved filter/page/mode state. Search and alternate sort modes are unavailable; ordering is displayed favorite count descending, then native rank.
+- Popular period stores participate in `.pmfbackup` streaming export/import, cross-host remapping, Merge/Replace, memory fallback, and clear-current/clear-all maintenance.
+- `iframely.net` is part of the fresh default known-host list. User-customized host lists are migrated without being overwritten.
 
 ## v0.11.6 import-dialog action contract
 
@@ -29,7 +57,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## v0.11.4 backup-integrity contracts
 
-- IndexedDB catalogue export uses one read-only transaction containing all eight catalogue stores. The exported store set is therefore one consistent snapshot even when normal scan/status work is active.
+- IndexedDB catalogue export uses one read-only transaction containing every catalogue store. The exported store set is therefore one consistent snapshot even when normal scan/status work is active.
 - Import preflights every selected group before writes. Format, selected groups, all catalogue stores, record key paths, duplicate store keys, and duplicate post/creator preset IDs must be valid before Merge or Replace starts.
 - A backup whose `sourceHost` is the other supported Pawchive hostname is remapped to the current hostname. The remap covers creator/post keys, directory/meta records, per-creator UI state, post/creator statuses, Favorite snapshot entries/meta, auxiliary Favorite-sync metadata, and Pawchive-owned URLs. Any collisions created by remapping a profile that already contains both host variants are consolidated using the newer record, with creator-directory field merging and post completeness as tie-breakers.
 - Replace clears every catalogue object store before writing the validated backup, including stores represented by empty arrays.

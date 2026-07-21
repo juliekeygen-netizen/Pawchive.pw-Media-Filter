@@ -11,9 +11,9 @@ const {
   CatalogueJobManager, NativeActionAlignment,
 } = api;
 
-assert.equal(Config.version, '0.11.6');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.6/);
-assert.equal(Config.databaseVersion, 5);
+assert.equal(Config.version, '0.12.1');
+assert.match(originalSource, /\/\/ @version\s+0\.12\.1/);
+assert.equal(Config.databaseVersion, 6);
 assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
 assert.match(originalSource, /createObjectStore\('creatorStates'/);
 
@@ -21,7 +21,7 @@ const migrated = Settings.normalize(Settings.migrate({
   settingsSchemaVersion: 2,
   creatorCardBadges: { enabled: false, types: { videos: false } },
 }));
-assert.equal(migrated.settingsSchemaVersion, 5);
+assert.equal(migrated.settingsSchemaVersion, 6);
 assert.equal(migrated.creatorCardBadgeCountMode, 'posts');
 assert.equal(migrated.creatorStatusBadgeSize, 'small');
 assert.equal(migrated.creatorStatusBadges.enabled, true);

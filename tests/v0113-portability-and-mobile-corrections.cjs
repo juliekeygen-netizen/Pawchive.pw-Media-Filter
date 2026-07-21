@@ -16,8 +16,8 @@ const {
 } = api;
 
 (async () => {
-assert.equal(Config.version, '0.11.6');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.6/);
+assert.equal(Config.version, '0.12.1');
+assert.match(originalSource, /\/\/ @version\s+0\.12\.1/);
 
 // Native directory pagination compacts to the same five-control shape used by
 // PMF-owned paginators on phones.
@@ -59,6 +59,8 @@ assert.deepEqual(JSON.parse(JSON.stringify(DataPortability.summary(backup))), {
   posts: 2,
   creators: 1,
   directory: 1,
+  popularPeriods: 0,
+  popularEntries: 0,
   hasSettings: true,
   postPresets: 1,
   creatorPresets: 1,
@@ -113,7 +115,7 @@ assert.match(originalSource, /name="importSettings"/);
 assert.match(originalSource, /name="importPresets"/);
 assert.match(originalSource, /name="importMode" value="merge"/);
 assert.match(originalSource, /name="importMode" value="replace"/);
-assert.match(originalSource, /Finish or stop the creator queue before importing a backup/);
+assert.match(originalSource, /Finish or stop the creator and Popular queues before importing a backup/);
 
 console.log('Pawchive Media Filter v0.11.3 portability and mobile correction tests passed.');
 })().catch((error) => {

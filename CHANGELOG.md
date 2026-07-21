@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.12.1
+
+- Repaired Popular Posts native ownership so PMF never hides an ancestor containing Pawchive's post grid; Native cards remain visible and only safe period controls/native paginators are replaced.
+- Added an explicit startup mode, locked Native **All posts** / **Sort: Popular** styling, left-aligned queue state, **Scan / Resume / Update** action labels, and the standard First / Previous / pages / Next / Last Popular paginator.
+- Rebuilt the custom Popular period header from Pawchive's real Previous / Day / Week / Month / Next URLs, including period links located beside the native paginator.
+- Added abort-linked Popular mounts, stale-load guards after every asynchronous cache read, debounced native rebinding, and refresh revisions to prevent rapid page, Back/Forward, and period navigation from installing an obsolete grid or flashing duplicate PMF generations.
+- Added a settings-schema-6 migration that appends `iframely.net` only to the untouched prior default known-host list while preserving genuinely customized host lists.
+- Added `tools/Start-PawchiveMetadataRunner.ps1` and userscript `pmf_maintenance` commands. The runner launches the user's existing Chrome/Edge profile in a minimized app window, disables background throttling, keeps Windows awake, resumes/retries checkpoints, and periodically discovers newly added unknown metadata.
+- Hardened Popular queue reorder persistence and queue removal pumping.
+- Added focused v0.12.1 lifecycle/runner coverage; 57 executable tests now pass.
+
+## 0.12.0
+
+- Added a dedicated `/posts/popular` controller with polished **Native** and **Local** modes for dated Day, Week, and Month Popular Posts periods.
+- Native mode preserves Pawchive period navigation and popularity order, mirrors native pagination, and queues resumable Scan / Update jobs without enabling local filters or alternate sorting.
+- Popular scans store complete reusable post metadata plus period-specific rank and displayed favorite counts, mark observed posts as known-no-missing, reuse complete global posts, and keep each period in its own local snapshot.
+- Local mode reuses the creator-page post filter, preset, status-filter, card, and paginator systems while keeping **Sort: Popular** locked to period favorite count and native rank.
+- Added a durable multi-period Popular queue, per-period UI state, IndexedDB schema 6 stores, clear-current / clear-all controls, and `.pmfbackup` Merge / Replace portability for Popular periods and observations.
+- Added `iframely.net` to the fresh default **Known media and download hosts** list.
+- Added focused v0.12.0 Popular Posts regression coverage; 56 executable tests now pass.
+
 ## 0.11.6
 
 - Removed both redundant Back controls from the Import backup view; the dialog now keeps only Cancel, Import backup, and the header close button.

@@ -14,8 +14,8 @@ const {
   CreatorCatalogueSummary,
 } = api;
 
-assert.equal(Config.version, '0.11.6');
-assert.match(originalSource, /\/\/ @version\s+0\.11\.6/);
+assert.equal(Config.version, '0.12.1');
+assert.match(originalSource, /\/\/ @version\s+0\.12\.1/);
 
 // The advanced sort follows the specified Images-first type order and remembers a safe default.
 assert.deepEqual(JSON.parse(JSON.stringify(CreatorSorter.mediaTypes)), ['images', 'videos', 'archives', 'projectFiles', 'externalLinks']);
@@ -189,7 +189,7 @@ assert.doesNotMatch(originalSource, /pmf-creator-filter-popover\{width:min\(370p
 assert.match(originalSource, /pmf-creator-filter-popover\{max-width:calc\(100vw - 16px\)/);
 assert.match(originalSource, /const openAbove=spaceBelow/);
 assert.doesNotMatch(
-  originalSource.slice(originalSource.indexOf('  const CreatorFilterUI = {'), originalSource.indexOf('\n\n  const AnchoredMenu = {')),
+  originalSource.slice(originalSource.indexOf('  const CreatorFilterUI = {'), originalSource.indexOf('  const AnchoredMenu = {', originalSource.indexOf('  const CreatorFilterUI = {'))),
   /fetch\s*\(/,
   'opening and applying Local catalogue filters must not issue Pawchive network requests',
 );

@@ -24,19 +24,19 @@ const { loadUserscript } = require('./test-helper.cjs');
     App,
   } = api;
 
-  assert.equal(Config.version, '0.11.6');
-  assert.match(originalSource, /\/\/ @version\s+0\.11\.6/);
-  assert.equal(Settings.value.settingsSchemaVersion, 5);
+  assert.equal(Config.version, '0.12.1');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.1/);
+  assert.equal(Settings.value.settingsSchemaVersion, 6);
 
   const expectedHosts = [
     'youtube.com', 'youtu.be', 'vimeo.com', 'mega.nz', 'drive.google.com',
     'dropbox.com', 'pixeldrain.com', 'pixeldrain.net', 'gofile.io',
-    'mediafire.com', 'streamable.com',
+    'mediafire.com', 'streamable.com', 'iframely.net',
   ];
   assert.deepEqual([...Settings.value.knownHosts], expectedHosts);
   assert.equal(Settings.value.knownHosts.includes('redgifs.com'), false);
 
-  const previousHosts = [...expectedHosts, 'redgifs.com'];
+  const previousHosts = expectedHosts.filter((host) => host !== 'iframely.net').concat('redgifs.com');
   const previousKeywords = [
     'PSD', 'Photoshop', 'PSB', 'CLIP', 'Clip Studio', 'CSP', 'SAI', 'Krita',
     'source file', 'project file', 'Blender', 'BLEND', 'Maya', 'C4D',
@@ -51,7 +51,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.ok(migratedDefaults.projectKeywords.includes('プロジェクトファイル'));
   assert.ok(migratedDefaults.projectKeywords.includes('项目文件'));
   assert.ok(migratedDefaults.projectKeywords.includes('專案檔案'));
-  assert.equal(migratedDefaults.settingsSchemaVersion, 5);
+  assert.equal(migratedDefaults.settingsSchemaVersion, 6);
   const migratedCommaJoinedDefaults = Settings.migrate({
     settingsSchemaVersion: 4,
     knownHosts: previousHosts,

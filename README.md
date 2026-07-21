@@ -1,12 +1,38 @@
 # Pawchive.pw Media Filter
 
+## v0.12.1 Popular lifecycle repair and external metadata runner
+
+The Popular Posts controller now starts in an explicit **Native** or **Local** mode and owns only the intended Pawchive elements. Native cards are never hidden through a broad navigation ancestor. The custom period panel follows Pawchive's real Previous / Day / Week / Month / Next destinations, while the Native paginator uses the same First / Previous / numbered pages / Next / Last contract as the rest of PMF. Native filter and sort controls remain visible but disabled as **All posts** and **Sort: Popular**.
+
+Popular mounting is abort-linked to the current route generation. Every asynchronous cache phase checks that the same period/page is still current before it can install UI. Native rebind work is debounced and revision-guarded, so rapid paginator use, Previous/Next period changes, and browser Back/Forward discard obsolete generations rather than leaving an empty or duplicate grid.
+
+### Run missing-attachment metadata outside your normal browser window
+
+`tools/Start-PawchiveMetadataRunner.ps1` launches Chrome or Edge with the same existing browser profile in a dedicated minimized app window. The browser engine must still run because Tampermonkey values and Pawchive's IndexedDB catalogue are browser-profile data, but your ordinary browser window can remain closed. The runner disables Chromium background throttling, keeps Windows awake, restarts after a full browser exit, resumes stopped checkpoints, retries retryable failures, and periodically checks for newly added unknown metadata.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\tools\Start-PawchiveMetadataRunner.ps1"
+```
+
+Close the selected browser before starting the default runner so it can safely use that profile. See [`tools/README.md`](tools/README.md) for browser/profile selection and one-shot modes.
+
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.11.6**
+Current version: **0.12.1**
 
 ## Installation
 
 [Install Pawchive.pw Media Filter](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+## v0.12.0 Popular Posts catalogue
+
+`/posts/popular` now has compact **Native** and **Local** modes for every dated Day, Week, and Month period. Native mode keeps Pawchive's own popularity order and period navigation, provides mirrored pagination, and queues Scan / Resume / Update work for the selected period. Multiple periods may wait in the Popular queue without replacing one another.
+
+A Popular scan stores metadata only—never media files. Existing complete posts are reused, new or incomplete posts receive their normal detail metadata, and every observed card is marked known-no-missing for that observation time. Period membership keeps its own rank and displayed favorite count, so one post can retain different popularity values in different day, week, or month snapshots.
+
+Local mode reuses the existing post-filter UI, saved presets, Favorite / Like / Seen filters, compact card settings, and 50-post paginator. Sorting remains locked to **Popular**, using the selected period's displayed favorite count and native rank. Popular period data, observations, and UI state are included in `.pmfbackup` Merge / Replace imports and have dedicated clear-current and clear-all actions under Data & performance.
+
+Fresh installs now include `iframely.net` in **Known media and download hosts**. Existing customized host lists are preserved.
 
 ## v0.11.6 import-dialog cleanup
 

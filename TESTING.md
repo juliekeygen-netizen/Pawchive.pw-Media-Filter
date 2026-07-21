@@ -1,4 +1,43 @@
-# Pawchive.pw Media Filter v0.11.6 testing
+# Pawchive.pw Media Filter v0.12.1 testing
+
+## v0.12.1 Popular lifecycle and metadata-runner matrix
+
+Automated validation:
+
+```text
+node --check pawchive-pw-media-filter.user.js
+57 executable .cjs tests
+```
+
+1. Open `/posts/popular` directly and hard-refresh. Exactly one of **Native** or **Local** must be selected immediately; there must be no unselected intermediate PMF mode left on screen.
+2. In Native mode, Pawchive's post cards must remain visible. The custom panel must show Previous / Day / Week / Month / Next when Pawchive provides those links. Native duplicate period/paginator controls may be hidden, but no ancestor containing the card grid may be hidden.
+3. Confirm Native controls read **All posts**, **Sort: Popular**, and **Scan** for an unscanned period. Filter and sort are gray, struck through, and non-interactive. Queue state is aligned on the left.
+4. Confirm both Popular paginators show First, Previous, numbered pages, Next, and Last. Test top and bottom controls on pages 1, 2, a middle page, and the last page.
+5. Rapidly click Next/Previous, change Day/Week/Month, use period Previous/Next, and spam browser Back/Forward. The final URL must own the only PMF root; no stale cards, duplicate grids, empty Native grid, or repeated full-page flashes may remain.
+6. Queue Scan, navigate to another period, queue another Scan, and use Back/Forward. Each period remains independently queued and the prior job is not replaced.
+7. Complete one disposable period scan and switch to Local. Saved cards appear, filters/presets/statuses work, and **Sort: Popular** remains locked. Switching Native ↔ Local never leaves both grids visible or neither grid visible.
+8. Open Default detection after upgrading an untouched host list. `iframely.net` appears. Repeat with a deliberately customized host list and confirm PMF does not append it automatically.
+9. Close Chrome/Edge completely, then run `powershell -ExecutionPolicy Bypass -File ".\tools\Start-PawchiveMetadataRunner.ps1"`. Confirm a minimized app window starts with the same catalogue/profile, Windows remains awake, and the missing-metadata checkpoint starts or resumes.
+10. Stop the checkpoint, close the maintenance app, and leave the watchdog running. Confirm it restarts after a full browser exit. Add new unknown Catalogue posts after a completed pass and confirm watch mode discovers them during its later inventory check.
+11. Test `-Mode resume-missing -Once`, `retry-missing -Once`, and `start-missing -Once`. Confirm the userscript accepts only the documented `pmf_maintenance` values.
+12. Browser-only limitations must be reported honestly: Node tests cannot prove real Pawchive DOM timing, actual Chrome/Edge profile behavior, HTTP 429 timing, or long-duration Android/desktop background execution.
+
+
+## v0.12.0 Popular Posts matrix
+
+Run `node tests/v0120-popular-posts.cjs`, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check` with CR-at-EOL enabled for the repository's CRLF files. The complete suite contains 56 executable tests.
+
+Live checks:
+
+1. Open `/posts/popular` in Day, Week, and Month views. Confirm the custom period box follows Pawchive's actual previous/next links and only **Native / Local** mode buttons are added.
+2. In Native mode, confirm **All posts** and **Sort: Popular** are disabled, native cards remain visible, mirrored pagination works at top and bottom, and no search/status-filter row appears.
+3. Queue two or more different periods. Confirm they remain distinct and execute sequentially; reload during a scan and verify Resume restores the interrupted period without replacing the other queued periods.
+4. Scan a full period. Confirm all native pages are visited, complete existing posts are reused, new/incomplete posts receive metadata, and the Local snapshot contains the expected rank and displayed favorite count.
+5. Open Local mode and test Videos, Images, Archives, Project files, External links, Custom extensions, Custom search rules, Published date, presets, and Favorite/Like/Seen filters. Sorting must stay locked to Popular.
+6. Update a previously scanned period after native ranks or favorite counts change. Confirm stale membership is removed and the local result refreshes without duplicating posts.
+7. Export a `.pmfbackup`, clear a disposable Popular period, and test Merge and Replace imports. Confirm period observations, normal post metadata, settings, and presets restore on both supported hostnames.
+8. Test desktop 1080p/1440p, Android portrait/landscape, Back/Forward, period changes, and BFCache navigation for stale native/local grids or refresh flashes.
+9. On a fresh settings profile, confirm `iframely.net` appears in Known media and download hosts; confirm an existing customized list is not reset.
 
 ## v0.11.6 import-dialog cleanup matrix
 
