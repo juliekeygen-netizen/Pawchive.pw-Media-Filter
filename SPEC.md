@@ -1,6 +1,6 @@
-# Pawchive.pw Media Filter v0.12.1 specification
+# Pawchive.pw Media Filter v0.12.2 specification
 
-## v0.12.1 Popular lifecycle and maintenance-runner contracts
+## v0.12.2 Popular lifecycle and maintenance-runner contracts
 
 - Popular native-control discovery must reject any candidate that is the native grid, contains the native grid, contains native post cards, or contains a paginator subtree. Period links may still be read from beside/inside a native paginator before that paginator is hidden.
 - A Popular mount is tied to both the Lifecycle route generation and an inner AbortController. Cache reads for period metadata, observations, posts, statuses, Favorites, and UI state must verify the current `pageKey` after every await. An obsolete mount may not append roots, hide native content, or overwrite the active period.
@@ -20,7 +20,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.12.1`
+- Userscript and `Config.version`: `0.12.2`
 - Settings: `pmf-settings-v5`
 - Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1

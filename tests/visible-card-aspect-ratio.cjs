@@ -6,7 +6,7 @@ const { loadUserscript, makeClassList } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config, CompactThumbnailRatio, CompactGridScale, App } = api;
 
-assert.equal(Config.version, '0.12.1');
+assert.equal(Config.version, '0.12.2');
 assert.equal(CompactThumbnailRatio.expectedHeight(320, 1), 320);
 assert.equal(CompactThumbnailRatio.expectedHeight(320, 4 / 3), 240);
 assert.equal(CompactThumbnailRatio.expectedHeight(320, 16 / 9), 180);

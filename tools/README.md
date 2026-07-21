@@ -7,7 +7,7 @@ A completely browser-free runner cannot safely operate on the existing catalogue
 ## Requirements
 
 - Windows 10 or 11
-- Chrome or Microsoft Edge
+- Chrome, Microsoft Edge, or Brave
 - Tampermonkey and Pawchive Media Filter installed in the selected browser profile
 - The same browser profile that contains your existing Pawchive local catalogue
 
@@ -34,6 +34,12 @@ The default mode is `watch-missing`. It:
 Press `Ctrl+C` in PowerShell to stop the watchdog.
 
 ## Browser and profile examples
+
+Use Brave:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\tools\Start-PawchiveMetadataRunner.ps1" -Browser Brave -ProfileDirectory "Profile 1"
+```
 
 Use Edge:
 

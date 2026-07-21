@@ -15,8 +15,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Cache,
   } = api;
 
-  assert.equal(Config.version, '0.12.1');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.1/);
+  assert.equal(Config.version, '0.12.2');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.2/);
 
   // Aggregate-affecting settings may invalidate a fingerprint, but a structurally
   // compatible summary must remain renderable until its replacement is committed.

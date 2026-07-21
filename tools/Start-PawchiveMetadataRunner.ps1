@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Auto', 'Chrome', 'Edge')]
+    [ValidateSet('Auto', 'Chrome', 'Edge', 'Brave')]
     [string]$Browser = 'Auto',
 
     [ValidateSet('watch-missing', 'resume-missing', 'retry-missing', 'start-missing')]
@@ -36,7 +36,7 @@ public static class PmfRunnerNative {
 }
 '@
 
-$ES_CONTINUOUS       = [uint32]0x80000000
+$ES_CONTINUOUS       = [Convert]::ToUInt32('80000000', 16)
 $ES_SYSTEM_REQUIRED  = [uint32]0x00000001
 $ES_AWAYMODE_REQUIRED = [uint32]0x00000040
 $SW_MINIMIZE = 6
@@ -69,9 +69,17 @@ function Resolve-Browser {
         )
     }
 
+    if ($Browser -in @('Auto', 'Brave')) {
+        $candidates += @(
+            @{ Name = 'Brave'; Process = 'brave'; Executable = "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe"; Data = "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data" },
+            @{ Name = 'Brave'; Process = 'brave'; Executable = "${env:ProgramFiles(x86)}\BraveSoftware\Brave-Browser\Application\brave.exe"; Data = "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data" },
+            @{ Name = 'Brave'; Process = 'brave'; Executable = "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe"; Data = "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\User Data" }
+        )
+    }
+
     $match = $candidates | Where-Object { Test-Path -LiteralPath $_.Executable } | Select-Object -First 1
     if (-not $match) {
-        throw 'Chrome or Microsoft Edge was not found. Pass -Browser Chrome or -Browser Edge after installing one.'
+        throw 'Chrome, Microsoft Edge, or Brave was not found. Pass -Browser Chrome, -Browser Edge, or -Browser Brave after installing one.'
     }
 
     if ($UserDataDirectory) {

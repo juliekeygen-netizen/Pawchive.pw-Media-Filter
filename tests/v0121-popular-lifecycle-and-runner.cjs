@@ -20,8 +20,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     MaintenanceCommandRunner,
   } = api;
 
-  assert.equal(Config.version, '0.12.1');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.1/);
+  assert.equal(Config.version, '0.12.2');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.2/);
   assert.equal(Settings.schema.version, 6);
 
   const oldDefaultHosts = [
@@ -117,7 +117,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(readme, /browser-origin IndexedDB/);
   assert.match(readme, /watch-missing/);
 
-  console.log('Pawchive Media Filter v0.12.1 Popular lifecycle and external metadata-runner tests passed.');
+  console.log('Pawchive Media Filter v0.12.2 Popular lifecycle and external metadata-runner tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

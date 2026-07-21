@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.12.1
+// @version      0.12.2
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.12.1',
+    version: '0.12.2',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -3416,11 +3416,21 @@
       const parent=link?.parentElement;
       return PopularDOM.isSafeNativeControlGroup(parent,grid)?parent:null;
     },
+    nativeCardCandidates(root=document){
+      if(!root?.querySelectorAll)return[];
+      const candidates=[...root.querySelectorAll('article.post-card,.post-card')].filter((node)=>!PopularDOM.isOwned(node));
+      return candidates.filter((card)=>Boolean(card.dataset?.id||(card.dataset?.service&&card.dataset?.user)||card.querySelector?.('a[href*="/post/"]')));
+    },
     find(page={}){
-      const main=document.querySelector('main#main,main.main,#main');
       const grids=[...document.querySelectorAll('.card-list__items')].filter((node)=>!PopularDOM.isOwned(node));
-      const grid=grids.find((node)=>node.querySelector('article.post-card[data-id],article.post-card[data-service][data-user]'))||document.querySelector('article.post-card:not([data-pmf-owned="true"])')?.parentElement||null;
-      const nativeCards=grid?[...grid.querySelectorAll('article.post-card[data-id],article.post-card[data-service][data-user]')].filter((node)=>!PopularDOM.isOwned(node)):[];
+      const grid=grids.find((node)=>PopularDOM.nativeCardCandidates(node).length)
+        ||PopularDOM.nativeCardCandidates(document)[0]?.parentElement
+        ||null;
+      const main=grid?.closest?.('main#main,main.main,#main,main,[role="main"]')
+        ||document.querySelector('main#main,main.main,#main,main,[role="main"]')
+        ||grid?.parentElement
+        ||null;
+      const nativeCards=grid?PopularDOM.nativeCardCandidates(grid):[];
       const paginators=[...document.querySelectorAll('.paginator,[id^="paginator"]')].filter((node)=>!PopularDOM.isOwned(node)&&node.querySelector('a,button,li'));
       const heading=[...document.querySelectorAll('h1,h2,h3')].find((node)=>/popular\s+posts/i.test(node.textContent||''))||null;
       const links=[...document.querySelectorAll('a[href*="/posts/popular"]')].filter((node)=>!PopularDOM.isOwned(node));
@@ -7732,7 +7742,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     mounted(){return Boolean(PopularPageController.root?.isConnected&&PopularPageController.context?.periodKey);},
     health(page=Route.parsePage(location.href)){return page.kind==='popular'&&PopularPageController.mounted()&&PopularPageController.context?.pageKey===page.pageKey&&App.pageKind==='popular'&&App.ui?.root?.isConnected&&App.dom?.grid?.isConnected;},
     assertMountCurrent(context,signal){const current=Route.parsePage(location.href);if(signal?.aborted||current.kind!=='popular'||current.pageKey!==context?.pageKey)throw new DOMException('Aborted','AbortError');},
-    async waitForDOM(page,{signal}={}){for(let attempt=0;attempt<120;attempt+=1){if(signal?.aborted)throw new DOMException('Aborted','AbortError');const found=PopularDOM.find(page);if(found?.grid&&found.nativeCards.length){const context=PopularPeriod.fromPage(page,found);if(context.periodKey)return{found,context};}await Util.sleep(50,signal);}throw new Error('Popular Posts page did not become ready.');},
+    async waitForDOM(page,{signal}={}){for(let attempt=0;attempt<160;attempt+=1){if(signal?.aborted)throw new DOMException('Aborted','AbortError');const found=PopularDOM.find(page);if(found?.grid&&found.nativeCards.length){const context=PopularPeriod.fromPage(page,found);if(context.periodKey)return{found,context};}await Util.sleep(50,signal);}throw new Error('Popular Posts page did not become ready: native post cards were not detected.');},
     saveNative(found){return{grid:{node:found.grid,hidden:found.grid.hidden,display:found.grid.style.getPropertyValue('display'),priority:found.grid.style.getPropertyPriority('display'),aria:found.grid.getAttribute('aria-hidden')},paginators:found.paginators.map((node)=>({node,hidden:node.hidden,display:node.style.getPropertyValue('display'),priority:node.style.getPropertyPriority('display'),aria:node.getAttribute('aria-hidden')})),navs:(found.navContainers||[]).filter((node)=>PopularDOM.isSafeNativeControlGroup(node,found.grid)).map((node)=>({node,hidden:node.hidden,display:node.style.getPropertyValue('display'),priority:node.style.getPropertyPriority('display'),aria:node.getAttribute('aria-hidden')}))};},
     restoreNode(state){if(!state?.node?.isConnected)return;state.node.hidden=state.hidden;if(state.display)state.node.style.setProperty('display',state.display,state.priority||'');else state.node.style.removeProperty('display');if(state.aria==null)state.node.removeAttribute('aria-hidden');else state.node.setAttribute('aria-hidden',state.aria);delete state.node.dataset.pmfPopularHidden;},
     restoreNative(){PopularPageController.restoreNode(PopularPageController.nativeSnapshot?.grid);for(const item of PopularPageController.nativeSnapshot?.paginators||[])PopularPageController.restoreNode(item);for(const item of PopularPageController.nativeSnapshot?.navs||[])PopularPageController.restoreNode(item);},

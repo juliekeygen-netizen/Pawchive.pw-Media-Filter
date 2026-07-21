@@ -1,6 +1,6 @@
 # Pawchive.pw Media Filter
 
-## v0.12.1 Popular lifecycle repair and external metadata runner
+## v0.12.2 Popular lifecycle repair and external metadata runner
 
 The Popular Posts controller now starts in an explicit **Native** or **Local** mode and owns only the intended Pawchive elements. Native cards are never hidden through a broad navigation ancestor. The custom period panel follows Pawchive's real Previous / Day / Week / Month / Next destinations, while the Native paginator uses the same First / Previous / numbered pages / Next / Last contract as the rest of PMF. Native filter and sort controls remain visible but disabled as **All posts** and **Sort: Popular**.
 
@@ -18,7 +18,7 @@ Close the selected browser before starting the default runner so it can safely u
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.12.1**
+Current version: **0.12.2**
 
 ## Installation
 

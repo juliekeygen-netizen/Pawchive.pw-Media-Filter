@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.2
+
+- Fixed Popular Posts bootstrap on Pawchive layouts whose content uses a plain `<main>` element or post cards without `data-id` attributes; Native/Local UI detection now also recognizes generic `.post-card` elements that contain real `/post/` links.
+- Increased the Popular DOM readiness window and improved its failure diagnostic so route retries do not silently look like an inactive userscript.
+- Fixed the PowerShell runner startup crash by constructing the `0x80000000` execution-state flag as an unsigned value instead of converting a negative signed literal.
+- Added Brave browser support, including automatic executable/profile discovery and the explicit `-Browser Brave` option.
+- Added focused v0.12.2 bootstrap and runner regression coverage; 58 executable tests now pass.
+
 ## 0.12.1
 
 - Repaired Popular Posts native ownership so PMF never hides an ancestor containing Pawchive's post grid; Native cards remain visible and only safe period controls/native paginators are replaced.

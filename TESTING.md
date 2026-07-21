@@ -1,6 +1,6 @@
-# Pawchive.pw Media Filter v0.12.1 testing
+# Pawchive.pw Media Filter v0.12.2 testing
 
-## v0.12.1 Popular lifecycle and metadata-runner matrix
+## v0.12.2 Popular lifecycle and metadata-runner matrix
 
 Automated validation:
 
