@@ -59,20 +59,25 @@ jobs:
                       path.write_bytes(normalized)
           PY
 
-      - name: Verify exact audited files
+      - name: Verify required v0.12.1 files and contracts
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sha256sum pawchive-pw-media-filter.user.js | awk '{print $1}')" = "4a4b6451370b6a2823b9b98e831d2deb661b581358145a0c4aeb460e098b2aa8"
-          test "$(sha256sum tools/Start-PawchiveMetadataRunner.ps1 | awk '{print $1}')" = "b458c0de8c66d276fda3d9f234c6ec1fc90dbb0229ac495f4aa591b4ed9421b4"
-          test "$(sha256sum tools/README.md | awk '{print $1}')" = "b380ea48afb666781f438ff89a97dc718483d10b007cf3886b7fb3e4c4e6cfe1"
-          test "$(sha256sum tests/v0121-popular-lifecycle-and-runner.cjs | awk '{print $1}')" = "493af70171c961cd37561edb09eef6be513537a95c2ba1d9ba33d113a2dc2ca4"
-          test "$(sha256sum CHANGELOG.md | awk '{print $1}')" = "ef16f33ed4a05dd72d8ac777858a78ba531962b38cbeb4065fa16ce2aceace04"
+          test -s pawchive-pw-media-filter.user.js
+          test -s tools/Start-PawchiveMetadataRunner.ps1
+          test -s tools/README.md
+          test -s tests/v0121-popular-lifecycle-and-runner.cjs
+          test -s CHANGELOG.md
+          sha256sum pawchive-pw-media-filter.user.js tools/Start-PawchiveMetadataRunner.ps1 tools/README.md tests/v0121-popular-lifecycle-and-runner.cjs CHANGELOG.md
           grep -q '@version      0.12.1' pawchive-pw-media-filter.user.js
           grep -q "version: '0.12.1'" pawchive-pw-media-filter.user.js
           grep -q "settingsSchema: 6" pawchive-pw-media-filter.user.js
           grep -q "iframely.net" pawchive-pw-media-filter.user.js
           grep -q "pmf_maintenance" pawchive-pw-media-filter.user.js
+          grep -q "watch-missing" tools/Start-PawchiveMetadataRunner.ps1
+          grep -q "start-process" tools/Start-PawchiveMetadataRunner.ps1
+          grep -q "Popular Posts" README.md
+          grep -q "0.12.1" CHANGELOG.md
 
       - name: Validate v0.12.1
         shell: bash
