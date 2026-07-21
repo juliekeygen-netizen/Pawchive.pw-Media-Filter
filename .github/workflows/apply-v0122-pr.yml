@@ -1,0 +1,73 @@
+name: Trigger Pawchive v0.12.2
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0122/pr-trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0122-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply tested v0.12.2 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          git checkout -B master origin/master
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "6afee31c44f223b8d7ad77fbe10cc92e17b0f098"
+          grep -q '@version      0.12.1' pawchive-pw-media-filter.user.js
+          awk '/^\/Td6WFo/{capture=1} /^PATCH_B64$/{capture=0} capture{print}' .github/workflows/apply-v0122.yml > /tmp/pawchive-v0122.patch.xz.b64
+          test "$(sha256sum /tmp/pawchive-v0122.patch.xz.b64 | awk '{print $1}')" = "291a1a039d23a0a019bee5dca0df76f18929b2575200c852bfc3d0c76db4a9c9"
+          base64 -d /tmp/pawchive-v0122.patch.xz.b64 > /tmp/pawchive-v0122.patch.xz
+          test "$(sha256sum /tmp/pawchive-v0122.patch.xz | awk '{print $1}')" = "8023de54eccf8c119df0a667ef470d7448021eb1b66ab13e9a2a60b6c2715b56"
+          xz -dc /tmp/pawchive-v0122.patch.xz > /tmp/pawchive-v0122.patch
+          test "$(sha256sum /tmp/pawchive-v0122.patch | awk '{print $1}')" = "bb72cc4d2a5875071ddbdebaa3a63d99517c2d60e0b5971d3b9286e461b4263b"
+          git apply --check /tmp/pawchive-v0122.patch
+          git apply /tmp/pawchive-v0122.patch
+
+      - name: Validate v0.12.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 58
+          git diff --check
+          grep -q '@version      0.12.2' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.12.2'" pawchive-pw-media-filter.user.js
+          grep -q "ValidateSet('Auto', 'Chrome', 'Edge', 'Brave')" tools/Start-PawchiveMetadataRunner.ps1
+          grep -q "ToUInt32('80000000', 16)" tools/Start-PawchiveMetadataRunner.ps1
+          grep -q 'main,\[role="main"\]' pawchive-pw-media-filter.user.js
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .github .pawchive-v0122
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.12.2 Popular bootstrap and Brave runner'
+          git push origin HEAD:master
