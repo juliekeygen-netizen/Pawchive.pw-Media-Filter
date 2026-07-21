@@ -44,8 +44,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c6a808fd6accffcaa54f243f34b3035999feb5b4"
-          git apply --check /tmp/pawchive-v0121.patch
-          git apply /tmp/pawchive-v0121.patch
+          git apply --ignore-space-change --ignore-whitespace --check /tmp/pawchive-v0121.patch
+          git apply --ignore-space-change --ignore-whitespace /tmp/pawchive-v0121.patch
 
       - name: Verify exact audited files
         shell: bash
