@@ -71,11 +71,11 @@ jobs:
           sha256sum pawchive-pw-media-filter.user.js tools/Start-PawchiveMetadataRunner.ps1 tools/README.md tests/v0121-popular-lifecycle-and-runner.cjs CHANGELOG.md
           grep -q '@version      0.12.1' pawchive-pw-media-filter.user.js
           grep -q "version: '0.12.1'" pawchive-pw-media-filter.user.js
-          grep -q "settingsSchema: 6" pawchive-pw-media-filter.user.js
+          grep -q "settingsSchemaVersion: 6" pawchive-pw-media-filter.user.js
           grep -q "iframely.net" pawchive-pw-media-filter.user.js
           grep -q "pmf_maintenance" pawchive-pw-media-filter.user.js
           grep -q "watch-missing" tools/Start-PawchiveMetadataRunner.ps1
-          grep -q "start-process" tools/Start-PawchiveMetadataRunner.ps1
+          grep -q "Start-Process" tools/Start-PawchiveMetadataRunner.ps1
           grep -q "Popular Posts" README.md
           grep -q "0.12.1" CHANGELOG.md
 
