@@ -39,12 +39,11 @@ jobs:
           xz -dc /tmp/pawchive-v0121.patch.xz > /tmp/pawchive-v0121.patch
           test "$(sha256sum /tmp/pawchive-v0121.patch | awk '{print $1}')" = "5564428b4b9786138c48a9a4106b28cd6f211c7a9d260c27a1babf90258f7325"
 
-      - name: Rebuild from production v0.11.6
+      - name: Apply over current production tree
         shell: bash
         run: |
           set -euo pipefail
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c6a808fd6accffcaa54f243f34b3035999feb5b4"
-          git read-tree --reset -u 83ea73ad6219d039fa12fdec9eaa90f5a701fb03
           git apply --check /tmp/pawchive-v0121.patch
           git apply /tmp/pawchive-v0121.patch
 
@@ -82,6 +81,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          rm -rf .github .pawchive-v0121 .pawchive-v0121-new
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
