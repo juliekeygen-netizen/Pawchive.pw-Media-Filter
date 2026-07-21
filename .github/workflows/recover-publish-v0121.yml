@@ -5,13 +5,13 @@ on:
     branches:
       - master
     paths:
-      - '.pawchive-v0121/recover-trigger'
+      - '.pawchive-v0121-new/release-trigger'
 
 permissions:
   contents: write
 
 concurrency:
-  group: pawchive-v0121-recovery-publication
+  group: pawchive-v0121-release-publication
   cancel-in-progress: false
 
 jobs:
@@ -24,44 +24,22 @@ jobs:
           ref: master
           fetch-depth: 0
 
-      - name: Recover staged v0.12.1 patch
+      - name: Recover exact audited v0.12.1 patch
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin master "$GITHUB_HEAD_REF"
-          python - "$GITHUB_HEAD_REF" <<'PY'
-          import base64, gzip, itertools, pathlib, subprocess, sys
-          branch = sys.argv[1]
-          parts = [
-              subprocess.check_output(['git', 'show', f'origin/{branch}:.pawchive-v0121/part{i:02d}'])
-              for i in range(4)
-          ]
-          alphabet = b'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-          matches = []
-          for placement1, placement2 in itertools.product(('start', 'end'), repeat=2):
-              for a, b in itertools.product(alphabet, repeat=2):
-                  p1 = (bytes((a,)) + parts[1]) if placement1 == 'start' else (parts[1] + bytes((a,)))
-                  p2 = (bytes((b,)) + parts[2]) if placement2 == 'start' else (parts[2] + bytes((b,)))
-                  encoded = parts[0] + p1 + p2 + parts[3]
-                  try:
-                      compressed = base64.b64decode(encoded, validate=True)
-                      patch = gzip.decompress(compressed)
-                  except Exception:
-                      continue
-                  if patch.startswith(b'diff --git ') and b'0.12.1' in patch:
-                      matches.append((placement1, placement2, a, b, patch))
-          unique = {}
-          for item in matches:
-              unique[item[4]] = item
-          matches = list(unique.values())
-          if len(matches) != 1:
-              raise SystemExit(f'Expected exactly one recoverable patch, found {len(matches)}')
-          placement1, placement2, a, b, patch = matches[0]
-          pathlib.Path('/tmp/pawchive-v0121.patch').write_bytes(patch)
-          print(f'Recovered patch: part01 {placement1}={chr(a)!r}, part02 {placement2}={chr(b)!r}; bytes={len(patch)}')
-          PY
+          : > /tmp/pawchive-v0121.patch.xz.b64
+          for i in $(seq -w 0 12); do
+            git show "origin/$GITHUB_HEAD_REF:.pawchive-v0121-new/part${i}" >> /tmp/pawchive-v0121.patch.xz.b64
+          done
+          test "$(sha256sum /tmp/pawchive-v0121.patch.xz.b64 | awk '{print $1}')" = "bffefabd21e0efcdcbdcb3eb324fb7fd80866e281632ec11d547bd7ecb631bfe"
+          base64 -d /tmp/pawchive-v0121.patch.xz.b64 > /tmp/pawchive-v0121.patch.xz
+          test "$(sha256sum /tmp/pawchive-v0121.patch.xz | awk '{print $1}')" = "dcc2d74d155d44387ebfc64c3942ac880b936d8d3db4a9aef4796098e72c746f"
+          xz -dc /tmp/pawchive-v0121.patch.xz > /tmp/pawchive-v0121.patch
+          test "$(sha256sum /tmp/pawchive-v0121.patch | awk '{print $1}')" = "5564428b4b9786138c48a9a4106b28cd6f211c7a9d260c27a1babf90258f7325"
 
-      - name: Rebuild audited tree from production v0.11.6
+      - name: Rebuild from production v0.11.6
         shell: bash
         run: |
           set -euo pipefail
@@ -69,19 +47,6 @@ jobs:
           git read-tree --reset -u 83ea73ad6219d039fa12fdec9eaa90f5a701fb03
           git apply --check /tmp/pawchive-v0121.patch
           git apply /tmp/pawchive-v0121.patch
-          python - <<'PY'
-          from pathlib import Path
-          root = Path('.')
-          text_suffixes = {'.md', '.js', '.cjs', '.ps1', '.txt', '.json', '.yml', '.yaml'}
-          for path in root.rglob('*'):
-              if not path.is_file() or '.git' in path.parts:
-                  continue
-              if path.name == '.gitignore' or path.suffix.lower() in text_suffixes:
-                  data = path.read_bytes()
-                  normalized = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
-                  if normalized != data:
-                      path.write_bytes(normalized)
-          PY
 
       - name: Verify exact audited files
         shell: bash
@@ -91,6 +56,7 @@ jobs:
           test "$(sha256sum tools/Start-PawchiveMetadataRunner.ps1 | awk '{print $1}')" = "b458c0de8c66d276fda3d9f234c6ec1fc90dbb0229ac495f4aa591b4ed9421b4"
           test "$(sha256sum tools/README.md | awk '{print $1}')" = "b380ea48afb666781f438ff89a97dc718483d10b007cf3886b7fb3e4c4e6cfe1"
           test "$(sha256sum tests/v0121-popular-lifecycle-and-runner.cjs | awk '{print $1}')" = "493af70171c961cd37561edb09eef6be513537a95c2ba1d9ba33d113a2dc2ca4"
+          test "$(sha256sum CHANGELOG.md | awk '{print $1}')" = "ef16f33ed4a05dd72d8ac777858a78ba531962b38cbeb4065fa16ce2aceace04"
           grep -q '@version      0.12.1' pawchive-pw-media-filter.user.js
           grep -q "version: '0.12.1'" pawchive-pw-media-filter.user.js
           grep -q "settingsSchema: 6" pawchive-pw-media-filter.user.js
@@ -110,7 +76,7 @@ jobs:
           done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
           echo "Executable tests: $test_count"
           test "$test_count" -eq 57
-          git -c core.whitespace=cr-at-eol diff --check
+          git diff --check
 
       - name: Publish directly to master
         shell: bash
