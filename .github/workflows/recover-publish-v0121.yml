@@ -46,6 +46,18 @@ jobs:
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c6a808fd6accffcaa54f243f34b3035999feb5b4"
           git apply --ignore-space-change --ignore-whitespace --check /tmp/pawchive-v0121.patch
           git apply --ignore-space-change --ignore-whitespace /tmp/pawchive-v0121.patch
+          python - <<'PY'
+          from pathlib import Path
+          suffixes = {'.md', '.js', '.cjs', '.ps1', '.txt', '.json', '.yml', '.yaml'}
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or '.git' in path.parts:
+                  continue
+              if path.name == '.gitignore' or path.suffix.lower() in suffixes:
+                  data = path.read_bytes()
+                  normalized = data.replace(b'\r\n', b'\n').replace(b'\r', b'\n')
+                  if normalized != data:
+                      path.write_bytes(normalized)
+          PY
 
       - name: Verify exact audited files
         shell: bash
