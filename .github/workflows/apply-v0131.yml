@@ -1,0 +1,67 @@
+name: Apply Pawchive v0.13.1
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0131/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0131-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Apply v0.13.1 paginator fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "5089c1ad2894502a5f528843d5fe47e4c452ad8a"
+          cat .pawchive-v0131/part00 .pawchive-v0131/part01 > /tmp/apply-v0131.py.b64
+          base64 -d /tmp/apply-v0131.py.b64 > /tmp/apply-v0131.py
+          python /tmp/apply-v0131.py .
+
+      - name: Validate v0.13.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 66
+          git diff --check
+          grep -q '@version      0.13.1' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.13.1'" pawchive-pw-media-filter.user.js
+          grep -q 'maxPageButtons:10' pawchive-pw-media-filter.user.js
+          grep -q 'a\[href\],a\[data-value\],button,li' pawchive-pw-media-filter.user.js
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .pawchive-v0131
+          rm -f .github/workflows/apply-v0131.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.13.1 paginator controls and symbols'
+          git push origin HEAD:master
