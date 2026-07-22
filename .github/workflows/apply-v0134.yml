@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .pawchive-v0134/part00 .pawchive-v0134/part01 > /tmp/pawchive-v0134.patch.xz.b64
+          cat .pawchive-v0134/part00 .pawchive-v0134/part01 .pawchive-v0134/part02 .pawchive-v0134/part03 .pawchive-v0134/part04 > /tmp/pawchive-v0134.patch.xz.b64
           test "$(sha256sum /tmp/pawchive-v0134.patch.xz.b64 | awk '{print $1}')" = "8d252d5e1c90c9c3dadff856901cd63d2869460b4d714a5dba4c878000a7a5c5"
           base64 -d /tmp/pawchive-v0134.patch.xz.b64 > /tmp/pawchive-v0134.patch.xz
           test "$(sha256sum /tmp/pawchive-v0134.patch.xz | awk '{print $1}')" = "c3649ffaeda8deb22cedb0ee31790f460b3bdeb809d2a4ce2df6c5fb6d1e8dea"
