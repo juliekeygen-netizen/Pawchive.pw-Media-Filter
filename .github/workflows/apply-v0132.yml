@@ -27,17 +27,19 @@ jobs:
       - name: Recover and apply v0.13.2 patch
         shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "353e77f47fa746355ee506b73882f57cc3c68ed2"
           grep -q '@version      0.13.1' pawchive-pw-media-filter.user.js
           cat .pawchive-v0132/part00 .pawchive-v0132/part01 .pawchive-v0132/part02 .pawchive-v0132/part03 .pawchive-v0132/part04 .pawchive-v0132/part05 > /tmp/pawchive-v0132.patch.xz.b64
+          sha256sum /tmp/pawchive-v0132.patch.xz.b64
           test "$(sha256sum /tmp/pawchive-v0132.patch.xz.b64 | awk '{print $1}')" = "da9b92a1ce2c98238002b9e7d7ac5893f0d1f71c63d92ed3cfd25c473fc07ec7"
           base64 -d /tmp/pawchive-v0132.patch.xz.b64 > /tmp/pawchive-v0132.patch.xz
+          sha256sum /tmp/pawchive-v0132.patch.xz
           test "$(sha256sum /tmp/pawchive-v0132.patch.xz | awk '{print $1}')" = "c156dc9cdabfaa99da7df830bca2fcedb4fe3d3bbe392fd14232568dd7cf5a04"
           xz -dc /tmp/pawchive-v0132.patch.xz > /tmp/pawchive-v0132.patch
+          sha256sum /tmp/pawchive-v0132.patch
           test "$(sha256sum /tmp/pawchive-v0132.patch | awk '{print $1}')" = "0b58e41328ea97f7a04ee7befc0f4ef6f117c0f2a95e72c085b1540bec0e3df0"
-          git apply --check /tmp/pawchive-v0132.patch
-          git apply /tmp/pawchive-v0132.patch
+          git apply --3way /tmp/pawchive-v0132.patch
 
       - name: Validate v0.13.2
         shell: bash
