@@ -1,0 +1,79 @@
+name: Apply Pawchive v0.13.4
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0134/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0134-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out publication branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Recover validated patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .pawchive-v0134/part00 .pawchive-v0134/part01 > /tmp/pawchive-v0134.patch.xz.b64
+          test "$(sha256sum /tmp/pawchive-v0134.patch.xz.b64 | awk '{print $1}')" = "8d252d5e1c90c9c3dadff856901cd63d2869460b4d714a5dba4c878000a7a5c5"
+          base64 -d /tmp/pawchive-v0134.patch.xz.b64 > /tmp/pawchive-v0134.patch.xz
+          test "$(sha256sum /tmp/pawchive-v0134.patch.xz | awk '{print $1}')" = "c3649ffaeda8deb22cedb0ee31790f460b3bdeb809d2a4ce2df6c5fb6d1e8dea"
+          xz -dc /tmp/pawchive-v0134.patch.xz > /tmp/pawchive-v0134.patch
+          test "$(sha256sum /tmp/pawchive-v0134.patch | awk '{print $1}')" = "a4780ea0824ba398f713e51c390b98b2ddf68e922436887b889f42fe98b5486f"
+
+      - name: Apply to current master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          git checkout -B pawchive-v0134-release origin/master
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c671737fb314af4e13dd929656119b870646ed15"
+          test "$(git hash-object README.md)" = "be6dedfef2f317d33b53abcba03bf55119cc46b1"
+          test "$(git hash-object CHANGELOG.md)" = "e4f3e0e7c2178516b999357ecc8f46308a779837"
+          git apply --check /tmp/pawchive-v0134.patch
+          git apply /tmp/pawchive-v0134.patch
+
+      - name: Validate v0.13.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 69
+          git diff --check
+          grep -q '@version      0.13.4' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.13.4'" pawchive-pw-media-filter.user.js
+          grep -q 'const PopularAggregate' pawchive-pw-media-filter.user.js
+          grep -q '>All Scans</button>' pawchive-pw-media-filter.user.js
+          grep -q 'highest observed displayed favorite count' README.md
+          grep -q 'All Scans Popular mode tests passed' tests/v0134-popular-all-scans-mode.cjs
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add v0.13.4 All Scans Popular mode'
+          git push origin HEAD:master
