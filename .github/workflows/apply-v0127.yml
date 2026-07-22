@@ -40,30 +40,41 @@ jobs:
           git apply /tmp/pawchive-v0127.patch
 
       - name: Validate v0.12.7
+        id: validate
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          echo 'Checking userscript syntax'
+          set -o pipefail
+          exec > >(tee /tmp/pmf-validation.log) 2>&1
+          set -euxo pipefail
           node --check pawchive-pw-media-filter.user.js
           test_count=0
           while IFS= read -r test_file; do
-            if ! node "$test_file" >/tmp/pmf-test.log 2>&1; then
-              echo "FAILED: $test_file"
-              cat /tmp/pmf-test.log
-              exit 1
-            fi
+            echo "RUNNING: $test_file"
+            node "$test_file"
             test_count=$((test_count + 1))
           done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
           echo "Executable tests: $test_count"
           test "$test_count" -eq 62
-          echo 'Checking patch whitespace'
           git diff --check
-          echo 'Checking release markers'
           grep -q '@version      0.12.7' pawchive-pw-media-filter.user.js
           grep -q "version: '0.12.7'" pawchive-pw-media-filter.user.js
           grep -q 'const PopularQueuePanel' pawchive-pw-media-filter.user.js
           grep -q 'v0.12.7 Popular queue, cards, paginator, and dated-mount tests passed' tests/v0127-popular-queue-cards-and-dated-mount.cjs
           echo 'v0.12.7 validation complete'
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0127-validation-report
+          path: /tmp/pmf-validation.log
+          if-no-files-found: error
+
+      - name: Enforce validation result
+        if: steps.validate.outcome != 'success'
+        shell: bash
+        run: exit 1
 
       - name: Publish directly to master
         shell: bash
