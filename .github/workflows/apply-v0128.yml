@@ -56,7 +56,7 @@ jobs:
           grep -q '@version      0.12.8' pawchive-pw-media-filter.user.js
           grep -q "version: '0.12.8'" pawchive-pw-media-filter.user.js
           grep -q 'const QueuePanelView' pawchive-pw-media-filter.user.js
-          grep -q 'v0.12.8 native Popular controls, action states, and queue reuse tests passed' tests/v0128-native-period-controls-and-actions.cjs
+          grep -q 'v0.12.8 native period, action-state, queue reuse, and Local-card tests passed' tests/v0128-native-period-controls-and-actions.cjs
 
       - name: Publish directly to master
         shell: bash
