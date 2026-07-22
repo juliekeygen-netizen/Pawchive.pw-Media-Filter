@@ -25,9 +25,13 @@ jobs:
           fetch-depth: 0
 
       - name: Recover and apply v0.13.0 patch
+        id: apply_patch
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
+          exec > >(tee /tmp/v0130-apply.log) 2>&1
+          set -euxo pipefail
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "aa7cb992015537f378482c184f9edba99e699873"
           grep -q '@version      0.12.9' pawchive-pw-media-filter.user.js
           cat .pawchive-v0130/part00 .pawchive-v0130/part01 > /tmp/pawchive-v0130.patch.xz.b64
@@ -36,8 +40,21 @@ jobs:
           test "$(sha256sum /tmp/pawchive-v0130.patch.xz | awk '{print $1}')" = "e9bf8ce3e843c85f6f76896b18b0565514e4b1af209dc593f9535096d361d5cd"
           xz -dc /tmp/pawchive-v0130.patch.xz > /tmp/pawchive-v0130.patch
           test "$(sha256sum /tmp/pawchive-v0130.patch | awk '{print $1}')" = "350ce0994d19f35dd680924fb767843128d8aabc2fe859a1c3f59fe34d9ea34a"
-          git apply --check /tmp/pawchive-v0130.patch
+          git apply --check --verbose /tmp/pawchive-v0130.patch
           git apply /tmp/pawchive-v0130.patch
+
+      - name: Upload apply diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0130-apply-log
+          path: /tmp/v0130-apply.log
+          if-no-files-found: error
+
+      - name: Enforce patch result
+        if: steps.apply_patch.outcome != 'success'
+        shell: bash
+        run: exit 1
 
       - name: Validate v0.13.0
         shell: bash
