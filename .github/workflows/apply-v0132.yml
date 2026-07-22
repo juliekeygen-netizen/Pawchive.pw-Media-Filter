@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "353e77f47fa746355ee506b73882f57cc3c68ed2"
           grep -q '@version      0.13.1' pawchive-pw-media-filter.user.js
-          cp .pawchive-v0132/patch.xz.b64 /tmp/pawchive-v0132.patch.xz.b64
+          cat .pawchive-v0132/part00 .pawchive-v0132/part01 .pawchive-v0132/part02 .pawchive-v0132/part03 .pawchive-v0132/part04 .pawchive-v0132/part05 > /tmp/pawchive-v0132.patch.xz.b64
           test "$(sha256sum /tmp/pawchive-v0132.patch.xz.b64 | awk '{print $1}')" = "da9b92a1ce2c98238002b9e7d7ac5893f0d1f71c63d92ed3cfd25c473fc07ec7"
           base64 -d /tmp/pawchive-v0132.patch.xz.b64 > /tmp/pawchive-v0132.patch.xz
           test "$(sha256sum /tmp/pawchive-v0132.patch.xz | awk '{print $1}')" = "c156dc9cdabfaa99da7df830bca2fcedb4fe3d3bbe392fd14232568dd7cf5a04"
