@@ -112,7 +112,8 @@ function Test-MaintenanceBrowserRunning {
         if ($root -and -not $root.HasExited) { return $true }
     }
 
-    return (Get-MaintenanceProcesses -BrowserInfo $BrowserInfo).Count -gt 0
+    $maintenanceProcesses = @(Get-MaintenanceProcesses -BrowserInfo $BrowserInfo)
+    return $maintenanceProcesses.Count -gt 0
 }
 
 function Minimize-MaintenanceWindows {
@@ -146,7 +147,8 @@ function Start-MaintenanceBrowser {
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-session-crashed-bubble',
-        '--disable-background-mode'
+        '--disable-background-mode',
+        '--start-minimized'
     )
 
     Write-RunnerLog "Launching $($BrowserInfo.Name) profile '$ProfileDirectory' in $Mode mode."
@@ -170,6 +172,7 @@ $browserInfo = Resolve-Browser
 Write-RunnerLog "Using $($browserInfo.Name): $($browserInfo.Executable)"
 Write-RunnerLog "User data: $($browserInfo.Data); profile: $ProfileDirectory"
 Write-RunnerLog 'This runner uses a real minimized browser engine because Tampermonkey storage and Pawchive IndexedDB are browser-profile data.'
+Write-RunnerLog 'A Chrome, Edge, or Brave maintenance window opening briefly is expected; the runner minimizes it after launch.'
 
 try {
     if (-not $NoKeepAwake) {

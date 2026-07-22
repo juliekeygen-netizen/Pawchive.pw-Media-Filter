@@ -14,8 +14,8 @@ const {
   CreatorCatalogueSummary,
 } = api;
 
-assert.equal(Config.version, '0.12.2');
-assert.match(originalSource, /\/\/ @version\s+0\.12\.2/);
+assert.equal(Config.version, '0.12.3');
+assert.match(originalSource, /\/\/ @version\s+0\.12\.3/);
 
 // The advanced sort follows the specified Images-first type order and remembers a safe default.
 assert.deepEqual(JSON.parse(JSON.stringify(CreatorSorter.mediaTypes)), ['images', 'videos', 'archives', 'projectFiles', 'externalLinks']);

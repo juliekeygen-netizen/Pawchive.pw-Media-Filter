@@ -763,3 +763,10 @@ Record:
 - Native paginator result:
 - Small/Medium/Big visual result:
 - Remaining failures:
+
+## v0.12.3 Popular live-markup and runner regression
+
+- Open `/posts/popular` with no query string and confirm PMF mounts in Native mode while the heading says **Popular Posts For The Past 24 Hours**.
+- Open explicit Day, Week, and Month URLs and confirm Native/Local modes mount without requiring `post-card` classes or `data-id` attributes on Pawchive cards.
+- Confirm Scan parses all visible entries and subsequent fetched pages from their real `/service/user/id/post/id` links.
+- Run `Start-PawchiveMetadataRunner.ps1` under Windows PowerShell with a single matching maintenance process and confirm StrictMode does not throw a missing `.Count` property error.

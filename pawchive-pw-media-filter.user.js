@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.12.2
+// @version      0.12.3
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.12.2',
+    version: '0.12.3',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -1062,17 +1062,27 @@
         cacheSources: post.cacheSources,
       };
     },
-    fromNativeCard(card, context) {
-      const id = String(card?.dataset?.id || '');
-      if (!id) return null;
-      const title = card.querySelector('.post-card__header')?.textContent?.trim() || `Post ${id}`;
-      const link = card.querySelector('a[href*="/post/"]')?.getAttribute('href') || `/${context.service}/user/${context.creatorId}/post/${id}`;
-      const published = card.querySelector('time')?.getAttribute('datetime') || '';
-      const thumbnailUrl = card.querySelector('.post-card__image')?.src || '';
-      const attachmentText = card.querySelector('.post-card__footer')?.textContent || '';
+    fromNativeCard(card, context = {}) {
+      const selfHref = card?.matches?.('a[href]') ? (card.getAttribute?.('href') || card.href || '') : '';
+      const anchor = card?.querySelector?.('a[href*="/post/"]') || null;
+      const linked = Route.parsePostUrl(selfHref || anchor?.getAttribute?.('href') || anchor?.href || '');
+      const id = String(card?.dataset?.id || context.postId || linked?.postId || '');
+      const service = String(context.service || linked?.service || card?.dataset?.service || '').toLowerCase();
+      const creatorId = String(context.creatorId || linked?.creatorId || card?.dataset?.user || card?.dataset?.creatorId || '');
+      const domain = String(context.domain || linked?.domain || location.hostname).toLowerCase();
+      const creatorKey = String(context.creatorKey || linked?.creatorKey || (service && creatorId ? `${domain}|${service}|${creatorId}` : ''));
+      if (!id || !service || !creatorId || !creatorKey) return null;
+      const heading = card?.querySelector?.('.post-card__header,[class*="post-card__header"],header,h2,h3,[class*="title"]');
+      const title = String(heading?.textContent || '').replace(/\s+/g, ' ').trim() || `Post ${id}`;
+      const link = selfHref || anchor?.getAttribute?.('href') || anchor?.href || `/${service}/user/${creatorId}/post/${id}`;
+      const cardText = String(card?.textContent || '').replace(/\s+/g, ' ').trim();
+      const published = card?.querySelector?.('time')?.getAttribute?.('datetime') || cardText.match(/\b\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?/i)?.[0] || '';
+      const thumbnail = card?.querySelector?.('.post-card__image,img[src],source[srcset]');
+      const thumbnailUrl = thumbnail?.src || String(thumbnail?.srcset || '').split(/[ ,]/)[0] || '';
+      const attachmentText = card?.querySelector?.('.post-card__footer,[class*="post-card__footer"],footer')?.textContent || cardText;
       return {
-        key: `${context.creatorKey}|${id}`, creatorKey: context.creatorKey, id,
-        service: context.service, creatorId: context.creatorId, title, postUrl: link,
+        key: `${creatorKey}|${id}`, creatorKey, id,
+        service, creatorId, title, postUrl: link,
         published, publishedAt: published, importedAt: '', editedAt: '', thumbnailUrl,
         attachmentCount: Util.parseInteger(attachmentText.match(/(\d+)\s+attachments?/i)?.[1], 0),
         mainFile: null, attachments: [], content: '', contentText: '', tags: [], mainFileName: '', attachmentFilenames: [], fileExtensions: [], rawExtensions: [],
@@ -3391,60 +3401,100 @@
     periods:new Set(['day','week','month']),
     normalizePeriod(value){const period=String(value||'day').toLowerCase();return PopularPeriod.periods.has(period)?period:'day';},
     normalizeDate(value){const text=String(value||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(text))return'';const parsed=new Date(`${text}T00:00:00Z`);return Number.isFinite(parsed.getTime())&&parsed.toISOString().slice(0,10)===text?text:'';},
-    dateFromHeading(text){const match=String(text||'').match(/popular\s+posts\s+for\s+(.+)$/i);if(!match)return'';const parsed=Date.parse(`${match[1].trim()} 00:00:00 UTC`);return Number.isFinite(parsed)?new Date(parsed).toISOString().slice(0,10):'';},
+    todayUtc(){return new Date().toISOString().slice(0,10);},
+    dateFromHeading(text){const source=String(text||'').trim();if(/popular\s+posts\s+for\s+the\s+past\s+24\s+hours/i.test(source))return PopularPeriod.todayUtc();const match=source.match(/popular\s+posts\s+for\s+(.+)$/i);if(!match)return'';const parsed=Date.parse(`${match[1].trim()} 00:00:00 UTC`);return Number.isFinite(parsed)?new Date(parsed).toISOString().slice(0,10):'';},
+    dateFromLinks(dom,period='day'){
+      const wanted=PopularPeriod.normalizePeriod(period),preferred=[],named=[],fallback=[];
+      for(const link of dom?.periodLinks||[]){
+        let url;try{url=new URL(link.href||link.getAttribute?.('href'),location.origin);}catch{continue;}
+        const date=PopularPeriod.normalizeDate(url.searchParams.get('date'));if(!date)continue;
+        const label=String(link.textContent||link.getAttribute?.('aria-label')||'').replace(/\s+/g,' ').trim();const rel=String(link.getAttribute?.('rel')||'').toLowerCase();
+        if(rel==='prev'||rel==='next'||/\b(?:previous|prev|next)\b|[‹›«»←→]/i.test(label))continue;
+        const linkPeriod=PopularPeriod.normalizePeriod(url.searchParams.get('period'));if(linkPeriod!==wanted)continue;
+        const active=link.getAttribute?.('aria-current')==='page'||/\b(?:active|current|selected)\b/i.test(String(link.className||''));
+        if(active)preferred.push(date);else if(new RegExp(`^${wanted}$`,'i').test(label))named.push(date);else fallback.push(date);
+      }
+      return preferred[0]||named[0]||fallback[0]||'';
+    },
     key({domain=location.hostname,period='day',date=''}){const normalized=PopularPeriod.normalizeDate(date);return normalized?`${String(domain).toLowerCase()}|popular|${PopularPeriod.normalizePeriod(period)}|${normalized}`:'';},
     label(context={}){const date=PopularPeriod.normalizeDate(context.date);const period=PopularPeriod.normalizePeriod(context.period);const value=date?new Date(`${date}T00:00:00Z`):null;const options=period==='month'?{month:'long',year:'numeric',timeZone:'UTC'}:{month:'short',day:'numeric',year:'numeric',timeZone:'UTC'};const formatted=value&&Number.isFinite(value.getTime())?value.toLocaleDateString(undefined,options):'Current';return`${formatted} · ${period[0].toUpperCase()}${period.slice(1)}`;},
-    fromPage(page={},dom=null){const period=PopularPeriod.normalizePeriod(page.period);const date=PopularPeriod.normalizeDate(page.date)||PopularPeriod.dateFromHeading(dom?.heading?.textContent);const domain=String(page.domain||location.hostname).toLowerCase();const periodKey=PopularPeriod.key({domain,period,date});return{...page,kind:'popular',domain,period,date,periodKey,label:PopularPeriod.label({period,date}),offset:Math.max(0,Number(page.offset)||0),baseUrl:`${location.origin}/posts/popular?date=${encodeURIComponent(date)}&period=${encodeURIComponent(period)}`};},
+    fromPage(page={},dom=null){const period=PopularPeriod.normalizePeriod(page.period);const date=PopularPeriod.normalizeDate(page.date)||PopularPeriod.dateFromLinks(dom,period)||PopularPeriod.dateFromHeading(dom?.heading?.textContent)||PopularPeriod.todayUtc();const domain=String(page.domain||location.hostname).toLowerCase();const periodKey=PopularPeriod.key({domain,period,date});return{...page,kind:'popular',domain,period,date,periodKey,label:PopularPeriod.label({period,date}),offset:Math.max(0,Number(page.offset)||0),baseUrl:`${location.origin}/posts/popular?date=${encodeURIComponent(date)}&period=${encodeURIComponent(period)}`};},
     pageUrl(context,offset=0){const url=new URL('/posts/popular',location.origin);url.searchParams.set('date',context.date);url.searchParams.set('period',context.period);if(offset>0)url.searchParams.set('o',String(offset));return url.href;},
   };
 
   const PopularDOM = {
     isOwned(node){return Boolean(node?.closest?.('[data-pmf-owned="true"]'));},
+    anchorCandidates(root=document){if(!root)return[];const anchors=[];if(root.matches?.('a[href]'))anchors.push(root);anchors.push(...root.querySelectorAll?.('a[href]')||[]);return[...new Set(anchors)].filter((anchor)=>anchor&&!PopularDOM.isOwned(anchor));},
+    postAnchorCandidates(root=document){return PopularDOM.anchorCandidates(root).filter((anchor)=>Boolean(Route.parsePostUrl(anchor.getAttribute?.('href')||anchor.href||'')));},
+    pageLinkCandidates(root=document){return PopularDOM.anchorCandidates(root).filter((anchor)=>{try{const url=new URL(anchor.getAttribute?.('href')||anchor.href||'',location.origin);return url.pathname.replace(/\/+$/,'').toLowerCase()==='/posts/popular';}catch{return false;}});},
+    cardForAnchor(anchor){
+      if(!anchor||PopularDOM.isOwned(anchor))return null;
+      const direct=anchor.closest?.('article.post-card,article,[data-id][data-service][data-user],.post-card,[class*="post-card"],li');
+      if(direct&&!direct.closest?.('nav,.paginator,[id^="paginator"]')&&!PopularDOM.isOwned(direct))return direct;
+      let node=anchor;
+      for(let depth=0;node&&depth<7;depth+=1,node=node.parentElement){
+        if(node===document.body||/^(?:HTML|BODY|MAIN)$/i.test(String(node.tagName||'')))break;
+        if(node.closest?.('nav,.paginator,[id^="paginator"]'))continue;
+        const contexts=PopularDOM.postAnchorCandidates(node).map((link)=>Route.parsePostUrl(link.getAttribute?.('href')||link.href||'')).filter(Boolean);const keys=new Set(contexts.map((context)=>context.postKey));
+        const text=String(node.textContent||'');const hasVisual=Boolean(node.querySelector?.('img,picture,video,canvas'));const hasMeta=/\b(?:attachments?|favou?rites?)\b|\d{4}-\d{2}-\d{2}/i.test(text);
+        if(keys.size===1&&(hasMeta||(node!==anchor&&hasVisual)))return node;
+      }
+      return anchor.parentElement||anchor;
+    },
+    postContext(card){
+      const directAnchor=card?.querySelector?.('a[href*="/post/"]');
+      if(directAnchor){const parsed=Route.parsePostUrl(directAnchor.getAttribute?.('href')||directAnchor.href||'');if(parsed)return parsed;}
+      for(const anchor of PopularDOM.postAnchorCandidates(card)){const parsed=Route.parsePostUrl(anchor.getAttribute?.('href')||anchor.href||'');if(parsed)return parsed;}
+      const service=String(card?.dataset?.service||'').toLowerCase(),creatorId=String(card?.dataset?.user||card?.dataset?.creatorId||''),postId=String(card?.dataset?.id||'');if(!service||!creatorId||!postId)return null;const domain=location.hostname.toLowerCase(),creatorKey=`${domain}|${service}|${creatorId}`;return{domain,service,creatorId,creatorKey,postId,postKey:`${creatorKey}|${postId}`,creatorUrl:`${location.origin}/${encodeURIComponent(service)}/user/${encodeURIComponent(creatorId)}`,postUrl:`${location.origin}/${encodeURIComponent(service)}/user/${encodeURIComponent(creatorId)}/post/${encodeURIComponent(postId)}`};
+    },
+    nativeCardCandidates(root=document){
+      if(!root?.querySelectorAll)return[];const candidates=[],seen=new Set(),add=(node)=>{if(!node||seen.has(node)||PopularDOM.isOwned(node))return;seen.add(node);if(PopularDOM.postContext(node))candidates.push(node);};
+      [...root.querySelectorAll('article.post-card,.post-card')].forEach(add);[...root.querySelectorAll('article.post-card,.post-card,[data-id][data-service][data-user]')].forEach(add);[...root.querySelectorAll('a[href*="/post/"]')].forEach((anchor)=>add(PopularDOM.cardForAnchor(anchor)));PopularDOM.postAnchorCandidates(root).forEach((anchor)=>add(PopularDOM.cardForAnchor(anchor)));return candidates;
+    },
+    commonGrid(cards=[],root=document){
+      const known=[
+        ...root.querySelectorAll?.('.card-list__items')||[],
+        ...root.querySelectorAll?.('.card-list__items,.card-list,[class*="card-list"],[data-post-grid],[data-posts]')||[],
+      ].filter((node,index,list)=>!PopularDOM.isOwned(node)&&list.indexOf(node)===index);
+      const containing=known.find((node)=>{const listed=[...node.querySelectorAll?.('article.post-card,.post-card')||[],...node.querySelectorAll?.('a[href]')||[]];return cards.some((card)=>node===card||node.contains?.(card)||listed.includes(card)||listed.some((item)=>card.contains?.(item)));});if(containing)return containing;
+      const counts=new Map();for(const card of cards){let node=card?.parentElement;for(let depth=0;node&&depth<5;depth+=1,node=node.parentElement){if(node===document.body||/^(?:HTML|BODY|MAIN)$/i.test(String(node.tagName||'')))break;if(PopularDOM.isOwned(node))continue;counts.set(node,(counts.get(node)||0)+1);}}
+      let best=null,bestCount=0;for(const [node,count] of counts){if(count>bestCount){best=node;bestCount=count;}}return best||cards[0]?.parentElement||null;
+    },
     isSafeNativeControlGroup(node,grid){
       if(!node||node===document.body||node===grid||node.contains?.(grid))return false;
-      if(node.querySelector?.('.card-list__items,article.post-card,.paginator,[id^="paginator"]'))return false;
+      if(node.querySelector?.('.paginator,[id^="paginator"]')||PopularDOM.nativeCardCandidates(node).length)return false;
       return true;
     },
     navigationGroupFor(link,{main=null,grid=null}={}){
       let candidate=link?.closest?.('nav,menu,.tabs,[role="navigation"]')||link?.parentElement||null;
       while(candidate&&candidate!==main&&candidate!==document.body){
         if(!PopularDOM.isSafeNativeControlGroup(candidate,grid))return null;
-        const links=[...candidate.querySelectorAll?.('a[href*="/posts/popular"]')||[]].filter((node)=>!PopularDOM.isOwned(node));
+        const links=PopularDOM.pageLinkCandidates(candidate);
         if(links.length>=2)return candidate;
         candidate=candidate.parentElement;
       }
       const parent=link?.parentElement;
       return PopularDOM.isSafeNativeControlGroup(parent,grid)?parent:null;
     },
-    nativeCardCandidates(root=document){
-      if(!root?.querySelectorAll)return[];
-      const candidates=[...root.querySelectorAll('article.post-card,.post-card')].filter((node)=>!PopularDOM.isOwned(node));
-      return candidates.filter((card)=>Boolean(card.dataset?.id||(card.dataset?.service&&card.dataset?.user)||card.querySelector?.('a[href*="/post/"]')));
+    paginatorCandidates(root=document){
+      const values=[...root.querySelectorAll?.('.paginator,[id^="paginator"],nav[aria-label*="page" i]')||[]];
+      for(const link of PopularDOM.pageLinkCandidates(root)){let url;try{url=new URL(link.getAttribute?.('href')||link.href||'',location.origin);}catch{continue;}if(!url.searchParams.has('o'))continue;const group=link.closest?.('.paginator,nav,ul,ol,div');if(group)values.push(group);}
+      return [...new Set(values)].filter((node)=>!PopularDOM.isOwned(node)&&node.querySelector?.('a,button,li'));
     },
     find(page={}){
-      const grids=[...document.querySelectorAll('.card-list__items')].filter((node)=>!PopularDOM.isOwned(node));
-      const grid=grids.find((node)=>PopularDOM.nativeCardCandidates(node).length)
-        ||PopularDOM.nativeCardCandidates(document)[0]?.parentElement
-        ||null;
-      const main=grid?.closest?.('main#main,main.main,#main,main,[role="main"]')
-        ||document.querySelector('main#main,main.main,#main,main,[role="main"]')
-        ||grid?.parentElement
-        ||null;
-      const nativeCards=grid?PopularDOM.nativeCardCandidates(grid):[];
-      const paginators=[...document.querySelectorAll('.paginator,[id^="paginator"]')].filter((node)=>!PopularDOM.isOwned(node)&&node.querySelector('a,button,li'));
       const heading=[...document.querySelectorAll('h1,h2,h3')].find((node)=>/popular\s+posts/i.test(node.textContent||''))||null;
-      const links=[...document.querySelectorAll('a[href*="/posts/popular"]')].filter((node)=>!PopularDOM.isOwned(node));
-      const periodLinks=links.filter((link)=>{try{const url=new URL(link.href||link.getAttribute?.('href'),location.origin);return!url.searchParams.has('o')&&PopularPeriod.periods.has(PopularPeriod.normalizePeriod(url.searchParams.get('period')));}catch{return false;}});
-      const navContainers=[...new Set(periodLinks.map((link)=>PopularDOM.navigationGroupFor(link,{main,grid})).filter(Boolean))];
-      const navContainer=navContainers[0]||null;
-      const text=paginators.map((node)=>node.textContent||'').join(' ');const totalMatch=text.match(/of\s+([\d,]+)/i);const totalPosts=totalMatch?Util.parseInteger(totalMatch[1].replace(/,/g,''),0):nativeCards.length;
+      const nativeCards=PopularDOM.nativeCardCandidates(document);const grid=PopularDOM.commonGrid(nativeCards,document);
+      const main=grid?.closest?.('main#main,main.main,#main,main,[role="main"],[id*="content"],[class*="content"]')||heading?.closest?.('main#main,main.main,#main,main,[role="main"],[id*="content"],[class*="content"]')||document.querySelector('main#main,main.main,#main,main,[role="main"],[id*="content"],[class*="content"]')||grid?.parentElement||heading?.parentElement||null;
+      const paginators=PopularDOM.paginatorCandidates(document);const links=PopularDOM.pageLinkCandidates(document);
+      const periodLinks=links.filter((link)=>{try{const url=new URL(link.href||link.getAttribute?.('href'),location.origin);return!url.searchParams.has('o')&&(url.searchParams.has('period')||/\b(?:day|week|month|prev|next)\b/i.test(String(link.textContent||'')));}catch{return false;}});
+      const navContainers=[...new Set(periodLinks.map((link)=>PopularDOM.navigationGroupFor(link,{main,grid})).filter(Boolean))];const navContainer=navContainers[0]||null;
+      const text=[...paginators.map((node)=>node.textContent||''),document.body?.textContent||''].join(' ');const totalMatch=text.match(/(?:showing\s+[\d,]+\s*[-–]\s*[\d,]+\s+)?of\s+([\d,]+)/i);const totalPosts=totalMatch?Util.parseInteger(totalMatch[1].replace(/,/g,''),0):nativeCards.length;
       if(!main||!grid)return null;
       return{main,grid,nativeCards,template:nativeCards[0]||null,paginators,topPaginator:paginators[0]||null,bottomPaginator:paginators.at(-1)||null,heading,periodLinks,navContainer,navContainers,totalPosts};
     },
-    postContext(card){const anchor=card?.querySelector?.('a[href*="/post/"]');const parsed=anchor?Route.parsePostUrl(anchor.href||anchor.getAttribute?.('href')):null;if(parsed)return parsed;const service=String(card?.dataset?.service||'').toLowerCase(),creatorId=String(card?.dataset?.user||''),postId=String(card?.dataset?.id||'');if(!service||!creatorId||!postId)return null;const domain=location.hostname.toLowerCase(),creatorKey=`${domain}|${service}|${creatorId}`;return{domain,service,creatorId,creatorKey,postId,postKey:`${creatorKey}|${postId}`,creatorUrl:`${location.origin}/${encodeURIComponent(service)}/user/${encodeURIComponent(creatorId)}`,postUrl:`${location.origin}/${encodeURIComponent(service)}/user/${encodeURIComponent(creatorId)}/post/${encodeURIComponent(postId)}`};},
-    favoriteCount(card){const text=String(card?.querySelector?.('.post-card__footer')?.textContent||card?.textContent||'');const match=text.match(/([\d,.]+)\s+favou?rites?/i);return match?Math.max(0,Util.parseInteger(match[1].replace(/[,.]/g,''),0)):null;},
+    favoriteCount(card){const text=String(card?.querySelector?.('.post-card__footer,[class*="post-card__footer"],footer')?.textContent||card?.textContent||'');const match=text.match(/([\d,.]+)\s+favou?rites?/i);return match?Math.max(0,Util.parseInteger(match[1].replace(/[,.]/g,''),0)):null;},
     parseCard(card,periodContext,rank=0,offset=0){const context=PopularDOM.postContext(card);if(!context)return null;const stub=PostNormalizer.fromNativeCard(card,context);if(!stub)return null;stub.postUrl=context.postUrl||stub.postUrl;stub.cacheSources={scan:false,catalogue:true};const favoriteCount=PopularDOM.favoriteCount(card);const observedAt=Date.now();const entry={key:`${periodContext.periodKey}|${context.postKey}`,periodKey:periodContext.periodKey,postKey:context.postKey,rank:Math.max(1,Number(rank)||1),displayedFavoriteCount:favoriteCount,sourceOffset:Math.max(0,Number(offset)||0),observedAt,runId:''};return{context,stub,entry};},
-    parseDocument(doc,context,offset=0){const grid=[...doc.querySelectorAll?.('.card-list__items')||[]].find((node)=>node.querySelector?.('article.post-card[data-id],article.post-card[data-service][data-user]'))||null;const cards=grid?[...grid.querySelectorAll('article.post-card[data-id],article.post-card[data-service][data-user]')]:[];const items=cards.map((card,index)=>PopularDOM.parseCard(card,context,offset+index+1,offset)).filter(Boolean);const text=[...doc.querySelectorAll?.('.paginator small,.paginator')||[]].map((node)=>node.textContent||'').join(' ');const totalMatch=text.match(/of\s+([\d,]+)/i);return{items,totalPosts:totalMatch?Util.parseInteger(totalMatch[1].replace(/,/g,''),0):0,cardCount:cards.length};},
+    parseDocument(doc,context,offset=0){const cards=PopularDOM.nativeCardCandidates(doc);const items=cards.map((card,index)=>PopularDOM.parseCard(card,context,offset+index+1,offset)).filter(Boolean);const text=[...PopularDOM.paginatorCandidates(doc).map((node)=>node.textContent||''),doc.body?.textContent||''].join(' ');const totalMatch=text.match(/(?:showing\s+[\d,]+\s*[-–]\s*[\d,]+\s+)?of\s+([\d,]+)/i);return{items,totalPosts:totalMatch?Util.parseInteger(totalMatch[1].replace(/,/g,''),0):cards.length,cardCount:cards.length};},
   };
 
   const PopularSorter = {
@@ -7742,7 +7792,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     mounted(){return Boolean(PopularPageController.root?.isConnected&&PopularPageController.context?.periodKey);},
     health(page=Route.parsePage(location.href)){return page.kind==='popular'&&PopularPageController.mounted()&&PopularPageController.context?.pageKey===page.pageKey&&App.pageKind==='popular'&&App.ui?.root?.isConnected&&App.dom?.grid?.isConnected;},
     assertMountCurrent(context,signal){const current=Route.parsePage(location.href);if(signal?.aborted||current.kind!=='popular'||current.pageKey!==context?.pageKey)throw new DOMException('Aborted','AbortError');},
-    async waitForDOM(page,{signal}={}){for(let attempt=0;attempt<160;attempt+=1){if(signal?.aborted)throw new DOMException('Aborted','AbortError');const found=PopularDOM.find(page);if(found?.grid&&found.nativeCards.length){const context=PopularPeriod.fromPage(page,found);if(context.periodKey)return{found,context};}await Util.sleep(50,signal);}throw new Error('Popular Posts page did not become ready: native post cards were not detected.');},
+    async waitForDOM(page,{signal}={}){let last=null;for(let attempt=0;attempt<200;attempt+=1){if(signal?.aborted)throw new DOMException('Aborted','AbortError');const found=PopularDOM.find(page);last=found;if(found?.grid&&found.nativeCards.length){const context=PopularPeriod.fromPage(page,found);if(context.periodKey){Logger.info({operation:'popular-dom-ready',attempt,cardCount:found.nativeCards.length,totalPosts:found.totalPosts,periodKey:context.periodKey});return{found,context};}}await Util.sleep(50,signal);}const diagnostics={route:Route.parsePage(location.href),heading:last?.heading?.textContent||'',cards:last?.nativeCards?.length||0,grid:Boolean(last?.grid),main:Boolean(last?.main),postLinks:PopularDOM.postAnchorCandidates(document).length};Logger.warn('Popular Posts DOM detection timed out.',diagnostics);throw new Error(`Popular Posts page did not become ready: ${diagnostics.postLinks} post links and ${diagnostics.cards} cards were detected.`);},
     saveNative(found){return{grid:{node:found.grid,hidden:found.grid.hidden,display:found.grid.style.getPropertyValue('display'),priority:found.grid.style.getPropertyPriority('display'),aria:found.grid.getAttribute('aria-hidden')},paginators:found.paginators.map((node)=>({node,hidden:node.hidden,display:node.style.getPropertyValue('display'),priority:node.style.getPropertyPriority('display'),aria:node.getAttribute('aria-hidden')})),navs:(found.navContainers||[]).filter((node)=>PopularDOM.isSafeNativeControlGroup(node,found.grid)).map((node)=>({node,hidden:node.hidden,display:node.style.getPropertyValue('display'),priority:node.style.getPropertyPriority('display'),aria:node.getAttribute('aria-hidden')}))};},
     restoreNode(state){if(!state?.node?.isConnected)return;state.node.hidden=state.hidden;if(state.display)state.node.style.setProperty('display',state.display,state.priority||'');else state.node.style.removeProperty('display');if(state.aria==null)state.node.removeAttribute('aria-hidden');else state.node.setAttribute('aria-hidden',state.aria);delete state.node.dataset.pmfPopularHidden;},
     restoreNative(){PopularPageController.restoreNode(PopularPageController.nativeSnapshot?.grid);for(const item of PopularPageController.nativeSnapshot?.paginators||[])PopularPageController.restoreNode(item);for(const item of PopularPageController.nativeSnapshot?.navs||[])PopularPageController.restoreNode(item);},

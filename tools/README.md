@@ -1,6 +1,6 @@
 # Pawchive metadata runner
 
-`Start-PawchiveMetadataRunner.ps1` keeps the missing-attachment metadata updater running in a dedicated minimized Chrome or Edge app window.
+`Start-PawchiveMetadataRunner.ps1` keeps the missing-attachment metadata updater running in a dedicated minimized Chrome, Edge, or Brave app window.
 
 A completely browser-free runner cannot safely operate on the existing catalogue because the catalogue is stored in Pawchive's browser-origin IndexedDB and the maintenance checkpoint is stored by Tampermonkey. This tool launches the browser engine itself, but your normal browser window does not need to remain open.
 
@@ -11,7 +11,7 @@ A completely browser-free runner cannot safely operate on the existing catalogue
 - Tampermonkey and Pawchive Media Filter installed in the selected browser profile
 - The same browser profile that contains your existing Pawchive local catalogue
 
-Close that browser completely before starting the runner. Chrome and Edge lock a profile while it is in use.
+Close that browser completely before starting the runner. Chromium browsers lock a profile while it is in use. The runner must open a real maintenance window to access Tampermonkey and Pawchive IndexedDB; that window is expected and is minimized automatically after launch.
 
 ## Start the continuous runner
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.3
+
+- Fixed the current bare `/posts/popular` route by resolving **The Past 24 Hours** to the current UTC day and by deriving canonical dates from Pawchive's period links before falling back to today.
+- Replaced Popular Posts' class-only card discovery with post-link-driven DOM detection, common-grid inference, broader content-root and paginator discovery, and generic native-card normalization so the controller can mount and scan Pawchive's live card markup even when `post-card` classes or `data-id` attributes are absent.
+- Made fetched Popular period pages use the same generic post-link parser as the visible page, preventing scans from returning zero entries on the current markup.
+- Fixed the PowerShell metadata runner under `Set-StrictMode` by always materializing maintenance-process results as an array before reading `.Count`, added Chromium’s start-minimized flag, and clarified that the maintenance window opening briefly is expected.
+- Added focused v0.12.3 live-markup and runner regression coverage; 59 executable tests now pass.
+
 ## 0.12.2
 
 - Fixed Popular Posts bootstrap on Pawchive layouts whose content uses a plain `<main>` element or post cards without `data-id` attributes; Native/Local UI detection now also recognizes generic `.post-card` elements that contain real `/post/` links.

@@ -9,8 +9,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, context, originalSource, makeElement } = loadUserscript();
   const { Config, PopularDOM, Route } = api;
 
-  assert.equal(Config.version, '0.12.2');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.2/);
+  assert.equal(Config.version, '0.12.3');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.3/);
 
   const main = makeElement('main');
   const grid = makeElement('div');
@@ -62,7 +62,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.doesNotMatch(runner, /\[uint32\]0x80000000/);
   assert.match(runnerReadme, /-Browser Brave/);
 
-  console.log('Pawchive Media Filter v0.12.2 Popular bootstrap and Brave runner tests passed.');
+  console.log('Pawchive Media Filter v0.12.3 Popular bootstrap and Brave runner tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;
