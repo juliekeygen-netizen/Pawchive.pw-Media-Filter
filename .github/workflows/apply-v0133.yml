@@ -25,37 +25,34 @@ jobs:
           fetch-depth: 0
 
       - name: Recover and apply v0.13.3 patch
-        id: recover
-        continue-on-error: true
         shell: bash
         run: |
-          set -o pipefail
-          exec > >(tee /tmp/v0133-recover.log) 2>&1
-          set -euxo pipefail
-          pwd
-          git status --short
-          grep -n '@version' pawchive-pw-media-filter.user.js | head
+          set -euo pipefail
+          grep -q '@version      0.13.2' pawchive-pw-media-filter.user.js
           cat .pawchive-v0133/part00 .pawchive-v0133/part01 .pawchive-v0133/part02 > /tmp/pawchive-v0133.patch.xz.b64
-          wc -c /tmp/pawchive-v0133.patch.xz.b64
-          sha256sum /tmp/pawchive-v0133.patch.xz.b64
+          test "$(sha256sum /tmp/pawchive-v0133.patch.xz.b64 | awk '{print $1}')" = "803366784e802775c44fc821372b1e4b1381393787664f972bb077497eb4d8c7"
           base64 -d /tmp/pawchive-v0133.patch.xz.b64 > /tmp/pawchive-v0133.patch.xz
-          sha256sum /tmp/pawchive-v0133.patch.xz
+          test "$(sha256sum /tmp/pawchive-v0133.patch.xz | awk '{print $1}')" = "e8f758a3e91fa41199ae0dfe5eff888b29d1747c227e52612d4312feed3a2378"
           xz -dc /tmp/pawchive-v0133.patch.xz > /tmp/pawchive-v0133.patch
-          sha256sum /tmp/pawchive-v0133.patch
+          test "$(sha256sum /tmp/pawchive-v0133.patch | awk '{print $1}')" = "2a8a019aa295a37b13fe6e6455c4465954b47084c54a3e48f1fbd555fd3bfd1e"
+          set +e
           patch --batch --forward -p1 < /tmp/pawchive-v0133.patch
-
-      - name: Upload recovery report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: v0133-recovery-report
-          path: /tmp/v0133-recover.log
-          if-no-files-found: error
-
-      - name: Enforce recovery result
-        if: steps.recover.outcome != 'success'
-        shell: bash
-        run: exit 1
+          patch_status=$?
+          set -e
+          test "$patch_status" -eq 1
+          test -f tests/v0132-navigation-lifecycle-audit.cjs.rej
+          test "$(find . -name '*.rej' -print | wc -l)" -eq 1
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('tests/v0132-navigation-lifecycle-audit.cjs')
+          text = path.read_text()
+          text = text.replace("'0.13.2'", "'0.13.3'")
+          text = text.replace(r'0\.13\.2', r'0\.13\.3')
+          text = text.replace('v0.13.2 navigation lifecycle audit tests passed.', 'v0.13.3 navigation lifecycle audit tests passed.')
+          path.write_text(text)
+          PY
+          rm tests/v0132-navigation-lifecycle-audit.cjs.rej
+          test -z "$(find . -name '*.rej' -print -quit)"
 
       - name: Validate v0.13.3
         shell: bash
