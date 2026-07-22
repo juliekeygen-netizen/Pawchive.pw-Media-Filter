@@ -5,7 +5,7 @@ on:
     branches:
       - master
     paths:
-      - '.pawchive-v0123/patch.b64'
+      - '.pawchive-v0123/trigger'
 
 permissions:
   contents: write
@@ -32,7 +32,10 @@ jobs:
           git checkout -B master origin/master
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "b0571e10ac28a289baddb0892d78c747d50d22fc"
           grep -q '@version      0.12.2' pawchive-pw-media-filter.user.js
-          git show "origin/$GITHUB_HEAD_REF:.pawchive-v0123/patch.b64" > /tmp/pawchive-v0123.patch.xz.b64
+          : > /tmp/pawchive-v0123.patch.xz.b64
+          for part in 00 01 02 03; do
+            git show "origin/$GITHUB_HEAD_REF:.pawchive-v0123/part${part}" >> /tmp/pawchive-v0123.patch.xz.b64
+          done
           python - <<'PY'
           from pathlib import Path
           path = Path('/tmp/pawchive-v0123.patch.xz.b64')
