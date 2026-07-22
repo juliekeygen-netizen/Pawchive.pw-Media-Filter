@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.9
+
+- Reduced Popular-page DOM scanning and replaced full post-status-store reads with key-scoped lookups for the selected Popular period.
+- Stopped interrupted Popular jobs from silently resuming after navigation or reload, and capped Popular detail requests at two concurrent fetches to reduce background pressure on Pawchive.
+- Moved Pawchive's native top result count and paginator below the PMF toolbar in Native mode while preserving their original positions for cleanup.
+- Added incomplete-snapshot detection: periods such as 494 stored of 500 now show enabled **Retry scans**; only complete snapshots show disabled **Scanned**.
+- Shortened the Local unscanned message to one sentence.
+- Fixed Local Popular platform icons so Pixiv Fanbox and Patreon always use their matching Pawchive icon assets instead of cloning the first template card's service icon.
+- Added focused v0.12.9 performance, incomplete-scan, placement, interrupted-job, and platform-icon regression coverage; 64 executable tests pass.
+
 ## 0.12.8
 
 - Removed the PMF-owned Popular period/date card and Native mirrored paginator. Native mode now leaves Pawchive's original period selector, result count, and pagination as the only navigation controls.

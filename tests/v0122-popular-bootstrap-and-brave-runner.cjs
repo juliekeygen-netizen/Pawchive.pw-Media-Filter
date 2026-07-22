@@ -9,8 +9,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, context, originalSource, makeElement } = loadUserscript();
   const { Config, PopularDOM, Route } = api;
 
-  assert.equal(Config.version, '0.12.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.8/);
+  assert.equal(Config.version, '0.12.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.9/);
 
   const main = makeElement('main');
   const grid = makeElement('div');
@@ -51,7 +51,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(found.nativeCards.length, 1, 'cards with real post links must be accepted without data-id attributes');
   assert.equal(PopularDOM.postContext(card).postId, '123');
   assert.match(PopularDOM.find.toString(), /main,\[role=/);
-  assert.match(PopularDOM.nativeCardCandidates.toString(), /a\[href\*=\\?"\/post\//);
+  assert.match(PopularDOM.nativeCardCandidates.toString(), /postAnchorCandidates/);
 
   const runner = fs.readFileSync(path.resolve(__dirname, '..', 'tools', 'Start-PawchiveMetadataRunner.ps1'), 'utf8');
   const runnerReadme = fs.readFileSync(path.resolve(__dirname, '..', 'tools', 'README.md'), 'utf8');

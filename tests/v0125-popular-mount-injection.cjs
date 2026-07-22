@@ -7,8 +7,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, originalSource } = loadUserscript();
   const { Config, PopularPageController, CompactLayoutEngine } = api;
 
-  assert.equal(Config.version, '0.12.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.8/);
+  assert.equal(Config.version, '0.12.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.9/);
 
   const mountSource = PopularPageController.mount.toString();
   const mountUiSource = PopularPageController.mountUI.toString();

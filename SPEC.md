@@ -1,4 +1,14 @@
-# Pawchive.pw Media Filter v0.12.8 specification
+# Pawchive.pw Media Filter v0.12.9 specification
+
+## v0.12.9 Popular performance and completeness contract
+
+- Popular DOM discovery must prefer direct post-link and nearby paginator/count selectors. It must not recursively classify every count-like node as a possible post card.
+- Popular status hydration reads only the post-status keys referenced by the selected period. It must not load the complete status store merely to render one period.
+- Popular post-detail fetching is capped at two concurrent requests. An active Popular job interrupted by navigation or reload is restored as an **Interrupted** issue and requires an explicit retry; it is not silently resumed in the background.
+- Native mode places Pawchive's top result count and paginator immediately after the PMF root. Their original parent/sibling positions and visibility are restored during cleanup.
+- A period is complete only when its stored-entry count reaches the known Pawchive total and it has no retryable metadata work. An incomplete stored period exposes **Retry scans**; a complete or active period exposes disabled **Scanned**.
+- Local unscanned copy is exactly `This Popular Posts period has not been scanned.`
+- Local card platform icons are derived from the post service. `fanbox` and `pixiv_fanbox` use `/static/small_icons/fanbox.png`; `patreon` uses `/static/small_icons/patreon.png`.
 
 ## v0.12.8 Popular native-navigation and action-state contract
 
@@ -61,7 +71,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.12.8`
+- Userscript and `Config.version`: `0.12.9`
 - Settings: `pmf-settings-v5`
 - Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1

@@ -1,4 +1,23 @@
-# Pawchive.pw Media Filter v0.12.8 testing
+# Pawchive.pw Media Filter v0.12.9 testing
+
+## v0.12.9 Popular performance, retry, placement, and platform matrix
+
+Automated validation:
+
+```text
+node --check pawchive-pw-media-filter.user.js
+64 executable .cjs tests
+git diff --check
+```
+
+1. Open and leave several Popular pages, posts, and creator profiles using normal links and Back/Forward. No interrupted Popular scan should silently restart after navigation.
+2. In Native mode, confirm Pawchive's `Showing …` text and native page selector sit below the PMF toolbar, matching the Local-mode vertical order. Switch routes and confirm cleanup restores the native controls without duplicates.
+3. For a period with 494 stored entries and a known total of 500, Native must show enabled **Retry scans**. After all 500 are stored with no retryable metadata, it must show disabled, muted, struck-through **Scanned**.
+4. Start a retry and confirm at most two post-detail requests run concurrently. Interrupt it by navigation; the queue must show an interrupted issue instead of silently continuing after the next page load.
+5. Open an unscanned Local period. The only empty-state sentence is `This Popular Posts period has not been scanned.`
+6. Compare Patreon and Pixiv Fanbox posts in Local Popular mode. Patreon cards use `/static/small_icons/patreon.png`; Fanbox cards use `/static/small_icons/fanbox.png`. No template card may force the wrong service icon onto later cards.
+7. A Cloudflare 502 remains a Pawchive host response. Confirm PMF surfaces no claim that the host request succeeded and that ordinary browsing no longer triggers restored scan traffic.
+8. Browser confirmation remains required for live-server latency, Cloudflare behavior, native DOM placement, and actual network concurrency.
 
 ## v0.12.8 Native Popular controls and action-state matrix
 

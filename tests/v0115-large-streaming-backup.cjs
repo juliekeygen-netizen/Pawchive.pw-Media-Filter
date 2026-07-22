@@ -7,8 +7,8 @@ const { api, originalSource } = loadUserscript();
 const { Config, DataPortability, FilterEngine } = api;
 
 (() => {
-  assert.equal(Config.version, '0.12.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.8/);
+  assert.equal(Config.version, '0.12.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.9/);
 
   const stores = Object.fromEntries(DataPortability.catalogueStores.map((store) => [store, []]));
   for (let index = 0; index < 120; index += 1) {

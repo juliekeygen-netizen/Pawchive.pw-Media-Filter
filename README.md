@@ -1,5 +1,13 @@
 # Pawchive.pw Media Filter
 
+## v0.12.9 Popular performance, incomplete-scan retry, and platform fixes
+
+- Reduced Popular-page DOM work by narrowing post-link and count discovery and by loading only the status records used by the current Popular snapshot. Interrupted Popular scans are no longer silently resumed after navigation or reload.
+- Capped Popular post-detail work at two concurrent requests to reduce background pressure on Pawchive while browsing. Host-side Cloudflare 502 responses can still occur, but PMF no longer restarts interrupted work automatically.
+- Pawchive's native top result count and paginator are moved beneath the PMF toolbar in Native mode and restored to their original DOM positions when PMF unmounts.
+- Native periods with fewer stored entries than Pawchive's expected total show an enabled **Retry scans** action. Only complete snapshots show disabled **Scanned**.
+- Shortened the unscanned Local message and fixed Local card platform artwork so Pixiv Fanbox and Patreon use their own canonical Pawchive icons.
+
 ## v0.12.8 Native Popular navigation and action-state cleanup
 
 - Removed PMF's custom Popular date/period card and its mirrored Native paginator. Pawchive's original Previous / Day / Week / Month / Next links, count, and page controls are now the only Native navigation shown.
@@ -48,7 +56,7 @@ Close the selected browser before starting the default runner so it can safely u
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.12.8**
+Current version: **0.12.9**
 
 ## Installation
 
