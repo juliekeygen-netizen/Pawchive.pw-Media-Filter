@@ -10,8 +10,8 @@ const {
   NativeArtistsProxy, CreatorCardReconstructor, CreatorIndexUI,
 } = api;
 
-assert.equal(Config.version, '0.13.0');
-assert.match(originalSource, /\/\/ @version\s+0\.13\.0/);
+assert.equal(Config.version, '0.13.1');
+assert.match(originalSource, /\/\/ @version\s+0\.13\.1/);
 assert.equal(CreatorDirectoryMode.load(), 'native');
 assert.equal(CreatorDirectoryMode.normalize('bad-value'), 'native');
 assert.equal(CreatorDirectoryMode.save('catalogue'), 'catalogue');
@@ -132,8 +132,9 @@ assert.equal(NativeArtistsProxy.nextSort('name', 'asc', 'name').direction, 'desc
 assert.equal(NativeArtistsProxy.nextSort('favorited', 'desc', 'name').direction, 'desc');
 
 const pageLink = element('a');
+pageLink.textContent = '1';
 pageLink.dataset.value = '50';
-paginator.querySelectorAll = (selector) => selector === 'a[data-value],button[data-value],li' ? [pageLink] : [];
+paginator.querySelectorAll = (selector) => selector === 'a[href],a[data-value],button,li' ? [pageLink] : [];
 assert.equal(NativeArtistsProxy.activatePage(found, 0), true);
 assert.equal(pageLink.clicked, 1);
 
@@ -156,12 +157,12 @@ const nextAnchor = paginatorItem('a', '>');
 const lastWrapper = paginatorItem('li', '>>');
 const lastAnchor = paginatorItem('a', '>>');
 paginator.querySelector = () => null;
-paginator.querySelectorAll = (selector) => selector === 'a[data-value],button[data-value],li'
+paginator.querySelectorAll = (selector) => selector === 'a[href],a[data-value],button,li'
   ? [duplicateOneWrapper, duplicateOneAnchor, nextWrapper, nextAnchor, lastWrapper, lastAnchor]
   : [];
 const mirrorHost = element();
 assert.equal(NativeArtistsProxy.paginator(found, mirrorHost), true);
-assert.deepEqual(mirrorHost.children[0].children.map((button) => button.textContent), ['1', '>', '>>']);
+assert.deepEqual(mirrorHost.children[0].children.map((button) => button.textContent), ['1', '›', '»']);
 assert.deepEqual(mirrorHost.children[0].children.map((button) => button.dataset.nativePaginatorIndex), ['1', '3', '5']);
 
 const scanned = { directory:{ creatorKey:'a', creatorName:'A', service:'fanbox', creatorId:'1' }, scanned:true, state:{} };

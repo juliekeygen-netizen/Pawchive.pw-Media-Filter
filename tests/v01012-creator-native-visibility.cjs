@@ -13,8 +13,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     PawchiveDOM,
   } = api;
 
-  assert.equal(Config.version, '0.13.0');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.0/);
+  assert.equal(Config.version, '0.13.1');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.1/);
 
   // An actually unscanned creator must never enter early takeover.
   App.context = { creatorKey:'pawchive.pw|patreon|unscanned' };
