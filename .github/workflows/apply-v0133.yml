@@ -1,0 +1,74 @@
+name: Apply Pawchive v0.13.3
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0133/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0133-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply v0.13.3 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "1d52f48060eb4b8210c9b11f401025e464bf313b"
+          grep -q '@version      0.13.2' pawchive-pw-media-filter.user.js
+          cat .pawchive-v0133/part00 .pawchive-v0133/part01 .pawchive-v0133/part02 > /tmp/pawchive-v0133.patch.xz.b64
+          test "$(sha256sum /tmp/pawchive-v0133.patch.xz.b64 | awk '{print $1}')" = "803366784e802775c44fc821372b1e4b1381393787664f972bb077497eb4d8c7"
+          base64 -d /tmp/pawchive-v0133.patch.xz.b64 > /tmp/pawchive-v0133.patch.xz
+          test "$(sha256sum /tmp/pawchive-v0133.patch.xz | awk '{print $1}')" = "e8f758a3e91fa41199ae0dfe5eff888b29d1747c227e52612d4312feed3a2378"
+          xz -dc /tmp/pawchive-v0133.patch.xz > /tmp/pawchive-v0133.patch
+          test "$(sha256sum /tmp/pawchive-v0133.patch | awk '{print $1}')" = "2a8a019aa295a37b13fe6e6455c4465954b47084c54a3e48f1fbd555fd3bfd1e"
+          git apply --check /tmp/pawchive-v0133.patch
+          git apply /tmp/pawchive-v0133.patch
+
+      - name: Validate v0.13.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 68
+          git diff --check
+          grep -q '@version      0.13.3' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.13.3'" pawchive-pw-media-filter.user.js
+          grep -q 'canonicalPopularUrl' pawchive-pw-media-filter.user.js
+          grep -q 'jobPercent(job)' pawchive-pw-media-filter.user.js
+          grep -q 'Popular progress, canonical-route, and incremental-update tests passed' tests/v0133-popular-progress-canonical-and-update.cjs
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .pawchive-v0133
+          rm -f .github/workflows/apply-v0133.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.13.3 Popular progress and canonical periods'
+          git push origin HEAD:master
