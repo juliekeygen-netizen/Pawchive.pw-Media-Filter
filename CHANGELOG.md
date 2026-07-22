@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.0
+
+- Replaced the visible Native Popular paginator and result-count nodes with PMF mirrors at the top and bottom of the post grid.
+- Both Native mirrors reuse Pawchive's real hidden pagination actions, show the same PMF `Showing start–end of total` summary, and preserve the selected Popular route/page.
+- Original Pawchive paginator/count nodes are hidden in both Native and Local modes while mounted, preventing duplicate selectors and duplicate result counters.
+- Added focused mirrored-paginator coverage; 66 executable tests pass.
+
 ## 0.12.9
 
 - Reduced Popular-page DOM scanning and replaced full post-status-store reads with key-scoped lookups for the selected Popular period.

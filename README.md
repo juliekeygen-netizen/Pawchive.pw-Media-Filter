@@ -1,5 +1,12 @@
 # Pawchive.pw Media Filter
 
+## v0.13.0 mirrored Native Popular pagination
+
+- Replaced Pawchive's visible Native Popular page selectors and `Showing …` counters with PMF-styled mirrors, matching the Native creator-directory paginator instead of moving the original controls around the page.
+- Native Popular now has one PMF paginator immediately below the toolbar and one immediately below the post grid. Both show the same `Showing start–end of total` summary and activate Pawchive's real hidden paginator controls.
+- Pawchive's original top/bottom paginator nodes and original result-count nodes remain hidden while PMF is mounted, eliminating duplicated selectors and duplicated `Showing 1–50 of 500` text.
+- Local mode continues to use its filtered PMF paginator in the exact same top/bottom positions, and switching Native/Local swaps paginator contents without moving the period controls.
+
 ## v0.12.9 Popular performance, incomplete-scan retry, and platform fixes
 
 - Reduced Popular-page DOM work by narrowing post-link and count discovery and by loading only the status records used by the current Popular snapshot. Interrupted Popular scans are no longer silently resumed after navigation or reload.
@@ -56,7 +63,7 @@ Close the selected browser before starting the default runner so it can safely u
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.12.9**
+Current version: **0.13.0**
 
 ## Installation
 

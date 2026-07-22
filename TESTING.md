@@ -1,4 +1,23 @@
-# Pawchive.pw Media Filter v0.12.9 testing
+# Pawchive.pw Media Filter v0.13.0 testing
+
+## v0.13.0 mirrored Native Popular paginator matrix
+
+Automated validation:
+
+```text
+node --check pawchive-pw-media-filter.user.js
+66 executable .cjs tests
+git diff --check
+```
+
+1. Open `/posts/popular` in Native mode. Pawchive's original paginator and original `Showing …` text must not be visible anywhere.
+2. Confirm one PMF-styled paginator appears immediately below the Native/Local toolbar and a second appears immediately below the post grid.
+3. Both paginators must show the same `Showing 1–50 of 500`-style summary and the same current/previous/next/numbered-page state.
+4. Click page numbers and Previous/Next from both the top and bottom PMF mirrors. They must navigate through Pawchive's real page actions and keep the correct Popular date/period.
+5. Switch to Local mode. The two paginator hosts must remain in the same positions but show the Local filtered count and controls instead. Switch back to Native and confirm no duplicate native controls reappear.
+6. Test first, middle, and final pages. The summary must use the URL offset and actual card count, including a partial final page such as `Showing 451–467 of 467`.
+7. Use Back/Forward and hard refresh. There must be one toolbar, one top paginator, one bottom paginator, and no duplicated result-count line.
+8. Browser confirmation remains required for Pawchive's live paginator markup and navigation behavior.
 
 ## v0.12.9 Popular performance, retry, placement, and platform matrix
 

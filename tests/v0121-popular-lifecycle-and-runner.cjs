@@ -19,8 +19,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     MaintenanceCommandRunner,
   } = api;
 
-  assert.equal(Config.version, '0.12.9');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.9/);
+  assert.equal(Config.version, '0.13.0');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.0/);
   assert.equal(Settings.schema.version, 6);
 
   const oldDefaultHosts = [
@@ -90,14 +90,15 @@ const { loadUserscript } = require('./test-helper.cjs');
 
   assert.match(originalSource, /MaintenanceCommandRunner\.start\(\)/);
   assert.doesNotMatch(originalSource, /data-popular-period-role|data-popular-native-page-action|const PopularNativePaginator/);
+  assert.match(originalSource, /pmf-popular-native-paginator/);
   assert.match(PopularPageController.applyNativeControlVisibility.toString(), /setVisible\(node,true\)/);
-  assert.match(PopularPageController.applyNativeControlVisibility.toString(), /showPaginators/);
+  assert.match(PopularPageController.applyNativeControlVisibility.toString(), /setVisible\(node,false\)/);
   assert.match(originalSource, /refreshRevision/);
   assert.match(originalSource, /observerSchedule=Util\.debounce/);
   assert.match(PopularPageController.mount.toString(), /forwardAbort/);
   assert.match(PopularPageController.load.toString(), /assertMountCurrent/);
   assert.doesNotMatch(PopularDOM.find.toString(), /closest\?\.\('\.paginator/);
-  assert.doesNotMatch(originalSource.slice(originalSource.indexOf('const PopularPageController'), originalSource.indexOf('const App =')), /NativePaginatorMirror\.render/);
+  assert.match(originalSource.slice(originalSource.indexOf('const PopularPageController'), originalSource.indexOf('const App =')), /NativePaginatorMirror\.render/);
 
   const toolsDir = path.resolve(__dirname, '..', 'tools');
   const runner = fs.readFileSync(path.join(toolsDir, 'Start-PawchiveMetadataRunner.ps1'), 'utf8');

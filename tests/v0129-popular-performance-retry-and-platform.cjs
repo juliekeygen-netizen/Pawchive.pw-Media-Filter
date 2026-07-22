@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularPageController,
   } = api;
 
-  assert.equal(Config.version, '0.12.9');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.9/);
+  assert.equal(Config.version, '0.13.0');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.0/);
 
   const button = {
     disabled: false,
@@ -117,10 +117,11 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularJobManager.restore.toString(), /recentJobs\.set/);
   assert.match(PopularJobManager.snapshot.toString(), /'interrupted'/);
 
-  assert.match(PopularPageController.applyNativeControlVisibility.toString(), /placeNativeTopControls/);
-  assert.match(PopularPageController.placeNativeTopControls.toString(), /insertAdjacentElement\('afterend'/);
+  assert.doesNotMatch(PopularPageController.applyNativeControlVisibility.toString(), /placeNativeTopControls/);
+  assert.match(PopularPageController.applyNativeControlVisibility.toString(), /for\(const node of found\?\.paginators\|\|\[\]\).*setVisible\(node,false\)/);
+  assert.match(PopularPageController.applyNativeControlVisibility.toString(), /for\(const node of found\?\.countNodes\|\|\[\]\).*setVisible\(node,false\)/);
   assert.match(PopularPageController.nativeState.toString(), /nextSibling/);
   assert.match(PopularPageController.restoreNode.toString(), /insertBefore/);
 
-  console.log('Pawchive Media Filter v0.12.9 Popular performance, retry, native-control placement, and platform-icon tests passed.');
+  console.log('Pawchive Media Filter v0.13.0 Popular performance, retry, mirrored pagination, and platform-icon tests passed.');
 })();

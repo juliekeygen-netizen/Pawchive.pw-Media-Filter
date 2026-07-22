@@ -14,8 +14,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Lifecycle,
   } = api;
 
-  assert.equal(Config.version, '0.12.9');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.9/);
+  assert.equal(Config.version, '0.13.0');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.0/);
 
   assert.doesNotMatch(PopularNavigation.visit.toString(), /Turbo\.visit/,
     'Popular period navigation must use a full document navigation instead of Turbo');
@@ -36,14 +36,15 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(mountUi, /data-popular-settings/);
   assert.doesNotMatch(mountUi, /pmf-popular-period|periodNavMarkup/,
     'The custom date and period card must not be mounted');
-  assert.match(mountUi, /paginator\.hidden=true/,
-    'The PMF filtered paginator starts hidden and is reserved for Local mode');
+  assert.match(mountUi, /pmf-popular-native-paginator/,
+    'The PMF paginator hosts include Native-mode mirror containers');
 
   const bindSource = PopularPageController.bind.toString();
   assert.match(bindSource, /App\.dom\?\.periodLinks/,
     'Native Pawchive period links are the navigation source');
   assert.match(bindSource, /popular-native-period/);
-  assert.doesNotMatch(bindSource, /data-popular-native-page-action|PopularNativePaginator/);
+  assert.match(bindSource, /data-native-paginator-index/);
+  assert.match(bindSource, /navigateNativePage/);
 
   assert.match(PopularDOM.find.toString(), /countNodes=PopularDOM\.countCandidates/);
   assert.match(PopularPageController.saveNative.toString(), /counts:/);
@@ -51,11 +52,10 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularPageController.applyNativeControlVisibility.toString(), /navContainers/);
   assert.match(PopularPageController.applyNativeControlVisibility.toString(), /setVisible\(node,true\)/,
     'Native Day, Week, and Month controls stay visible in both modes');
-  assert.match(PopularPageController.renderNative.toString(), /showPaginators:true/);
-  assert.match(PopularPageController.renderNative.toString(), /paginator\.hidden=true/,
-    'Native mode uses Pawchive pagination rather than PMF pagination');
-  assert.match(PopularPageController.renderLocal.toString(), /showPaginators:false/,
-    'Local mode hides native page-number pagination while retaining native period navigation');
+  assert.match(PopularPageController.renderNative.toString(), /setPaginatorMode\('native'\)/);
+  assert.match(PopularPageController.renderNative.toString(), /renderNativePaginators/);
+  assert.match(PopularPageController.renderLocal.toString(), /setPaginatorMode\('local'\)/,
+    'Local mode restores the filtered paginator while retaining native period navigation');
   assert.match(PopularPageController.renderLocal.toString(), /paginator\.hidden=false/);
 
   assert.match(PopularPageController.load.toString(), /\['native','local'\]\.includes\(globalMode\)\?globalMode/,
@@ -66,7 +66,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(SettingsUI.preview.toString(), /App\.pageKind==='popular'/);
 
   assert.doesNotMatch(originalSource, /\.pmf-popular-period\{|\.pmf-popular-period-links/);
-  assert.doesNotMatch(originalSource, /const PopularNativePaginator|data-popular-native-page-action/);
+  assert.match(originalSource, /pmf-popular-native-paginator/);
 
-  console.log('Pawchive Media Filter v0.12.9 native Popular controls regression tests passed.');
+  console.log('Pawchive Media Filter v0.13.0 native Popular mirrored controls regression tests passed.');
 })();

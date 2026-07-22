@@ -17,18 +17,18 @@ const { loadUserscript } = require('./test-helper.cjs');
     QueuePanelView,
   } = api;
 
-  assert.equal(Config.version, '0.12.9');
+  assert.equal(Config.version, '0.13.0');
   assert.doesNotMatch(originalSource, /pmf-popular-period-card|pmf-popular-period-title|data-popular-period-nav/,
     'PMF must not render a second period/date selector');
-  assert.doesNotMatch(originalSource, /const PopularNativePaginator/,
-    'PMF must not render a second paginator in Native mode');
+  assert.match(PopularPageController.mountUI.toString(), /pmf-popular-native-paginator/,
+    'Native mode uses PMF-owned paginator mirrors rather than displaying Pawchive paginator nodes');
   assert.match(PopularDOM.find.toString(), /navContainers/);
   assert.match(PopularPageController.applyNativeControlVisibility.toString(), /setVisible\(node,true\)/,
     'Pawchive native period controls remain visible in both modes');
-  assert.match(PopularPageController.renderNative.toString(), /showPaginators:true/,
-    'Native mode uses Pawchive pagination');
-  assert.match(PopularPageController.renderNative.toString(), /paginator\.hidden=true/,
-    'The Local filtered paginator is hidden in Native mode');
+  assert.match(PopularPageController.renderNative.toString(), /renderNativePaginators/,
+    'Native mode renders PMF paginator mirrors at both grid edges');
+  assert.match(PopularPageController.applyNativeControlVisibility.toString(), /setVisible\(node,false\)/,
+    'Original Pawchive paginator and count nodes are hidden in both modes');
 
   assert.match(PopularNavigation.visit.toString(), /GM_setValue\(Config\.popularModeKey,App\.popularMode\)/);
   assert.match(PopularPageController.load.toString(), /const globalMode=GM_getValue\(Config\.popularModeKey,'native'\)/,
@@ -109,5 +109,5 @@ const { loadUserscript } = require('./test-helper.cjs');
     'The single stored count remains on the right side');
   assert.match(originalSource, /\.pmf-popular-local-grid \.post-card__footer\{text-align:left!important/);
 
-  console.log('Pawchive Media Filter v0.12.9 native period, action-state, queue reuse, and Local-card tests passed.');
+  console.log('Pawchive Media Filter v0.13.0 native period, mirrored pagination, action-state, queue reuse, and Local-card tests passed.');
 })();

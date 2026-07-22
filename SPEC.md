@@ -1,4 +1,13 @@
-# Pawchive.pw Media Filter v0.12.9 specification
+# Pawchive.pw Media Filter v0.13.0 specification
+
+## v0.13.0 Native Popular paginator contract
+
+- Pawchive's Day / Week / Month period links remain native and visible.
+- Pawchive's original page-number paginator nodes and original `Showing …` count nodes are hidden whenever the Popular controller is mounted.
+- Native mode renders two PMF-owned paginator mirrors: one immediately below the PMF toolbar and one immediately below the post grid.
+- Each mirror displays `Showing start–end of total` and the same First / Previous / numbered pages / Next / Last controls derived from Pawchive's hidden paginator.
+- Clicking a PMF Native paginator button activates the corresponding real Pawchive paginator item; PMF does not invent page URLs.
+- Local mode uses the same two hosts for its filtered paginator, so changing Native / Local swaps controls without changing their page positions.
 
 ## v0.12.9 Popular performance and completeness contract
 
@@ -71,7 +80,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.12.9`
+- Userscript and `Config.version`: `0.13.0`
 - Settings: `pmf-settings-v5`
 - Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1
