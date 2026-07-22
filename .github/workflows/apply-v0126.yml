@@ -1,0 +1,72 @@
+name: Apply Pawchive v0.12.6
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0126/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0126-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply v0.12.6 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "bcae6ace7e713466382c04004ec7f1b75ac4e8d2"
+          grep -q '@version      0.12.5' pawchive-pw-media-filter.user.js
+          cat .pawchive-v0126/part00 .pawchive-v0126/part01 .pawchive-v0126/part02 .pawchive-v0126/part03 .pawchive-v0126/part04 > /tmp/pawchive-v0126.patch.xz.b64
+          test "$(sha256sum /tmp/pawchive-v0126.patch.xz.b64 | awk '{print $1}')" = "bc4285780d8d9ccd30f4a25c3da7f2f99177ff15d92570b5c001aaac36eb409e"
+          base64 -d /tmp/pawchive-v0126.patch.xz.b64 > /tmp/pawchive-v0126.patch.xz
+          xz -dc /tmp/pawchive-v0126.patch.xz > /tmp/pawchive-v0126.patch
+          test "$(sha256sum /tmp/pawchive-v0126.patch | awk '{print $1}')" = "92a8cbf8258e6040538ddd6cfa863d2efe4fa1984b3cba093bd6d7006ee224c0"
+          git apply --check /tmp/pawchive-v0126.patch
+          git apply /tmp/pawchive-v0126.patch
+
+      - name: Validate v0.12.6
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 61
+          git diff --check
+          grep -q '@version      0.12.6' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.12.6'" pawchive-pw-media-filter.user.js
+          grep -q 'pmf-toolbar pmf-creator-index-toolbar pmf-popular-toolbar' pawchive-pw-media-filter.user.js
+          grep -q 'v0.12.6 Popular controls and navigation regression tests passed' tests/v0126-popular-controls-and-navigation.cjs
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .pawchive-v0126
+          rm -f .github/workflows/apply-v0126.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.12.6 Popular controls and navigation lifecycle'
+          git push origin HEAD:master
