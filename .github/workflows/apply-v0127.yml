@@ -43,20 +43,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo 'Checking userscript syntax'
           node --check pawchive-pw-media-filter.user.js
           test_count=0
           while IFS= read -r test_file; do
-            echo "Running $test_file"
-            node "$test_file"
+            if ! node "$test_file" >/tmp/pmf-test.log 2>&1; then
+              echo "FAILED: $test_file"
+              cat /tmp/pmf-test.log
+              exit 1
+            fi
             test_count=$((test_count + 1))
           done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
           echo "Executable tests: $test_count"
           test "$test_count" -eq 62
+          echo 'Checking patch whitespace'
           git diff --check
+          echo 'Checking release markers'
           grep -q '@version      0.12.7' pawchive-pw-media-filter.user.js
           grep -q "version: '0.12.7'" pawchive-pw-media-filter.user.js
           grep -q 'const PopularQueuePanel' pawchive-pw-media-filter.user.js
           grep -q 'v0.12.7 Popular queue, cards, paginator, and dated-mount tests passed' tests/v0127-popular-queue-cards-and-dated-mount.cjs
+          echo 'v0.12.7 validation complete'
 
       - name: Publish directly to master
         shell: bash
