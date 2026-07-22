@@ -55,9 +55,13 @@ jobs:
           test -z "$(find . -name '*.rej' -print -quit)"
 
       - name: Validate v0.13.3
+        id: validate
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
+          exec > >(tee /tmp/v0133-validation.log) 2>&1
+          set -euxo pipefail
           node --check pawchive-pw-media-filter.user.js
           test_count=0
           while IFS= read -r test_file; do
@@ -73,6 +77,19 @@ jobs:
           grep -q 'canonicalPopularUrl' pawchive-pw-media-filter.user.js
           grep -q 'jobPercent(job)' pawchive-pw-media-filter.user.js
           grep -q 'Popular progress, canonical-route, and incremental-update tests passed' tests/v0133-popular-progress-canonical-and-update.cjs
+
+      - name: Upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0133-validation-report
+          path: /tmp/v0133-validation.log
+          if-no-files-found: error
+
+      - name: Enforce validation result
+        if: steps.validate.outcome != 'success'
+        shell: bash
+        run: exit 1
 
       - name: Publish directly to master
         shell: bash
