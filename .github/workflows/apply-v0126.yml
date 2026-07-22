@@ -6,6 +6,11 @@ on:
       - master
     paths:
       - '.pawchive-v0126/trigger'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0126/trigger'
 
 permissions:
   contents: write
