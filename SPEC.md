@@ -1,4 +1,12 @@
-# Pawchive.pw Media Filter v0.12.2 specification
+# Pawchive.pw Media Filter v0.12.5 specification
+
+## v0.12.5 Popular injection and layout contract
+
+- The Popular root is inserted directly before the connected native Popular grid. It must not be inserted inside or relative to a native period-navigation group that PMF may hide.
+- Popular mounting publishes its page AbortController for shared settings/overlay actions, but it does not connect the creator-only compact-layout observer.
+- Popular Local mode measures the visible native Popular grid and uses the pure `CompactGridScale.calculateLayout` / `setOwnedGridStyles` helpers without requiring creator `App.context` state.
+- Popular cleanup cancels only Popular-owned resize/native observers and clears `App.pageController` only when it still points to that same controller.
+- Native period/paginator hiding must skip any container that contains the mounted Popular root or another PMF-owned node.
 
 ## v0.12.2 Popular lifecycle and maintenance-runner contracts
 
@@ -20,7 +28,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.12.2`
+- Userscript and `Config.version`: `0.12.5`
 - Settings: `pmf-settings-v5`
 - Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1

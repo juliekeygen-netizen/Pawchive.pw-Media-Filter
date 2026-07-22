@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.5
+
+- Fixed the real-browser `/posts/popular` mount failure by removing Popular Posts from the creator-only compact-layout lifecycle. Popular pages do not have a creator `App.context`, so they now measure their own native grid and apply only the pure card-sizing calculations required by Local mode.
+- Mounted the Popular root directly before Pawchive's native post grid, matching the stable grid-adjacent injection used by `/artists`, instead of anchoring it to native period-navigation markup that PMF later hides.
+- Popular mounts still publish their AbortController for shared UI actions, while Popular cleanup now cancels only Popular-owned observers and never disconnects a newer creator-page layout observer.
+- Native period-control hiding now refuses to hide any container that contains the PMF Popular root or another PMF-owned node.
+- Added focused v0.12.5 regression coverage; 60 executable tests now pass.
+
 ## 0.12.3
 
 - Fixed the current bare `/posts/popular` route by resolving **The Past 24 Hours** to the current UTC day and by deriving canonical dates from Pawchive's period links before falling back to today.

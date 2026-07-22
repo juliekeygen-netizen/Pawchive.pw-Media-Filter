@@ -7,8 +7,8 @@ const { api, originalSource } = loadUserscript();
 const { Config, DataPortability, FilterEngine } = api;
 
 (() => {
-  assert.equal(Config.version, '0.12.3');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.3/);
+  assert.equal(Config.version, '0.12.5');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.5/);
 
   const stores = Object.fromEntries(DataPortability.catalogueStores.map((store) => [store, []]));
   for (let index = 0; index < 120; index += 1) {
@@ -64,5 +64,5 @@ const { Config, DataPortability, FilterEngine } = api;
   assert.match(originalSource, /parsed=await DataPortability\.readBackupFile\(file\)/);
   assert.match(originalSource, /accept="\.pmfbackup,\.json,\.jsonl,application\/json,application\/x-pawchive-backup\+jsonl"/);
 
-  console.log('Pawchive Media Filter v0.12.3 large streaming backup tests passed.');
+  console.log('Pawchive Media Filter v0.12.5 large streaming backup tests passed.');
 })();

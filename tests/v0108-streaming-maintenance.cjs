@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     CreatorState,
   } = api;
 
-  assert.equal(Config.version, '0.12.3');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.3/);
+  assert.equal(Config.version, '0.12.5');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.5/);
   assert.doesNotMatch(originalSource, /const LegacyCreatorIndexUI/);
   assert.doesNotMatch(originalSource, /creatorOpenChildBase/);
   assert.match(Cache.scanCataloguePostChunk.toString(), /openCursor/);

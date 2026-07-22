@@ -1,4 +1,19 @@
-# Pawchive.pw Media Filter v0.12.2 testing
+# Pawchive.pw Media Filter v0.12.5 testing
+
+## v0.12.5 Popular injection and layout matrix
+
+Automated validation:
+
+```text
+node --check pawchive-pw-media-filter.user.js
+60 executable .cjs tests
+```
+
+1. Open `/posts/popular` and explicit Day, Week, and Month URLs. The period panel, Native/Local selector, toolbar, and custom paginator must appear directly above the native post grid.
+2. Confirm the console contains neither `reading 'signal'` nor a new mount exception. The root must remain connected instead of being inserted and immediately removed.
+3. Inspect the DOM: `#pmf-popular-root` and the top `.pmf-popular-paginator` are siblings immediately before `.card-list__items`; neither may be inside a native period-navigation container.
+4. Switch to Local after scanning a disposable period. Card size and aspect-ratio settings must use the measured Popular grid geometry without a creator `App.context`.
+5. Navigate Popular → creator → Popular and use Back/Forward. Popular cleanup must not disconnect the creator page's compact-layout observer, and native period hiding must not conceal the PMF root.
 
 ## v0.12.2 Popular lifecycle and metadata-runner matrix
 

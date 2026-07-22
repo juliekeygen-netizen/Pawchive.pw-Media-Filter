@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config } = api;
 
-assert.equal(Config.version, '0.12.3');
+assert.equal(Config.version, '0.12.5');
 
 assert.match(originalSource, /--pmf-status-summary-gap:7px;gap:var\(--pmf-status-summary-gap\)!important/);
 assert.match(originalSource, /\.pmf-page-controls\{gap:5px!important;min-height:27px!important\}/);

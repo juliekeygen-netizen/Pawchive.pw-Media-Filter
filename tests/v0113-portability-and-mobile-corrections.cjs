@@ -16,8 +16,8 @@ const {
 } = api;
 
 (async () => {
-assert.equal(Config.version, '0.12.3');
-assert.match(originalSource, /\/\/ @version\s+0\.12\.3/);
+assert.equal(Config.version, '0.12.5');
+assert.match(originalSource, /\/\/ @version\s+0\.12\.5/);
 
 // Native directory pagination compacts to the same five-control shape used by
 // PMF-owned paginators on phones.
