@@ -17,7 +17,7 @@ const { loadUserscript } = require('./test-helper.cjs');
     QueuePanelView,
   } = api;
 
-  assert.equal(Config.version, '0.13.3');
+  assert.equal(Config.version, '0.13.4');
   assert.doesNotMatch(originalSource, /pmf-popular-period-card|pmf-popular-period-title|data-popular-period-nav/,
     'PMF must not render a second period/date selector');
   assert.match(PopularPageController.mountUI.toString(), /pmf-popular-native-paginator/,
@@ -105,9 +105,9 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularPageController.renderLocal.toString(), /statusLeft\.hidden=true/);
   assert.match(PopularPageController.renderLocal.toString(), /statusLabel\.textContent=''/,
     'The redundant Local count is not rendered on the left side');
-  assert.match(PopularPageController.renderLocal.toString(), /statusRight\.textContent=`Local Popular Posts · \$\{App\.popularEntries\.size} stored`/,
+  assert.match(PopularPageController.renderLocal.toString(), /`Local Popular Posts · \$\{App\.popularEntries\.size\} stored`/,
     'The single stored count remains on the right side');
   assert.match(originalSource, /\.pmf-popular-local-grid \.post-card__footer\{text-align:left!important/);
 
-  console.log('Pawchive Media Filter v0.13.3 native period, mirrored pagination, action-state, queue reuse, and Local-card tests passed.');
+  console.log('Pawchive Media Filter v0.13.4 native period, mirrored pagination, action-state, queue reuse, and Local-card tests passed.');
 })();

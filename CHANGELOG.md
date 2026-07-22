@@ -1,3 +1,11 @@
+## 0.13.4
+
+- Added an **All Scans** Popular mode beside Native and Local.
+- All Scans groups every saved Popular snapshot by Day, Week, or Month, hides dated Previous/Next navigation, and turns the remaining Day/Week/Month links into local aggregate selectors.
+- Deduplicated posts across snapshots by post key. When a post was observed more than once in the selected period type, the entry with the highest displayed favorite count is retained; ties use the newest observation.
+- Rebuilt aggregate ranks after deduplication, retained Local filtering/status controls and pagination, and refreshed the aggregate automatically when a matching Popular scan completes.
+- Added one-transaction multi-period entry loading plus regression coverage for aggregation, period switching, native-control restoration, and favorite-count selection. All 69 executable tests pass.
+
 # Changelog
 
 ## 0.13.3

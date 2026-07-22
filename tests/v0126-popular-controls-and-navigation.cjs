@@ -14,8 +14,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Lifecycle,
   } = api;
 
-  assert.equal(Config.version, '0.13.3');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.3/);
+  assert.equal(Config.version, '0.13.4');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.4/);
 
   assert.doesNotMatch(PopularNavigation.visit.toString(), /Turbo\.visit/,
     'Popular period navigation must use a full document navigation instead of Turbo');
@@ -51,14 +51,14 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularPageController.restoreNative.toString(), /nativeSnapshot\?\.counts/);
   assert.match(PopularPageController.applyNativeControlVisibility.toString(), /navContainers/);
   assert.match(PopularPageController.applyNativeControlVisibility.toString(), /setVisible\(node,true\)/,
-    'Native Day, Week, and Month controls stay visible in both modes');
+    'Native Day, Week, and Month controls remain available across all Popular modes');
   assert.match(PopularPageController.renderNative.toString(), /setPaginatorMode\('native'\)/);
   assert.match(PopularPageController.renderNative.toString(), /renderNativePaginators/);
   assert.match(PopularPageController.renderLocal.toString(), /setPaginatorMode\('local'\)/,
     'Local mode restores the filtered paginator while retaining native period navigation');
   assert.match(PopularPageController.renderLocal.toString(), /paginator\.hidden=false/);
 
-  assert.match(PopularPageController.load.toString(), /\['native','local'\]\.includes\(globalMode\)\?globalMode/,
+  assert.match(PopularPageController.load.toString(), /allowedModes=\['native','local','aggregate'\].*allowedModes\.includes\(globalMode\)\?globalMode/,
     'The global selected mode wins over stale per-period saved state');
   assert.match(PopularPageController.renderNative.toString(), /Native Popular Posts · Pawchive controls/);
   assert.match(PopularPageController.renderLocal.toString(), /Local Popular Posts · \$\{App\.popularEntries\.size\} stored/);
@@ -68,5 +68,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.doesNotMatch(originalSource, /\.pmf-popular-period\{|\.pmf-popular-period-links/);
   assert.match(originalSource, /pmf-popular-native-paginator/);
 
-  console.log('Pawchive Media Filter v0.13.3 native Popular mirrored controls regression tests passed.');
+  console.log('Pawchive Media Filter v0.13.4 native Popular mirrored controls regression tests passed.');
 })();

@@ -1,5 +1,13 @@
 # Pawchive.pw Media Filter
 
+## v0.13.4 All Scans Popular mode
+
+- Added a third **All Scans** mode beside Native and Local on Popular Posts pages.
+- Choose Day, Week, or Month to combine every saved snapshot of that period type into one local result set; dated Previous/Next links are hidden while this mode is active.
+- The same post is shown once. Its highest observed displayed favorite count is retained across all matching snapshots, with the newest observation used as the tie-breaker.
+- Aggregate results keep the existing Local filters, status controls, card layout, and top/bottom pagination.
+- All Scans is view-only: scanning and updating still happen from the dated Native or Local period views.
+
 ## v0.13.3 Popular progress and canonical periods
 
 - Coalesced route-change and mutation bursts so rapid Back/Forward navigation cannot create duplicate mount storms.
