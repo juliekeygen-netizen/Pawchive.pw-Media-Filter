@@ -1,7 +1,7 @@
 name: Apply Pawchive v0.12.4
 
 on:
-  push:
+  pull_request:
     branches:
       - master
     paths:
@@ -18,7 +18,7 @@ jobs:
   apply:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out master
+      - name: Check out current master
         uses: actions/checkout@v4
         with:
           ref: master
