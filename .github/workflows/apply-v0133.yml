@@ -71,7 +71,7 @@ jobs:
           test "$test_count" -eq 68
           grep -q 'canonicalPopularUrl' pawchive-pw-media-filter.user.js
           grep -q 'jobPercent(job=' pawchive-pw-media-filter.user.js
-          grep -q 'Popular progress, canonical-route, and incremental Update tests passed' tests/v0133-popular-progress-canonical-and-update.cjs
+          grep -q 'Popular progress, canonical route, and incremental Update tests passed' tests/v0133-popular-progress-canonical-and-update.cjs
 
       - name: Publish directly to master
         shell: bash
