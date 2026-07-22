@@ -1,4 +1,25 @@
-# Pawchive.pw Media Filter v0.12.5 testing
+# Pawchive.pw Media Filter v0.12.6 testing
+
+## v0.12.6 Popular controls and navigation matrix
+
+Automated validation:
+
+```text
+node --check pawchive-pw-media-filter.user.js
+61 executable .cjs tests
+git diff --check
+```
+
+1. Compare `/posts/popular` with `/artists`: the main toolbar must have the same width, four control columns, control height, settings-button width, font, and status-row styling in Native and Local modes.
+2. Confirm the period panel is only as wide as its title and five controls require. Previous, Day, Week, Month, and Next must always be present. At a boundary, the unavailable direction is gray, struck through, disabled, and still occupies its place.
+3. On a dated Day route, click Previous repeatedly and confirm every destination remains `period=day`. Repeat for Week and Month. No click may jump to the previous/next link belonging to another period row.
+4. Switch Day → Week → Month and navigate several periods in each direction. Every navigation should complete as a full page load, retain one PMF root, and never produce `Popular Posts DOM detection timed out`, a blank grid, or an early-shell removal.
+5. Use the top and bottom Popular paginators repeatedly. The final URL, heading, date, cards, and PMF period label must all agree before the old UI is replaced.
+6. In Native mode, verify status text reads **Native Popular Posts · Pawchive controls**. In Local mode verify **N Local Popular posts** and **Local Popular Posts · N stored**.
+7. On an unscanned period, click Scan in Native and Local. The confirmation dialog must open and Queue scan must add that period. On a partial period the button says Resume; on a completed period it says Update in both modes.
+8. Click Settings in Native and Local. The modal must open; preview Small/Medium/Big card scale and aspect ratio in Local, then test Cancel and Save & apply.
+9. Open Local filters and test media/status filtering. Switching modes must not leave the primary button disabled or labeled **Scan in Native**.
+10. Browser confirmation remains required for actual Pawchive timing, queue requests, HTTP failures, and persisted IndexedDB results.
 
 ## v0.12.5 Popular injection and layout matrix
 

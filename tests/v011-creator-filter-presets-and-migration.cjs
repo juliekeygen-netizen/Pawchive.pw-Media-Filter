@@ -13,7 +13,7 @@ const {
   CreatorSortUI,
 } = api;
 
-assert.equal(Config.version, '0.12.5');
+assert.equal(Config.version, '0.12.6');
 
 const migrated = CreatorFilterEngine.normalizeState({
   service: 'fanbox',

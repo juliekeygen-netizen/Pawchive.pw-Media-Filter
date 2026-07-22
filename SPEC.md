@@ -1,4 +1,16 @@
-# Pawchive.pw Media Filter v0.12.5 specification
+# Pawchive.pw Media Filter v0.12.6 specification
+
+## v0.12.6 Popular control and navigation contract
+
+- `.pmf-popular-toolbar` also uses `.pmf-creator-index-toolbar`; desktop width and the Filter / Sort / primary action / Settings grid must match the creator directory.
+- The period surface is content-sized. Previous, Day, Week, Month, and Next always render in that order. Missing Previous/Next destinations are disabled rather than removed.
+- A Previous or Next destination is valid only when its URL `period` matches the currently selected period. Links from another period row may not overwrite it.
+- PMF-owned Popular navigation and mirrored native pagination use a full document navigation rather than Turbo. The current root remains until the requested native heading, date, grid, and cards are stable.
+- Explicit dated routes may not bind a stale grid whose observed heading/link date differs from the URL date.
+- Lifecycle startup may not restore/remove native content while the matching Popular route has an active mount promise.
+- Scan / Resume / Update and Settings have direct event handlers. Local mode uses the same action resolver as Native and may queue an unscanned period directly.
+- Native status text is **Native Popular Posts · Pawchive controls**. Local status contains **N Local Popular posts** and **Local Popular Posts · N stored**.
+- Settings card-size/aspect previews on Popular pages use the Popular-owned layout calculation and must not connect creator-only observers.
 
 ## v0.12.5 Popular injection and layout contract
 
@@ -28,7 +40,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.12.5`
+- Userscript and `Config.version`: `0.12.6`
 - Settings: `pmf-settings-v5`
 - Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1

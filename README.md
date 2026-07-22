@@ -1,5 +1,13 @@
 # Pawchive.pw Media Filter
 
+## v0.12.6 Popular controls, navigation, and UI consistency
+
+- The Popular toolbar now uses the same 920 px shared toolbar contract, control grid, typography, and control dimensions as `/artists` and creator pages.
+- The period panel sizes to its content. Previous and Next are always present; unavailable destinations remain visible as disabled controls.
+- Day, Week, and Month navigation now selects Previous/Next from the matching period row and performs a full document navigation. PMF keeps the existing UI until the requested page has a stable, matching heading and card grid.
+- Scan, Resume, Update, Settings, and Local filters use explicit handlers. Local mode uses the same action state as Native, and completed snapshots show Update.
+- Status summaries follow the shared directory wording: **Native Popular Posts · Pawchive controls** and **Local Popular Posts · N stored**.
+
 ## v0.12.5 Popular injection and layout repair
 
 - Popular Posts now mounts its UI as a stable sibling immediately before Pawchive's native post grid, the same structural pattern used by the working `/artists` controller.
@@ -24,7 +32,7 @@ Close the selected browser before starting the default runner so it can safely u
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.12.5**
+Current version: **0.12.6**
 
 ## Installation
 

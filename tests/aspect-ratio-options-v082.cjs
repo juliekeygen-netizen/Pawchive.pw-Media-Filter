@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, stored, originalSource } = loadUserscript();
 const { Config, Settings, CompactThumbnailRatio, UI } = api;
 
-assert.equal(Config.version, '0.12.5');
+assert.equal(Config.version, '0.12.6');
 
 Settings.load();
 assert.equal(Settings.value.compactThumbnailAspectRatio, '1-1');

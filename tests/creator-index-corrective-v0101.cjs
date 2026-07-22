@@ -10,8 +10,8 @@ const {
   ArtistsDOM, CreatorGridGeometry, CreatorBulkSelection, CatalogueJobManager, CatalogueModel,
 } = api;
 
-assert.equal(Config.version, '0.12.5');
-assert.match(originalSource, /\/\/ @version\s+0\.12\.5/);
+assert.equal(Config.version, '0.12.6');
+assert.match(originalSource, /\/\/ @version\s+0\.12\.6/);
 assert.equal(Config.databaseVersion, 6);
 assert.equal(Settings.schema.version, 6);
 const migrated = Settings.migrate({ settingsSchemaVersion:3 });

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.12.6
+
+- Aligned the Popular Posts toolbar with the shared `/artists` creator-directory toolbar width, control columns, typography, and button dimensions.
+- Made the period panel content-sized and kept Previous / Next controls visible as disabled, muted, struck-through buttons when Pawchive has no destination.
+- Fixed period navigation selecting the wrong Previous / Next URL by pairing navigation links with the active Day, Week, or Month row instead of allowing later rows to overwrite it.
+- Switched PMF Popular period and paginator navigation to full-document navigation, retained the old UI until the replacement native DOM is stable, and rejected stale DOM whose heading/date does not match the requested route.
+- Prevented the early-shell timeout from deleting a Popular UI while its matching route is still mounting.
+- Added direct Scan / Resume / Update, Settings, and Local Filter button handlers. Local mode now permits the same primary action and no longer displays **Scan in Native**.
+- Matched Popular status summaries to the creator directory: **Native Popular Posts · Pawchive controls** and **Local Popular Posts · N stored**.
+- Added a Popular-safe settings preview path and focused v0.12.6 navigation/control regression coverage; 61 executable tests pass.
+
 ## 0.12.5
 
 - Fixed the real-browser `/posts/popular` mount failure by removing Popular Posts from the creator-only compact-layout lifecycle. Popular pages do not have a creator `App.context`, so they now measure their own native grid and apply only the pure card-sizing calculations required by Local mode.

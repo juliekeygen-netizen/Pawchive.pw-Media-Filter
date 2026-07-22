@@ -9,8 +9,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, context, originalSource, makeElement } = loadUserscript();
   const { Config, PopularDOM, PopularPeriod, PostNormalizer, Route } = api;
 
-  assert.equal(Config.version, '0.12.5');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.5/);
+  assert.equal(Config.version, '0.12.6');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.6/);
 
   const today = new Date().toISOString().slice(0, 10);
   assert.equal(
@@ -114,7 +114,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(runner, /maintenance window opening briefly is expected/i);
   assert.match(runner, /--start-minimized/);
 
-  console.log('Pawchive Media Filter v0.12.5 live Popular DOM and runner tests passed.');
+  console.log('Pawchive Media Filter v0.12.6 live Popular DOM and runner tests passed.');
 })().catch((error) => {
   console.error(error);
   process.exitCode = 1;

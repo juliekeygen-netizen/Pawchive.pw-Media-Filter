@@ -7,8 +7,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, originalSource } = loadUserscript();
   const { Config, PopularPageController, CompactLayoutEngine } = api;
 
-  assert.equal(Config.version, '0.12.5');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.5/);
+  assert.equal(Config.version, '0.12.6');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.6/);
 
   const mountSource = PopularPageController.mount.toString();
   const mountUiSource = PopularPageController.mountUI.toString();
@@ -43,5 +43,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(originalSource, /connect\(\{signal=App\.pageController\?\.signal\}=\{\}\)/,
     'Shared creator layout code must still tolerate an absent controller');
 
-  console.log('Pawchive Media Filter v0.12.5 Popular mount injection regression tests passed.');
+  console.log('Pawchive Media Filter v0.12.6 Popular mount injection regression tests passed.');
 })();
