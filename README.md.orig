@@ -1,6 +1,6 @@
 # Pawchive.pw Media Filter
 
-## v0.13.3 Popular progress and canonical periods
+## v0.13.2 navigation lifecycle hardening
 
 - Coalesced route-change and mutation bursts so rapid Back/Forward navigation cannot create duplicate mount storms.
 - Added bounded retry backoff and stale-route guards for creator and Popular page DOM replacement.

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.3
+
+- Canonicalized the bare `/posts/popular` route to the dated current Day URL with `location.replace`, preventing the legacy rolling 24-hour view from becoming a separate local period or Back-button loop.
+- Made Popular overall queue progress track live post-level work inside the active period instead of remaining at 0% until the whole period finished; the toolbar and active row now use the same progress calculation.
+- Centered the shared Clear completed action in creator and Popular queue panels.
+- Coalesced high-frequency Popular progress renders and session work, especially while the tab is hidden, reducing DOM churn without slowing the underlying scan.
+- Confirmed and regression-tested incremental Popular Update behavior: every native list page is refreshed to reconcile membership/rank/favorite counts, while complete stored post-detail metadata is reused and only new/incomplete posts request detail data.
+
 ## 0.13.2
 
 - Added immediate History API route signals so `pushState` and `replaceState` navigation no longer waits for URL polling.
