@@ -24,37 +24,46 @@ jobs:
           ref: master
           fetch-depth: 0
 
-      - name: Recover and apply v0.13.0 patch
-        id: apply_patch
-        continue-on-error: true
+      - name: Apply v0.13.0 file deltas
         shell: bash
+        env:
+          PMF_MAIN_PATCH_B64: KLUv/aRyvQ0AvAAAOC8zLjAzLjADAHH7IB8JgH+s0WxTewU8AgA4Y1QsfHxjYxGAUHv+ptnZmm6x4LRy5DlnNEQWNBp6SOJ61IgObxURYy2NisDokDVbK9qghdsPU7O1SrkjaNjFUnBlNNvcvlQAAAABAP3/s7PNLRBEAAAAAQD9/zkAAkQAAAABAP3/OQACfBUAhAInLCxUPz8rPysxOjAsZW5kfHwsPWlbdSwsOjopOiwsKTsgfHwpO30hgNqgsGs3IQQSRFKKIWQIibkPNIInb3tHtB9q5BK81a8Pb3WIGmb5g5leBvWqy+5Wfy+69XNUcO1VGdLddkbs7lb1YX+3ToV2hKg6tnA6d2dtn/RuS6Ueanu3cbJcA598t1Iag7emPnrEW/lc0ZX3S9yw6PIAi66b4w/4hrvKXM8SHGd1l3i2NNCWa44K0QRRX9m2bIquqRWjpgur6Tao31wcaHwYupEQ2/U/SiHS5ego1NCHEen6yHRrbOoU6YLCDV2irUiX0qMS8G75+L5rpj6Qm+bu9C5/eGjaGF0H7Cd+uaKOszQJXPJZ4mFmmwPWrbbE7QRgigJqhyYA7BZ9feuj0YOcByXDGl3k0s0Gy9Q38P80xN8NsEnXipQoXZksdwFw9kETIuqSd12gAw6B/kKtuUgargHIuE6tBT6r5D0dlq7cZvX40VMRdVurndIyTWuo/XI3UtMaMMwWAyWQzFYZzL/wevfBZtpyOwbuCfqwtK4nltLJJ5aad2F0Gaa9ZPtmNtQ2/eNlhbo7nX+0TgDuFikmAma8MnsRVl66C17IssaPAmUYFgNpGN1BCO26i2JwOX0b6nI8wA+s3wOJtqPPaUrA0HX7h74TMFtCm8Q75KJZ9EacC7hVtC+PwAVylui/G46q7fSj8fAeSkClj4HLZh+YFh3vAcQUZNzBZNv53oK3VN+75PT4jc2Bwx2+usaFQ4oyMk2ixPOmq6E/9d78ajscic4YhFfb+vkfUlZb85xtZ3NVbVuB5Fmotiw56rj50bATFIfW/lIeVMfJoqRtq3S6I6QtSxZ7DMvu8Cxhx7byN4wb+JifEiu4H5jxe7ZyEgN6pKYVGz4/v2Bbs6Xg5IAKNQEAAAlAAJmTdb21OXPNrUHgnRAlt8d3eWslLNY4dB7OLJsPkidveRvMbYzL
+          PMF_OTHER_PATCHES_B64: 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
         run: |
-          set -o pipefail
-          exec > >(tee /tmp/v0130-apply.log) 2>&1
-          set -euxo pipefail
+          set -euo pipefail
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "aa7cb992015537f378482c184f9edba99e699873"
           grep -q '@version      0.12.9' pawchive-pw-media-filter.user.js
-          cat .pawchive-v0130/part00 .pawchive-v0130/part01 > /tmp/pawchive-v0130.patch.xz.b64
-          test "$(sha256sum /tmp/pawchive-v0130.patch.xz.b64 | awk '{print $1}')" = "a380f9de3cc0e9922100e9df8b410e35d58a6cb019a6f2d75427013fc6f055cd"
-          base64 -d /tmp/pawchive-v0130.patch.xz.b64 > /tmp/pawchive-v0130.patch.xz
-          test "$(sha256sum /tmp/pawchive-v0130.patch.xz | awk '{print $1}')" = "e9bf8ce3e843c85f6f76896b18b0565514e4b1af209dc593f9535096d361d5cd"
-          xz -dc /tmp/pawchive-v0130.patch.xz > /tmp/pawchive-v0130.patch
-          test "$(sha256sum /tmp/pawchive-v0130.patch | awk '{print $1}')" = "350ce0994d19f35dd680924fb767843128d8aabc2fe859a1c3f59fe34d9ea34a"
-          git apply --check --verbose /tmp/pawchive-v0130.patch
-          git apply /tmp/pawchive-v0130.patch
 
-      - name: Upload apply diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: v0130-apply-log
-          path: /tmp/v0130-apply.log
-          if-no-files-found: error
+          printf '%s' "$PMF_MAIN_PATCH_B64" | base64 -d > /tmp/pmf-main.zstpatch
+          test "$(sha256sum /tmp/pmf-main.zstpatch | awk '{print $1}')" = "5102cb5d02518eeaba1df5672dcbf49703220ace18620119ecb806531f10263e"
+          cp pawchive-pw-media-filter.user.js /tmp/pmf-main-base.js
+          zstd -d --patch-from=/tmp/pmf-main-base.js /tmp/pmf-main.zstpatch -o /tmp/pmf-main-next.js
+          mv /tmp/pmf-main-next.js pawchive-pw-media-filter.user.js
 
-      - name: Enforce patch result
-        if: steps.apply_patch.outcome != 'success'
-        shell: bash
-        run: exit 1
+          printf '%s' "$PMF_OTHER_PATCHES_B64" | base64 -d > /tmp/pmf-other.json.zst
+          test "$(sha256sum /tmp/pmf-other.json.zst | awk '{print $1}')" = "87760e77a412a32b73f98894e992674a777a1abeecf06cb7ac4a99ba991571d9"
+          zstd -d /tmp/pmf-other.json.zst -o /tmp/pmf-other.json
+          python3 - <<'PY_PATCH'
+          import base64
+          import json
+          from pathlib import Path
+          import subprocess
+
+          records = json.loads(Path('/tmp/pmf-other.json').read_text())
+          empty = Path('/tmp/pmf-empty-base')
+          empty.write_bytes(b'')
+          for index, record in enumerate(records):
+              path = Path(record['path'])
+              base = path if path.exists() else empty
+              patch = Path(f'/tmp/pmf-file-{index:02d}.zstpatch')
+              output = Path(f'/tmp/pmf-file-{index:02d}.next')
+              patch.write_bytes(base64.b64decode(record['b64']))
+              subprocess.run([
+                  'zstd', '-d', f'--patch-from={base}', str(patch), '-o', str(output), '-f'
+              ], check=True)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(output.read_bytes())
+          PY_PATCH
 
       - name: Validate v0.13.0
         shell: bash
