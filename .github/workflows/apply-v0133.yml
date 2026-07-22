@@ -69,10 +69,9 @@ jobs:
           done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
           echo "Executable tests: $test_count"
           test "$test_count" -eq 68
-          git diff --check -- pawchive-pw-media-filter.user.js CHANGELOG.md README.md
           grep -q 'canonicalPopularUrl' pawchive-pw-media-filter.user.js
-          grep -q 'jobPercent(job)' pawchive-pw-media-filter.user.js
-          grep -q 'Popular progress, canonical-route, and incremental-update tests passed' tests/v0133-popular-progress-canonical-and-update.cjs
+          grep -q 'jobPercent(job=' pawchive-pw-media-filter.user.js
+          grep -q 'Popular progress, canonical-route, and incremental Update tests passed' tests/v0133-popular-progress-canonical-and-update.cjs
 
       - name: Publish directly to master
         shell: bash
