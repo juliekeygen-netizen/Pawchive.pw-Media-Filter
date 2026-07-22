@@ -28,18 +28,14 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          git hash-object pawchive-pw-media-filter.user.js
           grep -q '@version      0.13.2' pawchive-pw-media-filter.user.js
           cat .pawchive-v0133/part00 .pawchive-v0133/part01 .pawchive-v0133/part02 > /tmp/pawchive-v0133.patch.xz.b64
-          sha256sum /tmp/pawchive-v0133.patch.xz.b64
           test "$(sha256sum /tmp/pawchive-v0133.patch.xz.b64 | awk '{print $1}')" = "803366784e802775c44fc821372b1e4b1381393787664f972bb077497eb4d8c7"
           base64 -d /tmp/pawchive-v0133.patch.xz.b64 > /tmp/pawchive-v0133.patch.xz
-          sha256sum /tmp/pawchive-v0133.patch.xz
           test "$(sha256sum /tmp/pawchive-v0133.patch.xz | awk '{print $1}')" = "e8f758a3e91fa41199ae0dfe5eff888b29d1747c227e52612d4312feed3a2378"
           xz -dc /tmp/pawchive-v0133.patch.xz > /tmp/pawchive-v0133.patch
-          sha256sum /tmp/pawchive-v0133.patch
           test "$(sha256sum /tmp/pawchive-v0133.patch | awk '{print $1}')" = "2a8a019aa295a37b13fe6e6455c4465954b47084c54a3e48f1fbd555fd3bfd1e"
-          git apply --3way /tmp/pawchive-v0133.patch
+          patch --batch --forward -p1 < /tmp/pawchive-v0133.patch
 
       - name: Validate v0.13.3
         shell: bash
