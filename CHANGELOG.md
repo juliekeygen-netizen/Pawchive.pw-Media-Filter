@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.13.2
+
+- Added immediate History API route signals so `pushState` and `replaceState` navigation no longer waits for URL polling.
+- Coalesced same-turn route signals to prevent redundant mount/abort churn during rapid Back/Forward and repeated navigation.
+- Hardened mount completion so an aborted or stale route cannot be recorded as successfully mounted.
+- BFCache and Turbo snapshots now abort in-flight mounts and pause active Popular scans; scans return as interrupted/retryable instead of continuing in the background.
+- Added navigation lifecycle stress regression coverage; 67 executable tests pass.
+
 ## 0.13.1
 
 - Fixed Native Popular pagination discovery so normal page links without `data-value` attributes are included; pages 1–10 now render instead of only Previous and the current page.

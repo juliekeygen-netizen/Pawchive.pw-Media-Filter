@@ -19,8 +19,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     MaintenanceCommandRunner,
   } = api;
 
-  assert.equal(Config.version, '0.13.1');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.1/);
+  assert.equal(Config.version, '0.13.2');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.2/);
   assert.equal(Settings.schema.version, 6);
 
   const oldDefaultHosts = [

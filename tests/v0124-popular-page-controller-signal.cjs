@@ -7,8 +7,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, originalSource } = loadUserscript();
   const { Config, PopularPageController, CompactLayoutEngine } = api;
 
-  assert.equal(Config.version, '0.13.1');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.1/);
+  assert.equal(Config.version, '0.13.2');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.2/);
 
   const mountSource = PopularPageController.mount.toString();
   const mountUiSource = PopularPageController.mountUI.toString();
@@ -29,5 +29,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.doesNotMatch(originalSource, /\{signal:App\.pageController\.signal\}/,
     'No unguarded App.pageController.signal resize listener may remain');
 
-  console.log('Pawchive Media Filter v0.13.1 Popular page-controller signal regression tests passed.');
+  console.log('Pawchive Media Filter v0.13.2 Popular page-controller signal regression tests passed.');
 })();

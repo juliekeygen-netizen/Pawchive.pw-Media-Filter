@@ -1,6 +1,6 @@
 # Pawchive.pw Media Filter
 
-## v0.13.0 mirrored Native Popular pagination
+## v0.13.2 navigation lifecycle hardening
 
 - Replaced Pawchive's visible Native Popular page selectors and `Showing …` counters with PMF-styled mirrors, matching the Native creator-directory paginator instead of moving the original controls around the page.
 - Native Popular now has one PMF paginator immediately below the toolbar and one immediately below the post grid. Both show the same `Showing start–end of total` summary and activate Pawchive's real hidden paginator controls.

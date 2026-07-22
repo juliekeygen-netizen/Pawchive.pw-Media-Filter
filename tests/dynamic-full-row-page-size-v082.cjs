@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api } = loadUserscript();
 const { Config, Settings, CompactGridScale } = api;
 
-assert.equal(Config.version, '0.13.1');
+assert.equal(Config.version, '0.13.2');
 assert.equal(Config.filteredPageSize, 50);
 assert.equal(CompactGridScale.pageSizeForColumns(1), 50);
 assert.equal(CompactGridScale.pageSizeForColumns(2), 50);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pawchive.pw Media Filter
 // @namespace    pawchive-pw-media-filter
-// @version      0.13.1
+// @version      0.13.2
 // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
 // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
 // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
@@ -22,7 +22,7 @@
 
   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const Config = Object.freeze({
-    version: '0.13.1',
+    version: '0.13.2',
     schemaVersion: 2,
     pageSize: 50,
     filteredPageSize: 50,
@@ -3571,7 +3571,7 @@
     restore(){if(PopularJobManager.restored)return;PopularJobManager.restored=true;PopularJobManager.paused=false;try{const raw=globalThis.sessionStorage?.getItem(Config.popularQueueSessionKey);const data=raw?JSON.parse(raw):null;const descriptors=data?.descriptors||[];PopularJobManager.sequence=Math.max(PopularJobManager.sequence,...descriptors.map((item)=>Math.max(0,Number(item?.queueOrder)||0)),0);for(const descriptor of descriptors){if(!descriptor?.context?.periodKey)continue;const job={id:`popular-job-${Date.now()}-${++PopularJobManager.sequence}`,periodKey:descriptor.context.periodKey,context:descriptor.context,requestedAction:descriptor.requestedAction||'resume',status:descriptor.status==='interrupted'?'interrupted':'queued',queuedAt:descriptor.queuedAt||Date.now(),queueOrder:descriptor.queueOrder||PopularJobManager.sequence,progress:{message:descriptor.status==='interrupted'?'Interrupted by navigation · Retry to continue':'Restored after reload'},error:descriptor.status==='interrupted'?new Error('Interrupted by navigation'):null};if(job.status==='interrupted')PopularJobManager.recentJobs.set(job.periodKey,job);else PopularJobManager.pendingJobs.push(job);}PopularJobManager.pendingJobs.sort((a,b)=>a.queueOrder-b.queueOrder);PopularJobManager.persist();PopularJobManager.notify();PopularJobManager.pump();}catch(error){Logger.warn('Popular queue session could not be restored.',error);}},
     enqueue(context,requestedAction='scan'){if(!context?.periodKey)return{accepted:false,state:'invalid'};const existing=PopularJobManager.jobForPeriod(context.periodKey);if(existing&&['queued','running'].includes(existing.status))return{accepted:false,state:existing.status==='queued'?'already-queued':'already-active',job:existing,position:PopularJobManager.queuePosition(context.periodKey)};PopularJobManager.recentJobs.delete(context.periodKey);const job={id:`popular-job-${Date.now()}-${++PopularJobManager.sequence}`,periodKey:context.periodKey,context:{...context},requestedAction,status:'queued',queuedAt:Date.now(),queueOrder:PopularJobManager.sequence,progress:{message:'Waiting in Popular queue'},controller:null,result:null,error:null};PopularJobManager.pendingJobs.push(job);PopularJobManager.persist();PopularJobManager.notify();PopularJobManager.pump();return{accepted:true,state:PopularJobManager.activeJob===job?'started':'queued',job,position:PopularJobManager.queuePosition(context.periodKey)};},
     async start(job){job.status='running';job.startedAt=Date.now();job.controller=new AbortController();PopularJobManager.activeJob=job;PopularJobManager.persist();PopularJobManager.notify();let slot=false;try{await CatalogueJobManager.acquireMaintenanceSlot();slot=true;if(job.controller.signal.aborted)throw new DOMException('Aborted','AbortError');job.result=await PopularScanner.run(job.context,{signal:job.controller.signal,action:job.requestedAction,jobId:job.id,onProgress:(progress)=>{job.progress={...job.progress,...progress};PopularJobManager.persist();PopularJobManager.notify();}});job.status='complete';job.progress={...job.progress,message:job.result.detailFailed?`Saved with ${job.result.detailFailed} metadata issue${job.result.detailFailed===1?'':'s'}`:'Popular period saved'};}
-      catch(error){job.error=error;job.status=error.name==='AbortError'?'stopped':'failed';job.progress={...job.progress,message:error.name==='AbortError'?'Popular scan stopped':error.message};const period=await Cache.getPopularPeriod(job.periodKey);if(period)await Cache.putPopularPeriod({...period,status:'partial',lastError:error.message,updatedAt:Date.now()});}
+      catch(error){job.error=error;const interrupted=error.name==='AbortError'&&job.interruptedByNavigation;job.status=interrupted?'interrupted':error.name==='AbortError'?'stopped':'failed';job.progress={...job.progress,message:interrupted?'Interrupted by navigation · Retry to continue':error.name==='AbortError'?'Popular scan stopped':error.message};const period=await Cache.getPopularPeriod(job.periodKey);if(period)await Cache.putPopularPeriod({...period,status:'partial',lastError:error.message,updatedAt:Date.now()});}
       finally{if(slot)CatalogueJobManager.releaseMaintenanceSlot();job.finishedAt=Date.now();PopularJobManager.activeJob=null;if(!job.shutdown){PopularJobManager.recentJobs.set(job.periodKey,job);PopularJobManager.persist();PopularJobManager.notify();PopularJobManager.pump();}else PopularJobManager.notify();}return job;},
     pump(){if(PopularJobManager.paused||PopularJobManager.activeJob||!PopularJobManager.pendingJobs.length)return;const job=PopularJobManager.pendingJobs.shift();job.done=PopularJobManager.start(job);PopularJobManager.persist();},
     stop(periodKey){const job=PopularJobManager.activeJob;if(!job||job.periodKey!==String(periodKey||''))return false;job.controller?.abort();return true;},
@@ -3582,6 +3582,8 @@
     dismiss(periodKey){const key=String(periodKey||''),job=PopularJobManager.recentJobs.get(key);if(!job||!['failed','stopped','interrupted'].includes(job.status))return false;PopularJobManager.recentJobs.delete(key);PopularJobManager.persist();PopularJobManager.notify();return true;},
     async cancelPeriod(periodKey){const key=String(periodKey||'');let changed=PopularJobManager.remove(key);const active=PopularJobManager.activeJob;if(active?.periodKey===key){active.shutdown=true;active.controller?.abort();if(active.done)await Promise.allSettled([active.done]);changed=true;}PopularJobManager.recentJobs.delete(key);PopularJobManager.persist();PopularJobManager.notify();PopularJobManager.pump();return changed;},
     async cancelAllAndForget(){const active=PopularJobManager.activeJob;if(active){active.shutdown=true;active.controller?.abort();if(active.done)await Promise.allSettled([active.done]);}PopularJobManager.pendingJobs=[];PopularJobManager.activeJob=null;PopularJobManager.recentJobs.clear();try{globalThis.sessionStorage?.removeItem(Config.popularQueueSessionKey);}catch{}PopularJobManager.notify();return true;},
+    suspendForBfcache(){PopularJobManager.paused=true;PopularJobManager.persist();const active=PopularJobManager.activeJob;if(active){active.interruptedByNavigation=true;active.controller?.abort();}PopularJobManager.notify();},
+    resumeFromBfcache(){PopularJobManager.paused=false;PopularJobManager.notify();PopularJobManager.pump();},
     shutdown(){PopularJobManager.paused=true;PopularJobManager.persist();if(PopularJobManager.activeJob){PopularJobManager.activeJob.shutdown=true;PopularJobManager.activeJob.controller?.abort();}},
   };
 
@@ -8561,6 +8563,8 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     fallbackTimer:null,
     earlyShellTimer:null,
     pendingReason:'startup',
+    microtaskQueued:false,
+    historySignalInstalled:false,
     mutationSchedule: Util.debounce(() => Lifecycle.routeHealth('documentElement mutation'), 140),
     removeStaleRoots() {
       document.querySelectorAll('#pmf-root, #pmf-toolbar, #pmf-artists-root, #pmf-popular-root, #pmf-creator-mode-selector, #pmf-creator-early-shell, .pmf-filtered-paginator, .pmf-filter-grid').forEach((node) => node.remove());
@@ -8578,12 +8582,16 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       if(!Lifecycle.documentObserver||Lifecycle.stopped)return;
       Lifecycle.documentObserver.disconnect();Lifecycle.documentObserver.observe(document.documentElement,{childList:true,subtree:true});
     },
+    healthy(page=Route.parsePage(location.href)){return page.kind==='creator'?CreatorPageController.health(page.context):page.kind==='post'?PostPageController.health(page.context):page.kind==='artists'?ArtistsPageController.health(page):page.kind==='popular'?PopularPageController.health(page):!CreatorPageController.mounted()&&!ArtistsPageController.mounted()&&!PostPageController.root&&!PopularPageController.mounted();},
+    installHistorySignals(signal){
+      const key='__pmfHistorySignalState';let state=globalThis[key];if(!state){const push=history.pushState.bind(history),replace=history.replaceState.bind(history);state={push,replace};history.pushState=function(...args){const result=push(...args);window.dispatchEvent(new Event('pmf:historychange'));return result;};history.replaceState=function(...args){const result=replace(...args);window.dispatchEvent(new Event('pmf:historychange'));return result;};globalThis[key]=state;}window.addEventListener('pmf:historychange',()=>Lifecycle.schedule('History API'),{signal});Lifecycle.historySignalInstalled=true;
+    },
     schedule(reason = 'signal', delay = 0) {
       if (Lifecycle.stopped) return;
       Lifecycle.pendingReason=reason;
       Logger.info('Route health scheduled:', reason, location.href);
       Lifecycle.desiredPageKey=Lifecycle.pageKey(Route.parsePage(location.href));
-      if(!delay){queueMicrotask(()=>Lifecycle.ensureMounted());return;}
+      if(!delay){if(Lifecycle.microtaskQueued)return;Lifecycle.microtaskQueued=true;queueMicrotask(()=>{Lifecycle.microtaskQueued=false;if(!Lifecycle.stopped)Lifecycle.ensureMounted();});return;}
       clearTimeout(Lifecycle.fallbackTimer);Lifecycle.fallbackTimer=setTimeout(()=>{Lifecycle.fallbackTimer=null;Lifecycle.ensureMounted();},Math.min(250,Math.max(0,delay)));
     },
     waitForCreatorDOM(context,{generation,signal,priorGrid=null,priorSignatureKey=''}={}) {
@@ -8609,7 +8617,7 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
     ensureMounted(page = Route.parsePage(location.href)) {
       if (Lifecycle.stopped) return Promise.resolve();
       const stylesheet=NativeStylesheetHealth.health('ensure mounted');if(!stylesheet.ok)return Promise.resolve();
-      const nextKey=Lifecycle.pageKey(page);const healthy=page.kind==='creator'?CreatorPageController.health(page.context):page.kind==='post'?PostPageController.health(page.context):page.kind==='artists'?ArtistsPageController.health(page):page.kind==='popular'?PopularPageController.health(page):!CreatorPageController.mounted()&&!ArtistsPageController.mounted()&&!PostPageController.root&&!PopularPageController.mounted();
+      const nextKey=Lifecycle.pageKey(page);const healthy=Lifecycle.healthy(page);
       Lifecycle.desiredPageKey=nextKey;
       if(nextKey===Lifecycle.mountedPageKey&&healthy)return Lifecycle.mountPromise||Promise.resolve();
       if(nextKey===Lifecycle.mountingPageKey&&Lifecycle.mountPromise){Logger.info({operation:'route-mount-reused',pageKey:nextKey,reason:Lifecycle.pendingReason||'same-route'});return Lifecycle.mountPromise;}
@@ -8617,21 +8625,21 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       Lifecycle.activePageKey=nextKey;Lifecycle.mountingPageKey=nextKey;const generation=++Lifecycle.routeGeneration;Lifecycle.mountController?.abort();const controller=new AbortController();Lifecycle.mountController=controller;
       const reason=Lifecycle.pendingReason||'ensure-mounted';Lifecycle.pendingReason='';
       Logger.info({operation:'route-transition',generation,fromPageKey,toPageKey:nextKey,reason});
-      const promise=Lifecycle.performEnsureMounted(page,{generation,signal:controller.signal,priorGrid,priorSignatureKey}).then(()=>{if(!controller.signal.aborted&&generation===Lifecycle.routeGeneration){Lifecycle.mountedPageKey=nextKey;Lifecycle.domEpoch+=1;clearTimeout(Lifecycle.earlyShellTimer);}}).catch((error)=>{if(error.name!=='AbortError')Logger.error('Mount failed.',error);}).finally(()=>{if(Lifecycle.mountPromise===promise){Lifecycle.mountPromise=null;Lifecycle.mountingPageKey='';}const current=Route.parsePage(location.href);const unhealthy=current.kind==='creator'?!CreatorPageController.health(current.context):current.kind==='post'?!PostPageController.health(current.context):current.kind==='artists'?!ArtistsPageController.health(current):current.kind==='popular'?!PopularPageController.health(current):Boolean(App.context||App.ui||ArtistsPageController.mounted()||PostPageController.root||PopularPageController.mounted());if(!Lifecycle.stopped&&generation===Lifecycle.routeGeneration&&unhealthy&&NativeStylesheetHealth.health('post-init').ok)Lifecycle.schedule('post-init health check',220);});
+      const promise=Lifecycle.performEnsureMounted(page,{generation,signal:controller.signal,priorGrid,priorSignatureKey}).then(()=>{const current=Route.parsePage(location.href),currentKey=Lifecycle.pageKey(current);if(!controller.signal.aborted&&generation===Lifecycle.routeGeneration&&currentKey===nextKey&&Lifecycle.healthy(current)){Lifecycle.mountedPageKey=nextKey;Lifecycle.domEpoch+=1;clearTimeout(Lifecycle.earlyShellTimer);}}).catch((error)=>{if(error.name!=='AbortError')Logger.error('Mount failed.',error);}).finally(()=>{if(Lifecycle.mountPromise===promise){Lifecycle.mountPromise=null;Lifecycle.mountingPageKey='';}const current=Route.parsePage(location.href),unhealthy=!Lifecycle.healthy(current);if(!Lifecycle.stopped&&generation===Lifecycle.routeGeneration&&unhealthy&&NativeStylesheetHealth.health('post-init').ok)Lifecycle.schedule('post-init health check',220);});
       Lifecycle.mountPromise=promise;return promise;
     },
     routeHealth(reason = 'watchdog') {
       if (Lifecycle.stopped) return;
-      const page=Route.parsePage(location.href);const healthy=page.kind==='creator'?CreatorPageController.health(page.context):page.kind==='post'?PostPageController.health(page.context):page.kind==='artists'?ArtistsPageController.health(page):page.kind==='popular'?PopularPageController.health(page):!CreatorPageController.mounted()&&!ArtistsPageController.mounted()&&!PostPageController.root&&!PopularPageController.mounted();
+      const page=Route.parsePage(location.href);const healthy=Lifecycle.healthy(page);
       if (!healthy) Lifecycle.schedule(reason, 0);
     },
     prepareSnapshot(reason = 'pagehide',event=null) {
-      Logger.info('Preparing page snapshot:', reason);App.savePresetDebounced.cancel(); App.saveActivePreset(); App.persistUIState();CreatorSessionCache.captureFromApp();if(event?.persisted||reason==='turbo:before-cache'){CatalogueJobManager.suspendForBfcache();PopularJobManager.persist();Lifecycle.documentObserver?.disconnect();Logger.info({operation:'soft-snapshot',pageKey:Lifecycle.activePageKey,rootConnected:Boolean(App.ui?.root?.isConnected),nativeAnchorConnected:Boolean(App.dom?.grid?.isConnected||PostPageController.nativeFavorite?.isConnected)});return;}CatalogueJobManager.shutdown();PopularJobManager.shutdown(); App.detachPage();PostPageController.cleanup();ArtistsPageController.cleanup();PopularPageController.cleanup();Lifecycle.restoreNativePage(); Lifecycle.removeStaleRoots();
+      Logger.info('Preparing page snapshot:', reason);App.savePresetDebounced.cancel(); App.saveActivePreset(); App.persistUIState();CreatorSessionCache.captureFromApp();if(event?.persisted||reason==='turbo:before-cache'){Lifecycle.mountController?.abort();Lifecycle.mountingPageKey='';Lifecycle.mountPromise=null;CatalogueJobManager.suspendForBfcache();PopularJobManager.suspendForBfcache();Lifecycle.documentObserver?.disconnect();Logger.info({operation:'soft-snapshot',pageKey:Lifecycle.activePageKey,rootConnected:Boolean(App.ui?.root?.isConnected),nativeAnchorConnected:Boolean(App.dom?.grid?.isConnected||PostPageController.nativeFavorite?.isConnected)});return;}CatalogueJobManager.shutdown();PopularJobManager.shutdown(); App.detachPage();PostPageController.cleanup();ArtistsPageController.cleanup();PopularPageController.cleanup();Lifecycle.restoreNativePage(); Lifecycle.removeStaleRoots();
     },
     handlePageShow(event) {
       if (Lifecycle.stopped) return;
       Logger.info('pageshow', { persisted: Boolean(event.persisted), href: location.href }); Lifecycle.lastHref = location.href;
-      if(event.persisted){CatalogueJobManager.resumeFromBfcache();Lifecycle.resumeRouteObservers();const stylesheet=NativeStylesheetHealth.health('persisted pageshow');const page=Route.parsePage(location.href);const healthy=stylesheet.ok&&(page.kind==='creator'?CreatorPageController.health(page.context):page.kind==='post'?PostPageController.health(page.context):page.kind==='artists'?ArtistsPageController.health(page):page.kind==='popular'?PopularPageController.health(page):false);Logger.info({operation:'bfcache-resume',pageKey:Lifecycle.pageKey(page),stylesheetState:stylesheet.state,rootConnected:Boolean(App.ui?.root?.isConnected),nativeAnchorConnected:Boolean(App.dom?.grid?.isConnected||PostPageController.nativeFavorite?.isConnected),renderContractValid:healthy,repaired:!healthy});if(healthy){Lifecycle.activePageKey=Lifecycle.pageKey(page);Lifecycle.mountedPageKey=Lifecycle.activePageKey;return;}if(!stylesheet.ok){Lifecycle.cancelForStylesheetFailure(stylesheet.snapshot);return;}}
+      if(event.persisted){CatalogueJobManager.resumeFromBfcache();PopularJobManager.resumeFromBfcache();Lifecycle.resumeRouteObservers();const stylesheet=NativeStylesheetHealth.health('persisted pageshow');const page=Route.parsePage(location.href);const healthy=stylesheet.ok&&page.kind!=='other'&&Lifecycle.healthy(page);Logger.info({operation:'bfcache-resume',pageKey:Lifecycle.pageKey(page),stylesheetState:stylesheet.state,rootConnected:Boolean(App.ui?.root?.isConnected),nativeAnchorConnected:Boolean(App.dom?.grid?.isConnected||PostPageController.nativeFavorite?.isConnected),renderContractValid:healthy,repaired:!healthy});if(healthy){Lifecycle.activePageKey=Lifecycle.pageKey(page);Lifecycle.mountedPageKey=Lifecycle.activePageKey;return;}if(!stylesheet.ok){Lifecycle.cancelForStylesheetFailure(stylesheet.snapshot);return;}}
       Lifecycle.mountController?.abort();Lifecycle.activePageKey='';if(App.pageKind==='popular')PopularPageController.cleanup();else if(App.ui)App.detachPage();PostPageController.cleanup();ArtistsPageController.cleanup();Lifecycle.restoreNativePage();Lifecycle.removeStaleRoots();
       Lifecycle.schedule('pageshow');
     },
@@ -8644,13 +8652,13 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       Lifecycle.schedule('creator-link 100ms', 100); Lifecycle.schedule('creator-link 300ms', 300);
     },
     shutdown() {
-      if (Lifecycle.stopped) return; Lifecycle.stopped = true; clearInterval(Lifecycle.timer);clearTimeout(Lifecycle.fallbackTimer);clearTimeout(Lifecycle.earlyShellTimer); Lifecycle.mountController?.abort(); Lifecycle.documentObserver?.disconnect(); Lifecycle.documentObserver = null; Lifecycle.mutationSchedule.cancel();NativeStylesheetHealth.stop(); Lifecycle.delayedChecks.forEach(clearTimeout); Lifecycle.delayedChecks.clear();CatalogueJobManager.shutdown();PopularJobManager.shutdown();MaintenanceCommandRunner.stop();FavoriteSyncCoordinator.stop();PostStatusStateCoordinator.shutdown();PostPageController.cleanup();ArtistsPageController.cleanup();PopularPageController.cleanup(); App.fullCleanup();CreatorSessionCache.clear();Lifecycle.restoreNativePage(); Lifecycle.removeStaleRoots();AttachmentBadgeSizing.remove();document.querySelector('#pmf-global-host')?.remove(); Lifecycle.eventController?.abort();
+      if (Lifecycle.stopped) return; Lifecycle.stopped = true;Lifecycle.microtaskQueued=false; clearInterval(Lifecycle.timer);clearTimeout(Lifecycle.fallbackTimer);clearTimeout(Lifecycle.earlyShellTimer); Lifecycle.mountController?.abort(); Lifecycle.documentObserver?.disconnect(); Lifecycle.documentObserver = null; Lifecycle.mutationSchedule.cancel();NativeStylesheetHealth.stop(); Lifecycle.delayedChecks.forEach(clearTimeout); Lifecycle.delayedChecks.clear();CatalogueJobManager.shutdown();PopularJobManager.shutdown();MaintenanceCommandRunner.stop();FavoriteSyncCoordinator.stop();PostStatusStateCoordinator.shutdown();PostPageController.cleanup();ArtistsPageController.cleanup();PopularPageController.cleanup(); App.fullCleanup();CreatorSessionCache.clear();Lifecycle.restoreNativePage(); Lifecycle.removeStaleRoots();AttachmentBadgeSizing.remove();document.querySelector('#pmf-global-host')?.remove(); Lifecycle.eventController?.abort();
     },
     start() {
       Settings.load();PostStatusFilters.load();PostStatusStateCoordinator.start();NativeStylesheetHealth.start();CatalogueJobManager.setConcurrency(Settings.value.catalogueConcurrentJobs);CatalogueJobManager.restoreSession();PopularJobManager.restore();MaintenanceCommandRunner.start();AttachmentBadgeSizing.applyAll({reason:'startup'});Lifecycle.eventController = new AbortController(); const signal = Lifecycle.eventController.signal;
       document.addEventListener('pmf:shutdown-instance', (event) => { if (event.detail?.instanceId !== INSTANCE_ID) Lifecycle.shutdown(); }, { signal });
       document.dispatchEvent(new CustomEvent('pmf:shutdown-instance', { detail: { instanceId: INSTANCE_ID } }));
-      OverlayManager.install(signal); Lifecycle.removeStaleRoots();
+      OverlayManager.install(signal); Lifecycle.removeStaleRoots();Lifecycle.installHistorySignals(signal);
       const signalRoute = (reason) => { Lifecycle.lastHref = location.href; Lifecycle.schedule(reason); };
       if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => signalRoute('DOMContentLoaded'), { once: true, signal });
       window.addEventListener('load', () => signalRoute('load'), { once: true, signal });
@@ -8662,13 +8670,13 @@ UI.closeSettings('reopen');const checked=(value)=>value?'checked':'';const selec
       document.addEventListener('click', (event) => Lifecycle.handleCreatorClick(event), { capture: true, signal });
       document.addEventListener('turbo:before-cache', () => Lifecycle.prepareSnapshot('turbo:before-cache'), { signal });
       document.addEventListener('turbo:before-render', () => {NativeStylesheetHealth.health('turbo:before-render');Lifecycle.mountController?.abort();}, { signal });
-      document.addEventListener('turbo:load', () => {CatalogueJobManager.resumeFromBfcache();PopularJobManager.pump();Lifecycle.resumeRouteObservers();signalRoute('turbo:load');}, { signal });
+      document.addEventListener('turbo:load', () => {CatalogueJobManager.resumeFromBfcache();PopularJobManager.resumeFromBfcache();Lifecycle.resumeRouteObservers();signalRoute('turbo:load');}, { signal });
       document.addEventListener('turbo:render', () => signalRoute('turbo:render'), { signal });
       try { window.navigation?.addEventListener('navigate', () => Lifecycle.schedule('Navigation API'), { signal }); } catch (error) { Logger.info('Navigation API observer unavailable.', error); }
       Lifecycle.documentObserver = new MutationObserver((mutations) => { if (mutations.every(Lifecycle.mutationIsOwned)) return; NativeStylesheetHealth.health('document mutation');Lifecycle.mutationSchedule(); });
       Lifecycle.documentObserver.observe(document.documentElement, { childList: true, subtree: true });
       Lifecycle.timer = setInterval(() => { if (location.href !== Lifecycle.lastHref) { Lifecycle.lastHref = location.href; Lifecycle.schedule('URL polling'); } else Lifecycle.routeHealth('watchdog polling'); }, 750);
-      const verifyEarlyShell=()=>{const page=Route.parsePage(location.href);const healthy=page.kind==='creator'?CreatorPageController.health(page.context):page.kind==='post'?PostPageController.health(page.context):page.kind==='artists'?ArtistsPageController.health(page):page.kind==='popular'?PopularPageController.health(page):true;if(healthy)return;const mounting=Boolean(Lifecycle.mountPromise&&Lifecycle.mountingPageKey===Lifecycle.pageKey(page));if(mounting){Lifecycle.earlyShellTimer=setTimeout(verifyEarlyShell,2500);return;}Lifecycle.restoreNativePage();Lifecycle.removeStaleRoots();Logger.warn('Early PMF shell timed out; native content was restored.');};Lifecycle.earlyShellTimer=setTimeout(verifyEarlyShell,2500);
+      const verifyEarlyShell=()=>{const page=Route.parsePage(location.href);const healthy=page.kind==='other'||Lifecycle.healthy(page);if(healthy)return;const mounting=Boolean(Lifecycle.mountPromise&&Lifecycle.mountingPageKey===Lifecycle.pageKey(page));if(mounting){Lifecycle.earlyShellTimer=setTimeout(verifyEarlyShell,2500);return;}Lifecycle.restoreNativePage();Lifecycle.removeStaleRoots();Logger.warn('Early PMF shell timed out; native content was restored.');};Lifecycle.earlyShellTimer=setTimeout(verifyEarlyShell,2500);
       Lifecycle.schedule('initial startup');
     },
   };
