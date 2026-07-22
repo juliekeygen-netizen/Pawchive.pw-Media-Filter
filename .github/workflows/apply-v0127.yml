@@ -1,0 +1,73 @@
+name: Apply Pawchive v0.12.7
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0127/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0127-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply v0.12.7 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "519c479f917989f76d644226459107f473b69837"
+          grep -q '@version      0.12.6' pawchive-pw-media-filter.user.js
+          cat .pawchive-v0127/part00 .pawchive-v0127/part01 .pawchive-v0127/part02 .pawchive-v0127/part03 > /tmp/pawchive-v0127.patch.xz.b64
+          test "$(sha256sum /tmp/pawchive-v0127.patch.xz.b64 | awk '{print $1}')" = "21721aea97c165739cabe59556e56e98ea8d8c85de7dcafbe70547ca032b8f75"
+          base64 -d /tmp/pawchive-v0127.patch.xz.b64 > /tmp/pawchive-v0127.patch.xz
+          test "$(sha256sum /tmp/pawchive-v0127.patch.xz | awk '{print $1}')" = "df57bbf5512996d02c802fc0b2976bc21e6bd246f746342f670c9cb41befaa1f"
+          xz -dc /tmp/pawchive-v0127.patch.xz > /tmp/pawchive-v0127.patch
+          test "$(sha256sum /tmp/pawchive-v0127.patch | awk '{print $1}')" = "99d6ef0cff4c59464808c8dea760699b04c98371166fec1b11391153d6470a7a"
+          git apply --check /tmp/pawchive-v0127.patch
+          git apply /tmp/pawchive-v0127.patch
+
+      - name: Validate v0.12.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 62
+          git diff --check
+          grep -q '@version      0.12.7' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.12.7'" pawchive-pw-media-filter.user.js
+          grep -q 'const PopularQueuePanel' pawchive-pw-media-filter.user.js
+          grep -q 'v0.12.7 Popular queue, cards, paginator, and dated-mount tests passed' tests/v0127-popular-queue-cards-and-dated-mount.cjs
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .pawchive-v0127
+          rm -f .github/workflows/apply-v0127.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.12.7 Popular queue, cards, and dated mounts'
+          git push origin HEAD:master
