@@ -49,9 +49,13 @@ jobs:
           PY
 
       - name: Validate v0.13.2
+        id: validate
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
+          exec > >(tee /tmp/v0132-validation.log) 2>&1
+          set -euxo pipefail
           node --check pawchive-pw-media-filter.user.js
           test_count=0
           while IFS= read -r test_file; do
@@ -67,6 +71,19 @@ jobs:
           grep -q 'routeMicrotaskPending' pawchive-pw-media-filter.user.js
           grep -q 'routeOffsetEvidence' pawchive-pw-media-filter.user.js
           grep -q 'v0.13.2 navigation lifecycle hardening tests passed' tests/v0132-navigation-lifecycle-hardening.cjs
+
+      - name: Upload validation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0132-validation-log
+          path: /tmp/v0132-validation.log
+          if-no-files-found: error
+
+      - name: Enforce validation result
+        if: steps.validate.outcome != 'success'
+        shell: bash
+        run: exit 1
 
       - name: Publish directly to master
         shell: bash
