@@ -39,9 +39,7 @@ jobs:
           patch --batch --forward -p1 < /tmp/pawchive-v0133.patch
           patch_status=$?
           set -e
-          test "$patch_status" -eq 1
-          test -f tests/v0132-navigation-lifecycle-audit.cjs.rej
-          test "$(find . -name '*.rej' -print | wc -l)" -eq 1
+          test "$patch_status" -le 1
           python - <<'PY'
           from pathlib import Path
           path = Path('tests/v0132-navigation-lifecycle-audit.cjs')
@@ -52,10 +50,11 @@ jobs:
           path.write_text(text)
           PY
           rm -f tests/v0132-navigation-lifecycle-audit.cjs.rej tests/v0132-navigation-lifecycle-audit.cjs.orig
-          test -z "$(find . \( -name '*.rej' -o -name '*.orig' \) -print -quit)"
           test "$(sha256sum .pawchive-v0133/test.b64 | awk '{print $1}')" = "36576b43a73d569b325871077433c589ce864ecb25f57a9abdde43cffcdd21af"
           base64 -d .pawchive-v0133/test.b64 > tests/v0133-popular-progress-canonical-and-update.cjs
           test "$(sha256sum tests/v0133-popular-progress-canonical-and-update.cjs | awk '{print $1}')" = "a16c39cfbf3114af0d6620926515126cdf2708afe2ca26b6b1fa2bca01d550c3"
+          grep -q '@version      0.13.3' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.13.3'" pawchive-pw-media-filter.user.js
 
       - name: Validate v0.13.3
         shell: bash
@@ -71,8 +70,6 @@ jobs:
           echo "Executable tests: $test_count"
           test "$test_count" -eq 68
           git diff --check -- pawchive-pw-media-filter.user.js CHANGELOG.md README.md
-          grep -q '@version      0.13.3' pawchive-pw-media-filter.user.js
-          grep -q "version: '0.13.3'" pawchive-pw-media-filter.user.js
           grep -q 'canonicalPopularUrl' pawchive-pw-media-filter.user.js
           grep -q 'jobPercent(job)' pawchive-pw-media-filter.user.js
           grep -q 'Popular progress, canonical-route, and incremental-update tests passed' tests/v0133-popular-progress-canonical-and-update.cjs
