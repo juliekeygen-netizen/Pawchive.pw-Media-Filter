@@ -30,8 +30,9 @@ jobs:
           set -euo pipefail
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "e71a017140ec0549491648352863bff8603b8c52"
           grep -q '@version      0.12.8' pawchive-pw-media-filter.user.js
-          test "$(sha256sum .pawchive-v0129/patch.xz.b64 | awk '{print $1}')" = "f46718dc9a8a30ce57508aae7095667f658c2dd80acea82889af6359035257c9"
-          base64 -d .pawchive-v0129/patch.xz.b64 > /tmp/pawchive-v0129.patch.xz
+          cat .pawchive-v0129/part00 .pawchive-v0129/part01 .pawchive-v0129/part02 .pawchive-v0129/part03 .pawchive-v0129/part04 > /tmp/pawchive-v0129.patch.xz.b64
+          test "$(sha256sum /tmp/pawchive-v0129.patch.xz.b64 | awk '{print $1}')" = "f46718dc9a8a30ce57508aae7095667f658c2dd80acea82889af6359035257c9"
+          base64 -d /tmp/pawchive-v0129.patch.xz.b64 > /tmp/pawchive-v0129.patch.xz
           test "$(sha256sum /tmp/pawchive-v0129.patch.xz | awk '{print $1}')" = "b49bf5c9171f5dec32b457ea0822ed54dac6c05c708024f0592823203085f542"
           xz -dc /tmp/pawchive-v0129.patch.xz > /tmp/pawchive-v0129.patch
           test "$(sha256sum /tmp/pawchive-v0129.patch | awk '{print $1}')" = "a8e06fd8b9937c6f6520c6bb9117fecfe4494d8e711958569fe1949510bee09c"
