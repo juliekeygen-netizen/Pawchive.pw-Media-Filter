@@ -1,4 +1,13 @@
-# Pawchive.pw Media Filter v0.12.6 specification
+# Pawchive.pw Media Filter v0.12.7 specification
+
+## v0.12.7 Popular dated-mount, queue, and card contract
+
+- An explicitly dated Popular route remains authoritative when Pawchive renders the generic **Popular Posts For The Past 24 Hours** heading. That generic heading is not date evidence and may not cause the requested route to be rejected. Explicit same-period links or an explicit dated heading may still reject a stale replacement DOM.
+- Popular readiness requires a stable connected post grid and real post cards, but not a heading node. The prior PMF root remains until the requested route is ready.
+- Native Popular pagination discovery includes unclassed `<menu>`, `<ul>`, and `<ol>` groups containing multiple `/posts/popular?...&o=...` links. Those groups are hidden after PMF mirrors pagination, without hiding the grid or a PMF-owned ancestor.
+- Popular Queue is an expandable shared-style Queue/Issues panel using the creator catalogue's queue tabs, progress summary, job rows, and Stop / Move to top / Remove / Retry / Dismiss actions. A newly accepted Scan, Resume, or Update opens it. Queue counts may not overlap Local result or storage summaries.
+- Local Popular cards rebuild the native footer. The visible footer contains the published date, not Pawchive's native favorite-count line. The period-specific **#rank · N favorites** metric is an overlay immediately above the footer. Patreon/Fanbox service artwork is a top-left overlay. Media badges and Favorite / Like / Seen badges are reapplied after insertion into the connected Local grid.
+- Every post observed while scanning a Popular page is stored with `missingStatsKnown=true`, `hasMissingStats=false`, `missingStatsSource='popular-page'`, and the observation timestamp. A later direct post check may supersede this evidence.
 
 ## v0.12.6 Popular control and navigation contract
 
@@ -40,7 +49,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.12.6`
+- Userscript and `Config.version`: `0.12.7`
 - Settings: `pmf-settings-v5`
 - Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1

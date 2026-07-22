@@ -14,8 +14,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Lifecycle,
   } = api;
 
-  assert.equal(Config.version, '0.12.6');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.6/);
+  assert.equal(Config.version, '0.12.7');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.7/);
 
   const link = (href, text, rel = '') => ({
     href,

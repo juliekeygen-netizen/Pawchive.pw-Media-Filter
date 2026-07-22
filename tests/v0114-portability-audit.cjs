@@ -16,8 +16,8 @@ const {
   context.location.origin = 'https://pawchive.pw';
   context.location.href = 'https://pawchive.pw/artists';
 
-  assert.equal(Config.version, '0.12.6');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.6/);
+  assert.equal(Config.version, '0.12.7');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.7/);
 
   const emptyStores = () => Object.fromEntries(DataPortability.catalogueStores.map((store) => [store, []]));
   const backup = {

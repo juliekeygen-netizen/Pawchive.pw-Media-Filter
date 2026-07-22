@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.7
+
+- Fixed direct older Popular Day/Week/Month URLs disappearing when Pawchive retained its generic past-24-hours heading. Generic headings are no longer treated as contradictory date evidence, and a heading element is no longer mandatory for a stable mount.
+- Detected Pawchive's unclassed `<menu>` pagination containers and hid the duplicate native page selector after PMF installs its mirrored paginator.
+- Replaced the Popular inline queue/status fragment with the creator-catalogue-style expandable Queue/Issues panel, including overall progress and normal job actions. Accepted Scan, Resume, and Update operations open the queue automatically.
+- Prevented queue counts, Local result counts, and Local storage summaries from overlapping by giving the Popular status row explicit grid columns.
+- Rebuilt Local Popular card footers: removed the duplicated native favorite-count text, kept the date at bottom-left, moved the period rank/favorite metric above the footer, moved Patreon/Fanbox icons to the top-left overlay, and restored media plus Favorite/Like/Seen badges.
+- Preserved the Popular scanner's known-no-missing observation contract for every scanned card.
+- Added focused v0.12.7 dated-mount, paginator, queue, card, badge, and missing-attachment regression coverage; 62 executable tests pass.
+
 ## 0.12.6
 
 - Aligned the Popular Posts toolbar with the shared `/artists` creator-directory toolbar width, control columns, typography, and button dimensions.

@@ -10,9 +10,9 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularJobManager, DataPortability, PopularCardDecorator, PopularPageController, Lifecycle, App, UI,
   } = api;
 
-  assert.equal(Config.version, '0.12.6');
+  assert.equal(Config.version, '0.12.7');
   assert.equal(Config.databaseVersion, 6);
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.6/);
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.7/);
   assert.equal(Config.likelyHosts.includes('iframely.net'), true);
 
   const day = Route.parsePage('https://pawchive.pw/posts/popular?date=2026-07-14&period=day');
@@ -140,7 +140,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularPageController.load.toString(), /String\(post\.key\)/);
   assert.match(PopularPageController.refresh.toString(), /String\(post\.key\)/);
   assert.match(PopularPageController.renderLocal.toString(), /postAnchorKey/);
-  assert.match(PopularCardDecorator.apply.toString(), /\\bfavou\?rites\?\\b/);
+  assert.match(PopularCardDecorator.normalizeFooter.toString(), /footer\.replaceChildren/);
+  assert.match(PopularCardDecorator.apply.toString(), /pmf-popular-card-metric/);
   assert.doesNotMatch(originalSource, /\x08/);
   assert.match(PopularPageController.load.toString(), /found\.totalPosts/);
   assert.match(PopularPageController.saveNative.toString(), /found\.navContainers/);

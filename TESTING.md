@@ -1,4 +1,24 @@
-# Pawchive.pw Media Filter v0.12.6 testing
+# Pawchive.pw Media Filter v0.12.7 testing
+
+## v0.12.7 Popular dated mounts, queue, and Local-card matrix
+
+Automated validation:
+
+```text
+node --check pawchive-pw-media-filter.user.js
+62 executable .cjs tests
+git diff --check
+```
+
+1. Hard-open `https://pawchive.pw/posts/popular?date=2026-06-09&period=day` and several other older Day/Week/Month URLs. The PMF period selector, Native/Local selector, toolbar, and grid must remain visible even when Pawchive's heading says **Popular Posts For The Past 24 Hours**.
+2. Repeat direct loads, hard refreshes, Back/Forward, and period changes. There must be one PMF root, no silent disappearance, and no mount rejection caused only by the generic heading.
+3. Confirm Pawchive's original top `<menu>` page selector is hidden while PMF's top and bottom paginators remain functional. The native card grid must never be hidden by paginator cleanup.
+4. Queue Scan from Native and Local. The same creator-catalogue-style Queue/Issues dropdown must open, show overall progress plus Active/Waiting/Recently completed rows, and support Stop, Move to top, Remove, Retry, Dismiss, and Clear completed where applicable.
+5. While one Popular job is active, switch to Local. Queue counts, **N Local Popular posts**, and **Local Popular Posts · N stored** must occupy separate columns and never overlap at desktop or mobile widths.
+6. After a completed scan, compare Local Popular cards with Local cards on a creator page. The visible footer contains only the date; Pawchive's native standalone `N favorites` line is gone.
+7. Confirm **#rank · N favorites** sits immediately above the footer backdrop, Patreon/Fanbox artwork sits at the upper-left overlay, media attachment badges appear, and Favorite/Like/Seen badges appear and update after status changes.
+8. Inspect a disposable scanned post in IndexedDB or an exported backup. It must contain `missingStatsKnown: true`, `hasMissingStats: false`, `missingStatsSource: popular-page`, and a current observation timestamp.
+9. Browser confirmation remains required for Pawchive's live DOM variants, actual network queue completion, IndexedDB persistence, and visual pixel alignment.
 
 ## v0.12.6 Popular controls and navigation matrix
 

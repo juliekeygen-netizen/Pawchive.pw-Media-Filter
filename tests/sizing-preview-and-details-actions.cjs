@@ -8,7 +8,7 @@ const {
   Config, Settings, CompactGridScale, CompactThumbnailRatio, CatalogueModel, CatalogueJobManager, Catalogue, UI, App,
 } = api;
 
-assert.equal(Config.version, '0.12.6');
+assert.equal(Config.version, '0.12.7');
 assert.equal(Config.settingsKey, 'pmf-settings-v5');
 
 Settings.load();

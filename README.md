@@ -1,5 +1,13 @@
 # Pawchive.pw Media Filter
 
+## v0.12.7 Popular dated mounts, shared queue, and Local cards
+
+- Explicit older Day/Week/Month URLs now mount from the requested route even when Pawchive keeps the generic **Popular Posts For The Past 24 Hours** heading. PMF waits for a stable real grid/card set and uses explicit period-link evidence when it exists.
+- Bare native `<menu>` pagination groups are detected and hidden, removing the leftover Pawchive page selector above the PMF controls.
+- Popular jobs now use the same expandable Queue/Issues panel structure and row actions as the creator catalogue instead of an overlapping inline status summary. Queuing a Scan, Resume, or Update opens the panel.
+- Local Popular cards rebuild the footer to show the date without Pawchive's duplicated favorite-count text. Rank/favorite metrics sit above the footer, platform icons move to the upper-left overlay, and attachment/status badges are reapplied after the card is connected.
+- Popular scans continue to record every observed post as **known to have no missing attachments** at that observation time.
+
 ## v0.12.6 Popular controls, navigation, and UI consistency
 
 - The Popular toolbar now uses the same 920 px shared toolbar contract, control grid, typography, and control dimensions as `/artists` and creator pages.
@@ -32,7 +40,7 @@ Close the selected browser before starting the default runner so it can safely u
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.12.6**
+Current version: **0.12.7**
 
 ## Installation
 
