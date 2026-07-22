@@ -1,4 +1,23 @@
-# Pawchive.pw Media Filter v0.12.7 testing
+# Pawchive.pw Media Filter v0.12.8 testing
+
+## v0.12.8 Native Popular controls and action-state matrix
+
+Automated validation:
+
+```text
+node --check pawchive-pw-media-filter.user.js
+63 executable .cjs tests
+git diff --check
+```
+
+1. Open Day, Week, and Month Popular pages. There must be no PMF date/period card and no PMF page selector in Native mode. Pawchive's original period links, count, paginator, and cards remain visible and usable.
+2. Switch to Local, click Pawchive Previous/Next or Day/Week/Month, and confirm the destination remains in Local. Repeat from Native and confirm Native remains selected.
+3. On an unscanned idle period, Native says **Scan** and is interactive; Local says **Update** but is gray, struck through, and disabled.
+4. On a stored idle period, Native says disabled **Scanned** and Local says interactive **Update**. During queued/running work, Native stays disabled **Scanned** and Local stays disabled **Update**.
+5. Open the Popular queue and the creator-directory queue. Both use the same Queue/Issues tabs, overall batch-progress block, Active/Waiting/Recently completed sections, progress row geometry, and action placement. Popular rows show the period label and compact progress text.
+6. In Local mode, the left status area contains only the queue control; the stored total appears once on the right. Local card dates align to the left.
+7. Open Scan and Update confirmations. Each contains only the title, Period, and Posts; no metadata/download or missing-attachment explanatory paragraph appears.
+8. Browser confirmation remains required for Pawchive's live DOM variants, actual period-link destinations, network jobs, IndexedDB persistence, and pixel alignment.
 
 ## v0.12.7 Popular dated mounts, queue, and Local-card matrix
 

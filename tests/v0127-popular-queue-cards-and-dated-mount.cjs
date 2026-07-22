@@ -9,13 +9,15 @@ const { loadUserscript } = require('./test-helper.cjs');
     Config,
     PopularDOM,
     PopularPageController,
+    QueuePanelView,
     PopularQueuePanel,
+    CreatorQueuePanel,
     PopularCardDecorator,
     PopularScanner,
   } = api;
 
-  assert.equal(Config.version, '0.12.7');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.7/);
+  assert.equal(Config.version, '0.12.8');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.8/);
 
   assert.equal(
     PopularPageController.routeDateEvidence({
@@ -52,8 +54,11 @@ const { loadUserscript } = require('./test-helper.cjs');
     finished:aggregate.finished,
     remaining:aggregate.remaining,
   }, { total:6, active:1, waiting:2, finished:3, remaining:3 });
-  assert.match(PopularQueuePanel.render.toString(), /pmf-queue-tabs/);
-  assert.match(PopularQueuePanel.render.toString(), /pmf-queue-progress/);
+  assert.match(QueuePanelView.render.toString(), /pmf-queue-tabs/);
+  assert.match(QueuePanelView.render.toString(), /pmf-queue-progress/);
+  assert.match(QueuePanelView.render.toString(), /data-queue-tab/);
+  assert.match(PopularQueuePanel.render.toString(), /QueuePanelView\.render/);
+  assert.match(CreatorQueuePanel.render.toString(), /QueuePanelView\.render/);
   assert.match(PopularQueuePanel.row.toString(), /pmf-queue-row/);
   assert.match(PopularPageController.mountUI.toString(), /pmf-creator-queue-panel pmf-popular-queue-panel/);
   assert.match(PopularPageController.bind.toString(), /ui\.queueButton\.addEventListener/);
@@ -73,8 +78,11 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(originalSource, /\.pmf-popular-platform-icon\{position:absolute;left:4px;top:calc/);
   assert.doesNotMatch(originalSource, /pmf-popular-local-grid>\.post-card \.post-card__footer\{padding-bottom:21px/,
     'The old footer padding hack must not distort Local Popular cards');
-  assert.match(originalSource, /\.pmf-popular-period-title\{[^}]*font-size:11px/);
-  assert.match(originalSource, /\.pmf-popular-toolbar \.pmf-status\{display:grid;grid-template-columns:auto minmax\(0,1fr\) auto/);
+  assert.doesNotMatch(originalSource, /pmf-popular-period-title|pmf-popular-period-card/,
+    'The custom Popular period/date card must not exist');
+  assert.match(originalSource, /\.pmf-popular-toolbar \.pmf-status\{display:grid;grid-template-columns:minmax\(0,1fr\) auto/);
+  assert.match(originalSource, /\.pmf-popular-toolbar \.pmf-status-left\{display:none!important/);
+  assert.match(originalSource, /\.pmf-popular-local-grid \.post-card__footer\{text-align:left!important/);
 
   const marked = PopularScanner.markNoMissing({ id:'post' }, 1234);
   assert.equal(marked.missingStatsKnown, true);
@@ -82,5 +90,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(marked.missingStatsSource, 'popular-page');
   assert.equal(marked.missingStatsObservedAt, 1234);
 
-  console.log('Pawchive Media Filter v0.12.7 Popular queue, cards, paginator, and dated-mount tests passed.');
+  console.log('Pawchive Media Filter v0.12.8 Popular queue, cards, paginator, and dated-mount tests passed.');
 })();

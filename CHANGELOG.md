@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.12.8
+
+- Removed the PMF-owned Popular period/date card and Native mirrored paginator. Native mode now leaves Pawchive's original period selector, result count, and pagination as the only navigation controls.
+- Preserved the selected Native/Local mode across Pawchive period-link navigation. Local mode retains only its own filtered-snapshot paginator.
+- Added explicit Popular action states: stored or active Native periods show disabled **Scanned**; Local always shows **Update**, disabled before the first snapshot and while work is active.
+- Unified Popular and creator-directory queue rendering through one shared Queue/Issues view, including the same overall progress, sections, progress rows, and action layout.
+- Removed the redundant left-side Local post count, kept one stored total on the right, and left-aligned Local Popular card dates.
+- Reduced Popular Scan/Update confirmations to the title, Period, and Posts values.
+- Added focused v0.12.8 native-navigation, action-state, queue-reuse, confirmation, and card-alignment regression coverage; 63 executable tests pass.
+
 ## 0.12.7
 
 - Fixed direct older Popular Day/Week/Month URLs disappearing when Pawchive retained its generic past-24-hours heading. Generic headings are no longer treated as contradictory date evidence, and a heading element is no longer mandatory for a stable mount.

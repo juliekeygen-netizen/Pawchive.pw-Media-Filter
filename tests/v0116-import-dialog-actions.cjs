@@ -7,8 +7,8 @@ const { api, originalSource } = loadUserscript();
 const { Config, DataPortabilityUI } = api;
 
 (() => {
-  assert.equal(Config.version, '0.12.7');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.7/);
+  assert.equal(Config.version, '0.12.8');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.8/);
 
   const source = DataPortabilityUI.open.toString();
   assert.doesNotMatch(source, /pmf-settings-back/);

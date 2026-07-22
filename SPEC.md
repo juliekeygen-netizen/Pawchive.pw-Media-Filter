@@ -1,4 +1,16 @@
-# Pawchive.pw Media Filter v0.12.7 specification
+# Pawchive.pw Media Filter v0.12.8 specification
+
+## v0.12.8 Popular native-navigation and action-state contract
+
+- PMF does not create a Popular date/period card or a second Native paginator. Pawchive's original Previous / Day / Week / Month / Next destinations, result count, and page controls remain authoritative and visible in Native mode.
+- Local mode may hide Pawchive's page paginator while rendering the saved filtered snapshot, but the native period selector remains visible and usable. A period-link navigation saves the global Native/Local mode before full-document navigation, and the destination restores that mode rather than an older per-period mode.
+- Native primary action is **Scan** only for an unscanned, idle period. A stored period or a queued/running job displays disabled **Scanned** with muted, struck-through styling. Local always labels the action **Update**; it is enabled only for a stored, idle period.
+- Scan and Update confirmation dialogs contain only the action title, `Period: …`, and `Posts: up to …`.
+- `QueuePanelView` is the shared queue renderer for both creator and Popular jobs. Tabs, overall progress, section headings, progress rows, issue handling, completed details, and action placement use the same markup; only the job identity and progress message differ.
+- The left status area contains only the queue control. Local post totals are not duplicated there; the right status displays the one stored-period total.
+- Local Popular footers and their timestamp descendants are left-aligned.
+
+The v0.12.8 contract supersedes earlier Popular bullets that required a PMF period panel, mirrored Native pagination, Local scanning from an unscanned period, or a duplicated left-side Local count.
 
 ## v0.12.7 Popular dated-mount, queue, and card contract
 
@@ -49,7 +61,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 
 ## Persistent identifiers
 
-- Userscript and `Config.version`: `0.12.7`
+- Userscript and `Config.version`: `0.12.8`
 - Settings: `pmf-settings-v5`
 - Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
 - Presets: existing key, schema 1

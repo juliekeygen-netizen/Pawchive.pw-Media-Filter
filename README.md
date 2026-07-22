@@ -1,5 +1,13 @@
 # Pawchive.pw Media Filter
 
+## v0.12.8 Native Popular navigation and action-state cleanup
+
+- Removed PMF's custom Popular date/period card and its mirrored Native paginator. Pawchive's original Previous / Day / Week / Month / Next links, count, and page controls are now the only Native navigation shown.
+- The selected **Native / Local** mode persists when Pawchive's period links navigate to another day, week, or month. Local mode continues to use its filtered 50-post paginator only for the saved Local snapshot.
+- Native periods that are stored or currently scanning show a disabled, muted, struck-through **Scanned** button. Local always says **Update**; it is disabled in the same style until that period has a stored snapshot or while a job is active.
+- Popular and creator-directory jobs now render through the same Queue/Issues shell, overall batch-progress block, section layout, progress rows, and action controls. Popular rows keep only period-specific labels and progress text.
+- Removed the redundant left-side Local post count, kept the single stored total on the right, left-aligned Local-card dates, and reduced Scan/Update confirmations to Period and Posts only.
+
 ## v0.12.7 Popular dated mounts, shared queue, and Local cards
 
 - Explicit older Day/Week/Month URLs now mount from the requested route even when Pawchive keeps the generic **Popular Posts For The Past 24 Hours** heading. PMF waits for a stable real grid/card set and uses explicit period-link evidence when it exists.
@@ -40,7 +48,7 @@ Close the selected browser before starting the default runner so it can safely u
 
 Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
 
-Current version: **0.12.7**
+Current version: **0.12.8**
 
 ## Installation
 

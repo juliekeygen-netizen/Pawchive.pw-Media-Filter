@@ -10,9 +10,9 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularJobManager, DataPortability, PopularCardDecorator, PopularPageController, Lifecycle, App, UI,
   } = api;
 
-  assert.equal(Config.version, '0.12.7');
+  assert.equal(Config.version, '0.12.8');
   assert.equal(Config.databaseVersion, 6);
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.7/);
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.8/);
   assert.equal(Config.likelyHosts.includes('iframely.net'), true);
 
   const day = Route.parsePage('https://pawchive.pw/posts/popular?date=2026-07-14&period=day');
@@ -135,7 +135,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(controllerSource, /data-popular-mode=\\?"local\\?"/);
   assert.match(controllerSource, /Sort: Popular/);
   assert.match(controllerSource, /All posts/);
-  assert.match(PopularPageController.primaryAction.toString(), /Media files are not downloaded/);
+  assert.match(PopularPageController.primaryAction.toString(), /paragraphs:\[`Period: \${context\.label}`,`Posts: up to \${total\.toLocaleString\(\)}`\]/);
+  assert.doesNotMatch(PopularPageController.primaryAction.toString(), /Media files are not downloaded|marked as having no missing attachments/);
   assert.doesNotMatch(PopularPageController.primaryAction.toString(), /Math\.max\([^)]*500/);
   assert.match(PopularPageController.load.toString(), /String\(post\.key\)/);
   assert.match(PopularPageController.refresh.toString(), /String\(post\.key\)/);

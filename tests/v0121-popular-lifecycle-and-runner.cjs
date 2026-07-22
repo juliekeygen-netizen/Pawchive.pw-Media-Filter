@@ -11,7 +11,6 @@ const { loadUserscript } = require('./test-helper.cjs');
     Config,
     Settings,
     PopularDOM,
-    PopularNativePaginator,
     PopularPageController,
     PopularPeriod,
     PopularJobManager,
@@ -20,8 +19,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     MaintenanceCommandRunner,
   } = api;
 
-  assert.equal(Config.version, '0.12.7');
-  assert.match(originalSource, /\/\/ @version\s+0\.12\.7/);
+  assert.equal(Config.version, '0.12.8');
+  assert.match(originalSource, /\/\/ @version\s+0\.12\.8/);
   assert.equal(Settings.schema.version, 6);
 
   const oldDefaultHosts = [
@@ -46,10 +45,6 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(PopularDOM.isSafeNativeControlGroup(safe, grid), true);
 
   const context = { period:'month', date:'2026-07-01', offset:100, periodKey:'pawchive.pw|popular|month|2026-07-01' };
-  assert.equal(PopularNativePaginator.currentPage(context), 3);
-  assert.equal(PopularNativePaginator.totalPages(500), 10);
-  assert.equal(PopularNativePaginator.target('first', 0, 3, 10), 1);
-  assert.equal(PopularNativePaginator.target('last', 0, 3, 10), 10);
   assert.match(PopularPeriod.pageUrl(context, 450), /o=450/);
 
   assert.equal(PopularPageController.actionFor(null), 'scan');
@@ -94,10 +89,9 @@ const { loadUserscript } = require('./test-helper.cjs');
   PopularJobManager.pendingJobs = [];
 
   assert.match(originalSource, /MaintenanceCommandRunner\.start\(\)/);
-  assert.match(originalSource, /data-popular-period-role="previous"/);
-  assert.match(originalSource, /data-popular-period-role="next"/);
-  assert.match(originalSource, /data-popular-native-page-action/);
-  assert.match(originalSource, /PopularNativePaginator\.render/);
+  assert.doesNotMatch(originalSource, /data-popular-period-role|data-popular-native-page-action|const PopularNativePaginator/);
+  assert.match(PopularPageController.applyNativeControlVisibility.toString(), /setVisible\(node,true\)/);
+  assert.match(PopularPageController.applyNativeControlVisibility.toString(), /showPaginators/);
   assert.match(originalSource, /refreshRevision/);
   assert.match(originalSource, /observerSchedule=Util\.debounce/);
   assert.match(PopularPageController.mount.toString(), /forwardAbort/);
