@@ -1,0 +1,188 @@
+--- a/pawchive-pw-media-filter.user.js
++++ b/pawchive-pw-media-filter.user.js
+@@ -1,7 +1,7 @@
+ // ==UserScript==
+ // @name         Pawchive.pw Media Filter
+ // @namespace    pawchive-pw-media-filter
+-// @version      0.12.3
++// @version      0.12.4
+ // @description  Build a local creator catalogue and filter Pawchive posts by media type, metadata, date, and text.
+ // @homepageURL  https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter
+ // @supportURL   https://github.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/issues
+@@ -22,7 +22,7 @@
+ 
+   const INSTANCE_ID = globalThis.crypto?.randomUUID?.() || `pmf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+   const Config = Object.freeze({
+-    version: '0.12.3',
++    version: '0.12.4',
+     schemaVersion: 2,
+     pageSize: 50,
+     filteredPageSize: 50,
+@@ -4297,13 +4297,14 @@
+       if(apply)return CompactLayoutEngine.apply({reason});
+       return null;
+     },
+-    connect() {
++    connect({signal=App.pageController?.signal}={}) {
+       CompactGridScale.disconnect();CompactGridScale.resetForCreator(App.context?.creatorKey||'');CompactGridScale.captureNativeGeometry()||CompactGridScale.fallbackMeasurement();CompactGridScale.pendingReason='creator-rebind';const generation=++CompactGridScale.generation;const sessionToken=App.sessionToken;const creatorKey=App.context?.creatorKey;const target=App.dom?.grid?.parentElement;if(!target)return;
++      if(!signal||signal.aborted){Logger.warn('Compact layout observer was not connected because no active page signal was available.');return;}
+       let lastWidth=CompactGridScale.availableWidth(null,target,CompactGridScale.measurement?.gridWidth||1);
+       const schedule=Util.debounce(()=>{if(generation!==CompactGridScale.generation||sessionToken!==App.sessionToken||creatorKey!==App.context?.creatorKey||!App.ui)return;const width=CompactGridScale.availableWidth(App.ui.grid,target,lastWidth);if(Math.abs(width-lastWidth)<2)return;lastWidth=width;if(!App.dom.grid.hidden)CompactGridScale.captureNativeGeometry();const priorSize=App.filteredPageSize();const matches=App.matchingPosts();App.filteredFirstResultIndex=Math.max(0,(App.filteredPage-1)*priorSize);App.filteredAnchorId=matches[App.filteredFirstResultIndex]?.id||App.filteredAnchorId;CompactLayoutEngine.apply({reason:'resize'});const nextSize=App.filteredPageSize();if(nextSize!==priorSize){App.restoreFirstResultPage(matches.length);App.render();}},120);
+       if(typeof ResizeObserver==='function'){CompactGridScale.observer=new ResizeObserver(()=>schedule());CompactGridScale.observer.observe(target);}
+-      CompactGridScale.resizeHandler=schedule;window.addEventListener('resize',schedule,{signal:App.pageController.signal});
+-      App.pageController.signal.addEventListener('abort',()=>schedule.cancel(),{once:true});
++      CompactGridScale.resizeHandler=schedule;window.addEventListener('resize',schedule,{signal});
++      signal.addEventListener('abort',()=>schedule.cancel(),{once:true});
+     },
+     disconnect() {
+       CompactGridScale.generation+=1;CompactGridScale.verifyGeneration+=1;CompactGridScale.observer?.disconnect();CompactGridScale.observer=null;CompactGridScale.resizeHandler?.cancel?.();CompactGridScale.resizeHandler=null;CompactGridScale.measurement=null;CompactGridScale.creatorKey='';CompactGridScale.previewScale=null;CompactGridScale.lastApplied=null;CompactGridScale.lastVerified=null;CompactGridScale.pendingReason='';CompactThumbnailRatio.clear();CardRenderer.clearCropDebug();
+@@ -4429,7 +4430,7 @@
+       return apply?CompactLayoutEngine.apply({reason}):null;
+     },
+     pageSize(){return LegacyCompactGridScale.pageSize();},
+-    connect(){return LegacyCompactGridScale.connect();},
++    connect(options){return LegacyCompactGridScale.connect(options);},
+     verify(event){return LegacyCompactGridScale.verifyRenderedGeometry(event);},
+     cleanup(){return LegacyCompactGridScale.disconnect();},
+   };
+@@ -7817,7 +7818,7 @@
+       const paginator=UI.own(document.createElement('div'));paginator.className='pmf-filtered-paginator pmf-popular-paginator';const statusFilters=document.createElement('div');statusFilters.className='pmf-quick-status-filters';for(const field of ['favorite','liked','seen']){const button=document.createElement('button');button.type='button';button.dataset.pmfQuickStatus=field;button.innerHTML=`<span class="pmf-quick-status-main">${PostStatus.icon(field)}</span><span class="pmf-quick-status-negate">${Icons.x}</span>`;statusFilters.append(button);}const filteredCount=document.createElement('small');filteredCount.className='pmf-filtered-count';const filteredControls=document.createElement('div');filteredControls.className='pmf-page-controls';paginator.append(statusFilters,filteredCount,filteredControls);found.grid.insertAdjacentElement('beforebegin',paginator);
+       const grid=UI.own(document.createElement('div'));grid.className=[found.grid.className,'pmf-filter-grid','pmf-popular-local-grid'].filter(Boolean).join(' ');grid.hidden=true;found.grid.insertAdjacentElement('afterend',grid);const paginatorBottom=UI.own(document.createElement('div'));paginatorBottom.className='pmf-filtered-paginator pmf-bottom-paginator pmf-popular-paginator';const filteredCountBottom=document.createElement('small');filteredCountBottom.className='pmf-filtered-count';const filteredControlsBottom=document.createElement('div');filteredControlsBottom.className='pmf-page-controls';paginatorBottom.append(filteredCountBottom,filteredControlsBottom);grid.insertAdjacentElement('afterend',paginatorBottom);
+       App.dom={...found,countNodes:[],menuNodes:[],topPaginator:found.topPaginator,bottomPaginator:found.bottomPaginator};App.ui={root,toolbar:root.querySelector('.pmf-popular-toolbar'),controls:root.querySelector('.pmf-controls'),filterButton:root.querySelector('.pmf-filter-button'),sortButton:root.querySelector('.pmf-sort-button'),scanButton:root.querySelector('.pmf-scan-button'),settingsButton:root.querySelector('.pmf-icon-button'),statusLeft:root.querySelector('.pmf-status-left'),statusLabel:root.querySelector('[data-popular-status-label]'),statusActions:root.querySelector('.pmf-status-actions'),statusRight:root.querySelector('.pmf-status-right'),progress:root.querySelector('.pmf-progress'),progressBar:root.querySelector('.pmf-progress span'),details:document.createElement('div'),paginator,filteredCount,statusFilters,filteredControls,paginatorBottom,filteredCountBottom,filteredControlsBottom,grid,filterPopover:null,editor:null,settings:null,sortMenu:null,queue:root.querySelector('.pmf-popular-queue')};
+-      PopularPageController.root=root;PopularPageController.bind();UI.updateQuickStatusFilters();CompactLayoutEngine.connect();
++      PopularPageController.root=root;PopularPageController.bind();UI.updateQuickStatusFilters();CompactLayoutEngine.connect({signal:PopularPageController.controller?.signal});
+     },
+     bind(){const signal=PopularPageController.controller.signal,ui=App.ui;
+       ui.root.addEventListener('click',(event)=>{const mode=event.target.closest('[data-popular-mode]')?.dataset.popularMode;if(mode){App.popularMode=mode;GM_setValue(Config.popularModeKey,mode);App.filteredPage=1;App.persistUIState();App.render();return;}if(event.target.closest('.pmf-filter-button')&&App.popularMode==='local')UI.toggleFilterPopover();if(event.target.closest('.pmf-scan-button'))PopularPageController.primaryAction();if(event.target.closest('.pmf-icon-button'))UI.openSettings();if(event.target.closest('[data-popular-queue-toggle]')){PopularPageController.queueOpen=!PopularPageController.queueOpen;PopularPageController.renderQueue();}const action=event.target.closest('[data-popular-job-action]');if(action){const key=action.dataset.periodKey;if(action.dataset.popularJobAction==='stop')PopularJobManager.stop(key);if(action.dataset.popularJobAction==='remove')PopularJobManager.remove(key);if(action.dataset.popularJobAction==='retry')PopularJobManager.retry(key);if(action.dataset.popularJobAction==='top')PopularJobManager.moveToTop(key);if(action.dataset.popularJobAction==='clear')PopularJobManager.clearCompleted();}}, {signal});
+@@ -7844,8 +7845,8 @@
+       if(PopularPageController.rebinding||!found?.grid||page.kind!=='popular')return false;const context=PopularPeriod.fromPage(page,found);if(!context.periodKey||context.pageKey!==App.popularContext?.pageKey)return false;PopularPageController.rebinding=true;try{PopularPageController.restoreNative();PopularPageController.nativeSnapshot=PopularPageController.saveNative(found);PopularPageController.found=found;App.dom={...App.dom,...found,topPaginator:found.topPaginator,bottomPaginator:found.bottomPaginator};App.dom.template=found.template||App.dom.template;App.dom.totalPosts=found.totalPosts||App.dom.totalPosts;const periodHost=App.ui?.root?.querySelector?.('.pmf-popular-period');if(periodHost)periodHost.innerHTML=PopularPageController.periodNavMarkup(found,context);PopularNativePaginator.reset();PopularPageController.applyNativeControlVisibility(found);App.render();return true;}finally{PopularPageController.rebinding=false;}
+     },
+     observeNative(found){const signal=PopularPageController.controller.signal;PopularPageController.observerSchedule=Util.debounce(()=>{if(!PopularPageController.mounted())return;const page=Route.parsePage(location.href);if(page.kind!=='popular'||page.pageKey!==App.popularContext?.pageKey)return;const next=PopularDOM.find(page);if(next?.grid&&(next.grid!==App.dom.grid||next.topPaginator!==App.dom.topPaginator||next.totalPosts!==App.dom.totalPosts))PopularPageController.rebindNative(next,page);},120);PopularPageController.observer=new MutationObserver((mutations)=>{if(mutations.every((mutation)=>PmfDomMutationGuard.ownsMutation(mutation)))return;const relevant=mutations.some((mutation)=>!mutation.target?.closest?.('[data-pmf-owned="true"]')&&[...mutation.addedNodes,...mutation.removedNodes].some((node)=>node.nodeType===1&&!node.closest?.('[data-pmf-owned="true"]')));if(relevant)PopularPageController.observerSchedule();});PopularPageController.observer.observe(found.main,{childList:true,subtree:true});signal.addEventListener('abort',()=>PopularPageController.observerSchedule?.cancel?.(),{once:true});},
+-    async mount(page,{signal}={}){PopularPageController.cleanup();const ready=await PopularPageController.waitForDOM(page,{signal});PopularPageController.assertMountCurrent(ready.context,signal);const controller=new AbortController(),forwardAbort=()=>controller.abort();signal?.addEventListener('abort',forwardAbort,{once:true});PopularPageController.page=page;PopularPageController.found=ready.found;PopularPageController.context=ready.context;PopularPageController.controller=controller;PopularPageController.nativeSnapshot=PopularPageController.saveNative(ready.found);PopularNativePaginator.reset();try{await PopularPageController.load(ready.context,ready.found,{signal:controller.signal});PopularPageController.assertMountCurrent(ready.context,controller.signal);PopularPageController.mountUI(ready.found,ready.context);PopularPageController.assertMountCurrent(ready.context,controller.signal);PopularPageController.applyNativeControlVisibility(ready.found);PopularPageController.unsubscribe=PopularJobManager.subscribe((snapshot)=>{if(!App.ui||App.pageKind!=='popular')return;const completed=snapshot.recent.find((job)=>job.periodKey===App.popularContext?.periodKey&&job.status==='complete');if(completed&&Number(completed.finishedAt)>PopularPageController.lastCompletedAt){PopularPageController.lastCompletedAt=Number(completed.finishedAt)||Date.now();PopularPageController.refresh();}else App.render();});PopularPageController.observeNative(ready.found);App.render();return true;}catch(error){if(PopularPageController.controller===controller)PopularPageController.cleanup();throw error;}finally{signal?.removeEventListener('abort',forwardAbort);}},
+-    cleanup(){PopularPageController.refreshRevision+=1;PopularPageController.unsubscribe?.();PopularPageController.unsubscribe=null;PopularPageController.observerSchedule?.cancel?.();PopularPageController.observerSchedule=null;PopularPageController.observer?.disconnect();PopularPageController.observer=null;PopularPageController.controller?.abort();PopularPageController.controller=null;PopularNativePaginator.reset();if(App.pageKind==='popular')App.persistUIState();PopularPageController.restoreNative();document.querySelectorAll('#pmf-popular-root,.pmf-popular-paginator,.pmf-popular-local-grid').forEach((node)=>node.remove());PopularPageController.root=null;PopularPageController.found=null;PopularPageController.context=null;PopularPageController.nativeSnapshot=null;PopularPageController.rebinding=false;if(App.pageKind==='popular'){App.ui=null;App.dom=null;App.pageKind='creator';App.popularContext=null;App.popularMeta=null;App.popularEntries=new Map();App.catalog=new Map();}},
++    async mount(page,{signal}={}){PopularPageController.cleanup();const ready=await PopularPageController.waitForDOM(page,{signal});PopularPageController.assertMountCurrent(ready.context,signal);const controller=new AbortController(),forwardAbort=()=>controller.abort();signal?.addEventListener('abort',forwardAbort,{once:true});PopularPageController.page=page;PopularPageController.found=ready.found;PopularPageController.context=ready.context;PopularPageController.controller=controller;App.pageController=controller;PopularPageController.nativeSnapshot=PopularPageController.saveNative(ready.found);PopularNativePaginator.reset();try{await PopularPageController.load(ready.context,ready.found,{signal:controller.signal});PopularPageController.assertMountCurrent(ready.context,controller.signal);PopularPageController.mountUI(ready.found,ready.context);PopularPageController.assertMountCurrent(ready.context,controller.signal);PopularPageController.applyNativeControlVisibility(ready.found);PopularPageController.unsubscribe=PopularJobManager.subscribe((snapshot)=>{if(!App.ui||App.pageKind!=='popular')return;const completed=snapshot.recent.find((job)=>job.periodKey===App.popularContext?.periodKey&&job.status==='complete');if(completed&&Number(completed.finishedAt)>PopularPageController.lastCompletedAt){PopularPageController.lastCompletedAt=Number(completed.finishedAt)||Date.now();PopularPageController.refresh();}else App.render();});PopularPageController.observeNative(ready.found);App.render();return true;}catch(error){if(PopularPageController.controller===controller)PopularPageController.cleanup();throw error;}finally{signal?.removeEventListener('abort',forwardAbort);}},
++    cleanup(){const controller=PopularPageController.controller;PopularPageController.refreshRevision+=1;PopularPageController.unsubscribe?.();PopularPageController.unsubscribe=null;PopularPageController.observerSchedule?.cancel?.();PopularPageController.observerSchedule=null;PopularPageController.observer?.disconnect();PopularPageController.observer=null;CompactLayoutEngine.cleanup();controller?.abort();if(App.pageController===controller)App.pageController=null;PopularPageController.controller=null;PopularNativePaginator.reset();if(App.pageKind==='popular')App.persistUIState();PopularPageController.restoreNative();document.querySelectorAll('#pmf-popular-root,.pmf-popular-paginator,.pmf-popular-local-grid').forEach((node)=>node.remove());PopularPageController.root=null;PopularPageController.found=null;PopularPageController.context=null;PopularPageController.nativeSnapshot=null;PopularPageController.rebinding=false;if(App.pageKind==='popular'){App.ui=null;App.dom=null;App.pageKind='creator';App.popularContext=null;App.popularMeta=null;App.popularEntries=new Map();App.catalog=new Map();}},
+   };
+ 
+   const App = {
+--- /dev/null
++++ b/tests/v0124-popular-page-controller-signal.cjs
+@@ -0,0 +1,33 @@
++
++'use strict';
++
++const assert = require('node:assert/strict');
++const { loadUserscript } = require('./test-helper.cjs');
++
++(() => {
++  const { api, originalSource } = loadUserscript();
++  const { Config, PopularPageController, CompactLayoutEngine } = api;
++
++  assert.equal(Config.version, '0.12.4');
++  assert.match(originalSource, /\/\/ @version\s+0\.12\.4/);
++
++  const mountSource = PopularPageController.mount.toString();
++  const mountUiSource = PopularPageController.mountUI.toString();
++  const cleanupSource = PopularPageController.cleanup.toString();
++  const connectSource = CompactLayoutEngine.connect.toString();
++
++  assert.match(mountSource, /PopularPageController\.controller=controller;App\.pageController=controller/,
++    'Popular mounts must publish their AbortController to shared App UI code before mounting the toolbar');
++  assert.match(mountUiSource, /CompactLayoutEngine\.connect\(\{signal:PopularPageController\.controller\?\.signal\}\)/,
++    'Popular layout connection must receive the active Popular page signal explicitly');
++  assert.match(cleanupSource, /if\(App\.pageController===controller\)App\.pageController=null/,
++    'Popular cleanup must clear only the controller it owns');
++  assert.match(connectSource, /LegacyCompactGridScale\.connect\(options\)/,
++    'The compact layout facade must forward explicit connection options');
++  assert.match(originalSource, /connect\(\{signal=App\.pageController\?\.signal\}=\{\}\)/,
++    'The legacy layout owner must tolerate an absent shared page controller instead of dereferencing null');
++  assert.doesNotMatch(originalSource, /\{signal:App\.pageController\.signal\}/,
++    'No unguarded App.pageController.signal resize listener may remain');
++
++  console.log('Pawchive Media Filter v0.12.4 Popular page-controller signal regression tests passed.');
++})();
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,13 @@
+ # Changelog
+ 
++## 0.12.4
++
++- Fixed the real-browser `/posts/popular` mount failure: Popular pages created `PopularPageController.controller` but did not publish it as `App.pageController`, while the shared compact-layout engine unconditionally read `App.pageController.signal`.
++- Popular mounts now assign and explicitly pass their AbortSignal before connecting shared layout code.
++- Popular cleanup disconnects compact-layout observers and clears only its own shared page controller.
++- Hardened compact-layout connection against a missing or already-aborted signal so one failed mount cannot generate a repeating watchdog error loop.
++- Added focused v0.12.4 regression coverage; 60 executable tests now pass.
++
+ ## 0.12.3
+ 
+ - Fixed the current bare `/posts/popular` route by resolving **The Past 24 Hours** to the current UTC day and by deriving canonical dates from Pawchive's period links before falling back to today.
+--- a/README.md
++++ b/README.md
+@@ -1,5 +1,12 @@
+ # Pawchive.pw Media Filter
+ 
++## v0.12.4 Popular mount-controller repair
++
++- Fixed the real-browser Popular Posts mount crash caused by the shared compact-layout engine reading `App.pageController.signal` while the Popular controller had only stored its controller in `PopularPageController.controller`.
++- Popular mounts now publish and explicitly pass their page AbortSignal to shared UI/layout code, and cleanup releases only the controller it owns.
++- The layout connection is defensive when no active signal exists, preventing watchdog retry loops from repeatedly throwing during a failed mount.
++
+ ## v0.12.2 Popular lifecycle repair and external metadata runner
+ 
+ The Popular Posts controller now starts in an explicit **Native** or **Local** mode and owns only the intended Pawchive elements. Native cards are never hidden through a broad navigation ancestor. The custom period panel follows Pawchive's real Previous / Day / Week / Month / Next destinations, while the Native paginator uses the same First / Previous / numbered pages / Next / Last contract as the rest of PMF. Native filter and sort controls remain visible but disabled as **All posts** and **Sort: Popular**.
+@@ -20,7 +27,7 @@
+ 
+ Tampermonkey userscript for scanning a Pawchive creator’s complete post catalogue, filtering the locally stored metadata, and showing attachment badges on creator and post cards.
+ 
+-Current version: **0.12.2**
++Current version: **0.12.4**
+ 
+ ## Installation
+ 
+--- a/SPEC.md
++++ b/SPEC.md
+@@ -1,5 +1,12 @@
+-# Pawchive.pw Media Filter v0.12.2 specification
++# Pawchive.pw Media Filter v0.12.4 specification
++
++## v0.12.4 Popular mount-controller contract
++
++- The active Popular page `AbortController` must be assigned to both `PopularPageController.controller` and the shared `App.pageController` before any shared UI or compact-layout code is connected.
++- Shared compact-layout connection accepts an explicit AbortSignal and must never dereference `App.pageController.signal` without a null/aborted guard.
++- Popular cleanup disconnects compact-layout observers, aborts the controller, and clears `App.pageController` only when it still points to that same controller.
++- A failed Popular mount must not enter a watchdog loop that repeatedly throws `Cannot read properties of null (reading 'signal')`.
+ 
+ ## v0.12.2 Popular lifecycle and maintenance-runner contracts
+ 
+@@ -22,7 +29,7 @@
+ 
+ ## Persistent identifiers
+ 
+-- Userscript and `Config.version`: `0.12.2`
++- Userscript and `Config.version`: `0.12.4`
+ - Settings: `pmf-settings-v5`
+ - Settings schema: 6; raw upgrade backup: `pmf-settings-backup-pre-schema-4`
+ - Presets: existing key, schema 1
+--- a/TESTING.md
++++ b/TESTING.md
+@@ -1,5 +1,19 @@
+-# Pawchive.pw Media Filter v0.12.2 testing
++# Pawchive.pw Media Filter v0.12.4 testing
++
++## v0.12.4 Popular mount-controller matrix
++
++Automated validation:
++
++```text
++node --check pawchive-pw-media-filter.user.js
++60 executable .cjs tests
++```
++
++1. Open `/posts/popular` and a dated Day/Week/Month URL with DevTools open. No `Cannot read properties of null (reading 'signal')` mount error may appear.
++2. Confirm exactly one `#pmf-popular-root` is installed and the Native/Local toolbar appears.
++3. Switch periods and use Back/Forward repeatedly. Compact-layout listeners must follow the active Popular AbortSignal and stale mounts must clean up without removing a newer controller.
++4. Confirm a failed or interrupted mount does not generate a repeating watchdog error loop.
+ 
+ ## v0.12.2 Popular lifecycle and metadata-runner matrix
+ 
