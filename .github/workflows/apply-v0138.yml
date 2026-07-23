@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git show origin/publish-v0138c:.pawchive-v0138/patch.xz.b64 > /tmp/v0138.patch.xz.b64
+          curl -fsSL "https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/publish-v0138c/.pawchive-v0138/patch.xz.b64" -o /tmp/v0138.patch.xz.b64
           test "$(sha256sum /tmp/v0138.patch.xz.b64 | awk '{print $1}')" = "d37cb797ec06bc5bd4a64c477a9fb9ad3d8a43f475ace14c3703e9a13227c5cb"
           base64 -d /tmp/v0138.patch.xz.b64 > /tmp/v0138.patch.xz
           xz -dc /tmp/v0138.patch.xz > /tmp/v0138.patch
