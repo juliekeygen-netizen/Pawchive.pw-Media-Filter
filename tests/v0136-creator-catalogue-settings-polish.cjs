@@ -18,8 +18,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     DataPortability,
   } = api;
 
-  assert.equal(Config.version, '0.13.6');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
+  assert.equal(Config.version, '0.13.7');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
 
   Settings.load();
   assert.equal(Settings.value.confirmCreatorCardScan, false);
@@ -67,11 +67,10 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(CreatorIndexUI.chrome.toString(), /pmf-sort-label/);
   assert.match(CreatorIndexUI.chrome.toString(), /pmf-sort-direction/);
   assert.match(originalSource, /data-pmf-creator-service/);
-  assert.match(originalSource, /data-pmf-creator-service="fanbox"/);
-  assert.match(originalSource, /linear-gradient\(rgba\(67,70,74/);
-  assert.match(originalSource, /linear-gradient\(rgba\(78,29,25/);
-  assert.match(originalSource, /data-pmf-creator-service="fanbox"\]\{background-color:#34383b/);
-  assert.match(originalSource, /data-pmf-creator-service="patreon"\]\{background-color:#43201d/);
+  assert.match(originalSource, /data-pmf-creator-service-badge/);
+  assert.match(originalSource, /data-pmf-creator-service-badge="fanbox"\]\{background:#30343a/);
+  assert.doesNotMatch(originalSource, /data-pmf-creator-service="fanbox"\][^{]*\{background-color/);
+  assert.doesNotMatch(originalSource, /linear-gradient\(rgba\(67,70,74|linear-gradient\(rgba\(78,29,25/);
 
   assert.match(originalSource, /\.pmf-popular-aggregate-picker\{display:grid;grid-template-columns:repeat\(3,minmax\(58px,1fr\)\)/);
   assert.match(originalSource, /\.pmf-creator-rule-controls\{display:grid;grid-template-columns:[^}]+minmax\(76px,88px\) 14px minmax\(76px,88px\) 30px/);
@@ -101,7 +100,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(DataPortability.exportPresets.toString(), /post:/);
   assert.match(DataPortability.exportPresets.toString(), /creator:/);
 
-  console.log('Pawchive Media Filter v0.13.6 creator catalogue, filters, portability, and settings polish tests passed.');
+  console.log('Pawchive Media Filter v0.13.7 creator catalogue, filters, portability, and settings polish tests passed.');
 
   function treeText(node, output = []) {
     if (!node) return output.join('\n');

@@ -14,8 +14,8 @@ const {
   CreatorCatalogueSummary,
 } = api;
 
-assert.equal(Config.version, '0.13.6');
-assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
+assert.equal(Config.version, '0.13.7');
+assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
 
 // The advanced sort follows the specified Images-first type order and remembers a safe default.
 assert.deepEqual(JSON.parse(JSON.stringify(CreatorSorter.mediaTypes)), ['images', 'videos', 'archives', 'projectFiles', 'externalLinks']);
@@ -172,7 +172,7 @@ assert.match(originalSource, /node\.style\.transform='none'/);
 assert.match(originalSource, /if\(!overlay\)\{popover\.remove\(\);return null;\}/);
 assert.match(originalSource, /matchWidth:true/);
 assert.match(originalSource, /className='pmf-filter-popover pmf-creator-filter-popover/);
-assert.match(originalSource, /<div class="pmf-popover-section">Media<\/div>/);
+assert.doesNotMatch(originalSource, /<div class="pmf-popover-section">Media<\/div>/);
 assert.match(originalSource, /Service: Patreon/);
 assert.match(originalSource, /Date published/);
 assert.match(originalSource, /pmf-aggregate-expression/);
@@ -182,7 +182,7 @@ assert.match(originalSource, /const hasStoredCatalogue=Number\(catalogue\.stored
 assert.match(originalSource, /dynamicAggregateUpdatedAt/);
 assert.match(originalSource, /boundedDynamicMap/);
 
-assert.match(originalSource, /configure-date/);
+assert.doesNotMatch(originalSource, /configure-date/);
 assert.match(originalSource, /data-creator-filter-editor="media:\$\{type\}"/);
 assert.match(originalSource, /openMedia\(editor\.slice\(6\),opener\)/);
 assert.doesNotMatch(originalSource, /pmf-creator-filter-popover\{width:min\(370px/);

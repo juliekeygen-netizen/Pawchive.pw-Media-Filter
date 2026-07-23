@@ -146,7 +146,7 @@ Live checks:
 2. In Native mode, confirm **All posts** and **Sort: Popular** are disabled, native cards remain visible, mirrored pagination works at top and bottom, and no search/status-filter row appears.
 3. Queue two or more different periods. Confirm they remain distinct and execute sequentially; reload during a scan and verify Resume restores the interrupted period without replacing the other queued periods.
 4. Scan a full period. Confirm all native pages are visited, complete existing posts are reused, new/incomplete posts receive metadata, and the Local snapshot contains the expected rank and displayed favorite count.
-5. Open Local mode and test Videos, Images, Archives, Project files, External links, Custom extensions, Custom search rules, Published date, presets, and Favorite/Like/Seen filters. Sorting must stay locked to Popular.
+5. Open Local mode and test Videos, Images, Archives, Project files, External links, Custom extensions, Custom search rules, Date published, presets, and Favorite/Like/Seen filters. Sorting must stay locked to Popular.
 6. Update a previously scanned period after native ranks or favorite counts change. Confirm stale membership is removed and the local result refreshes without duplicating posts.
 7. Export a `.pmfbackup`, clear a disposable Popular period, and test Merge and Replace imports. Confirm period observations, normal post metadata, settings, and presets restore on both supported hostnames.
 8. Test desktop 1080p/1440p, Android portrait/landscape, Back/Forward, period changes, and BFCache navigation for stale native/local grids or refresh flashes.
@@ -204,14 +204,14 @@ Run `node tests/v0112-mobile-responsive-ui.cjs`, `node --check pawchive-pw-media
 4. Open Local catalogue Advanced rules. Verify condition, enabled state, join, outcome, search value, Fields, text operator, Amount/Percentage, threshold(s), and remove action all reflow without horizontal overflow.
 5. On a creator page, verify Filter is full width and Sort, Update, and Settings remain usable on the next row. On Local catalogue, verify Update and its chevron remain side by side rather than stacking vertically.
 6. Open long sort/service menus near the left, right, top, and bottom edges. Menus must stay inside the viewport, wrap by words, scroll internally when tall, and open above low triggers when required.
-7. Exercise Published date, Custom extensions, Advanced attachment sorting, Bulk Scan/Update, Queue, metadata maintenance, and preset dialogs. No dialog may force page-level horizontal scrolling, and primary actions must remain reachable.
+7. Exercise Date published, Custom extensions, Advanced attachment sorting, Bulk Scan/Update, Queue, metadata maintenance, and preset dialogs. No dialog may force page-level horizontal scrolling, and primary actions must remain reachable.
 8. Recheck 1920×1080 and 2560×1440 desktop layouts to confirm the mobile overrides do not change desktop toolbar, settings, card, paginator, or menu geometry.
 
 ## v0.11.1 second-pass audit matrix
 
 Run `node tests/v0111-second-pass-audit.cjs`, the two v0.11.0 suites, `node --check pawchive-pw-media-filter.user.js`, every executable `tests/*.cjs`, and `git diff --check`. The complete suite contains 50 executable tests. Browser behavior still requires authenticated Tampermonkey verification.
 
-1. Configure a Published date range, disable the parent row, close/reopen the popover, and reload. It must remain disabled while retaining its dates. On a fresh profile, checking Date published must open the date child instead of silently enabling an unbounded known-date filter.
+1. Configure a Date published range, disable the parent row, close/reopen the popover, and reload. It must remain disabled while retaining its dates. Checking the Date published row or checkbox must only toggle it; only the chevron may open the date editor. Empty and open-ended date settings must be applicable and retained.
 2. Create multiple Advanced rules with different row-enabled states. Toggle the parent Advanced rules group off and on; row state and IF/AND/OR configuration must survive. Verify **No match** counts posts that do not match the text query rather than inverting the threshold result.
 3. Use attachment-mode Percentage on a creator containing audio/unknown attachments plus external links. The denominator must include every real attachment and scoped link, not only Images/Videos/Archives/Project files. Recheck project keyword-only evidence: it may increment project posts but not attachment count.
 4. Open a partial and a complete Local Catalogue after upgrading. Summary badges/filter values should repopulate from local IndexedDB without a list-page rescan. Change a Custom-extension or Advanced text query and confirm newly hydrated aggregates appear without stale cached results or Pawchive requests.
@@ -229,7 +229,7 @@ Run `node tests/v011-local-catalogue-redesign.cjs`, `node tests/v011-creator-fil
 3. Select Post publish date and verify newest creator latest-post dates first, then reverse and verify oldest latest-post dates first. Creators without a known published date remain at the end.
 4. Open Advanced attachment amounts. Test every Type with Amount and Percentage under both global Count methods, then verify Highest first and Lowest first. In post mode, percentages use matching posts / aggregate-eligible posts. In attachment mode, percentages use selected attachments or links / all counted attachments and links.
 5. Open Creator filters. It must be an anchored compact popover rather than the old full-screen/giant modal. Test Service independently, then combine two or more enabled groups with All and Any. Service must remain AND in both cases.
-6. Configure Published date using On or after, On or before, and inclusive Between. Verify at least one creator post must satisfy it and that unknown dates appear only when Include unknown is enabled.
+6. Configure Date published using On or after, On or before, and inclusive Between. Verify at least one creator post must satisfy it and that unknown dates appear only when Include unknown is enabled.
 7. Configure Videos, Images, Archives, Project files, External links, and Custom extensions. Test ≥, ≤, and Between under Amount and Percentage with both Count methods. Confirm labels/help describe the active units and no Catalogue API scan starts merely because a display filter changes.
 8. Create Advanced rules with IF, AND, and OR; Match and No match; multiple Fields; every text operator; Amount and Percentage. Verify the expression preview, field child, invalid-rule validation, and left-to-right result.
 9. On a partial creator summary, verify safe ≥ Amount lower bounds can participate only when Include safe partial lower bounds is enabled. Verify ≤, Between, and Percentage do not claim exact results from partial data. A No-match Amount may pass only as an explicitly enabled safe ≥ lower bound.

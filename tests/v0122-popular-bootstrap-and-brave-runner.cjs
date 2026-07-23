@@ -9,8 +9,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, context, originalSource, makeElement } = loadUserscript();
   const { Config, PopularDOM, Route } = api;
 
-  assert.equal(Config.version, '0.13.6');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
+  assert.equal(Config.version, '0.13.7');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
 
   const main = makeElement('main');
   const grid = makeElement('div');

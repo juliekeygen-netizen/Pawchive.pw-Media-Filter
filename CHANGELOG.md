@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.7
+
+- Restored creator-card backdrop behavior and limited Fanbox neutral styling to the service badge.
+- Corrected Date published interaction, empty/open-ended saving, creator-filter ordering, and post-filter wording.
+- Added mobile layout hardening for current creator, Popular, queue, filter, dialog, and paginator interfaces.
+
 ## 0.13.6
 
 - Centered the All Scans period selector with three equal Day/Week/Month columns.

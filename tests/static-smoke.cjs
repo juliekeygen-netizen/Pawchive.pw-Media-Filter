@@ -12,7 +12,7 @@ const {
 const json = (value) => JSON.parse(JSON.stringify(value));
 const creator = Route.parse('https://pawchive.pw/fanbox/user/12345?o=50&q=cat');
 
-assert.equal(Config.version, '0.13.6');
+assert.equal(Config.version, '0.13.7');
 assert.equal(Config.schemaVersion, 2);
 assert.equal(Config.databaseVersion, 6);
 assert.equal(Config.settingsKey, 'pmf-settings-v5');

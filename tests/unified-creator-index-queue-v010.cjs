@@ -11,8 +11,8 @@ const {
   CatalogueJobManager, NativeActionAlignment,
 } = api;
 
-assert.equal(Config.version, '0.13.6');
-assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
+assert.equal(Config.version, '0.13.7');
+assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
 assert.equal(Config.databaseVersion, 6);
 assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
 assert.match(originalSource, /createObjectStore\('creatorStates'/);
@@ -155,7 +155,7 @@ assert.match(originalSource, /CreatorCardRightRail/);
 assert.match(originalSource, /CreatorQueuePanel/);
 assert.match(originalSource, /pmf-field-availability/);
 assert.match(originalSource, /Match selected filters/);
-assert.match(originalSource, /Published date/);
+assert.match(originalSource, /Date published/);
 assert.match(originalSource, /Advanced rules/);
 assert.match(originalSource, /Custom extensions/);
 assert.match(originalSource, /CreatorPresets\.apply/);

@@ -6,6 +6,14 @@
 
 Open the link with Tampermonkey installed to install or update the script.
 
+## v0.13.7 Creator service badge, date filter, and mobile corrections
+
+- Restored creator-card artwork/backdrop rendering to the pre-v0.13.6 behavior; only the small Pixiv Fanbox service badge now receives the native dark neutral styling.
+- Made Creator Search Date published behave like the other advanced filters: its checkbox only toggles it, its chevron alone opens the editor, and empty or open-ended date settings can be applied.
+- Reordered Creator Search filters so standard media types are under General and Custom extensions, Advanced rules, Date published, and safe partial lower bounds are under Advanced.
+- Renamed the post-filter label from Published date to Date published on creator and Popular pages.
+- Added another responsive pass for creator filters, cards, Popular mode controls, paginators, queue details, dialogs, and narrow mobile widths.
+
 ## v0.13.6 Creator catalogue filters and settings polish
 
 - Centered the All Scans Day/Week/Month selector with equal-width period columns.
