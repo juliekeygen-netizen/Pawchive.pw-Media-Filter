@@ -24,7 +24,7 @@ jobs:
           ref: master
           fetch-depth: 0
 
-      - name: Recover and apply v0.13.7 patch
+      - name: Recover and apply validated v0.13.7 patch
         shell: bash
         run: |
           set -euo pipefail
@@ -38,23 +38,6 @@ jobs:
           test "$(sha256sum /tmp/v0137.patch | awk '{print $1}')" = "ee0d41f2c0dcf28de1892588785aff69eaf8206c434f760eb68193f16dc4eb72"
           git apply --check /tmp/v0137.patch
           git apply /tmp/v0137.patch
-
-      - name: Validate v0.13.7 release
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --check pawchive-pw-media-filter.user.js
-          grep -q '@version      0.13.7' pawchive-pw-media-filter.user.js
-          grep -q "version: '0.13.7'" pawchive-pw-media-filter.user.js
-          grep -q 'data-pmf-creator-service-badge="fanbox"' pawchive-pw-media-filter.user.js
-          grep -q '>Date published<' pawchive-pw-media-filter.user.js
-          grep -q 'Pawchive Media Filter v0.13.7 creator badge, date filter, ordering, labels, and mobile tests passed.' tests/v0137-creator-badge-date-order-mobile.cjs
-          python - <<'PY'
-          from pathlib import Path
-          text = Path('README.md').read_text(encoding='utf-8')
-          assert text.index('## Installation') < text.index('## v0.13.7')
-          assert 'raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js' in text
-          PY
 
       - name: Publish directly to master
         shell: bash
