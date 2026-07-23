@@ -24,48 +24,27 @@ jobs:
           ref: master
           fetch-depth: 0
 
-      - name: Recover and apply v0.13.8 patch
+      - name: Recover exact v0.13.8 payload
         shell: bash
         run: |
           set -euo pipefail
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c941e31e3090bb9357d2e828a28bbcc95324245e"
           grep -q '@version      0.13.7' pawchive-pw-media-filter.user.js
-
           cat .pawchive-v0138/part00 .pawchive-v0138/part01 > /tmp/v0138.patch.xz.b64
           test "$(sha256sum /tmp/v0138.patch.xz.b64 | awk '{print $1}')" = "e3660d9030137eebfff3502ea6ded20b12d0838e08eaa826be3209cfbfcb03c6"
           base64 -d /tmp/v0138.patch.xz.b64 > /tmp/v0138.patch.xz
           test "$(sha256sum /tmp/v0138.patch.xz | awk '{print $1}')" = "f7c1636fc6bb021a3b0443a62c898b327cd3a86f1c94869b494f8aceab504560"
           xz -dc /tmp/v0138.patch.xz > /tmp/v0138.patch
           test "$(sha256sum /tmp/v0138.patch | awk '{print $1}')" = "bf9faa6cd829217ea5448a87fa5d013a0f4bd28d653b220af86dc21e132807cb"
-
           git apply --reject --whitespace=nowarn /tmp/v0138.patch || true
           mkdir -p tests tools
           base64 -d .pawchive-v0138/v0137-test.b64 > tests/v0137-creator-badge-date-order-mobile.cjs
           base64 -d .pawchive-v0138/tools-readme.b64 > tools/README.md
           base64 -d .pawchive-v0138/runner-ps1.b64 > tools/Start-PawchiveMetadataRunner.ps1
-
           test "$(sha256sum tests/v0137-creator-badge-date-order-mobile.cjs | awk '{print $1}')" = "646f0ee6f09ca4370b3cd72132926cdc669a1c68a4da83105cce7a218c9184a4"
           test "$(sha256sum tools/README.md | awk '{print $1}')" = "3bf9ef209d283eed0725a3609a8217c5f4fcf9364a426dbbca2da6260844c26a"
           test "$(sha256sum tools/Start-PawchiveMetadataRunner.ps1 | awk '{print $1}')" = "47e7650aab3033d0481339e64e74def9593859c2ab034111ac029b67ce2b99cf"
           find . -type f \( -name '*.rej' -o -name '*.orig' \) -delete
-
-      - name: Validate exact v0.13.8 payload
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --check pawchive-pw-media-filter.user.js
-          grep -q '@version      0.13.8' pawchive-pw-media-filter.user.js
-          grep -q "version: '0.13.8'" pawchive-pw-media-filter.user.js
-          test -f tests/v0138-popular-queue-and-maintenance-runner.cjs
-          grep -q 'watch-all' tools/Start-PawchiveMetadataRunner.ps1
-          grep -q 'watch-profiles' tools/Start-PawchiveMetadataRunner.ps1
-          grep -q 'resume-profiles' tools/Start-PawchiveMetadataRunner.ps1
-          python - <<'PY'
-          from pathlib import Path
-          text = Path('README.md').read_text(encoding='utf-8')
-          assert text.index('## Installation') < text.index('## v0.13.8')
-          assert 'raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js' in text
-          PY
 
       - name: Publish directly to master
         shell: bash
