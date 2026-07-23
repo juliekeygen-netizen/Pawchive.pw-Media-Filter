@@ -1,0 +1,78 @@
+name: Apply Pawchive v0.13.7
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0137/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0137-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply v0.13.7 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "1c3ae9915d70a517b6b062cef7af9c4689b484d5"
+          grep -q '@version      0.13.6' pawchive-pw-media-filter.user.js
+          test "$(sha256sum .pawchive-v0137/patch.xz.b64 | awk '{print $1}')" = "9bc980593d195c8d8b5d982123055f2fe5bec300240a39c0eb885acd32d0c720"
+          base64 -d .pawchive-v0137/patch.xz.b64 > /tmp/v0137.patch.xz
+          test "$(sha256sum /tmp/v0137.patch.xz | awk '{print $1}')" = "0c70dbc902e0f69ae609efb275dce92b439fe30a998c7ed9ce455ffb73f27a1a"
+          xz -dc /tmp/v0137.patch.xz > /tmp/v0137.patch
+          test "$(sha256sum /tmp/v0137.patch | awk '{print $1}')" = "ee0d41f2c0dcf28de1892588785aff69eaf8206c434f760eb68193f16dc4eb72"
+          git apply --check /tmp/v0137.patch
+          git apply /tmp/v0137.patch
+
+      - name: Validate v0.13.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 72
+          git diff --check
+          grep -q '@version      0.13.7' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.13.7'" pawchive-pw-media-filter.user.js
+          grep -q 'data-pmf-creator-service-badge="fanbox"' pawchive-pw-media-filter.user.js
+          grep -q 'Pawchive Media Filter v0.13.7 creator badge, date filter, ordering, labels, and mobile tests passed.' tests/v0137-creator-badge-date-order-mobile.cjs
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('README.md').read_text(encoding='utf-8')
+          assert text.index('## Installation') < text.index('## v0.13.7')
+          assert 'raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js' in text
+          PY
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .pawchive-v0137
+          rm -f .github/workflows/apply-v0137.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.13.7 creator badge date filter and mobile UI'
+          git push origin HEAD:master
