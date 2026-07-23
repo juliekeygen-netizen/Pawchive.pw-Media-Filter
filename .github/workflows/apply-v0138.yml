@@ -36,8 +36,7 @@ jobs:
           test "$(sha256sum /tmp/v0138.patch.xz | awk '{print $1}')" = "f7c1636fc6bb021a3b0443a62c898b327cd3a86f1c94869b494f8aceab504560"
           xz -dc /tmp/v0138.patch.xz > /tmp/v0138.patch
           test "$(sha256sum /tmp/v0138.patch | awk '{print $1}')" = "bf9faa6cd829217ea5448a87fa5d013a0f4bd28d653b220af86dc21e132807cb"
-          git apply --check /tmp/v0138.patch
-          git apply /tmp/v0138.patch
+          git apply --3way --whitespace=nowarn /tmp/v0138.patch
 
       - name: Validate v0.13.8
         shell: bash
