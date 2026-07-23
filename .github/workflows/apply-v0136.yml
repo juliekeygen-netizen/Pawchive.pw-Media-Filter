@@ -1,0 +1,76 @@
+name: Apply Pawchive v0.13.6
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0136/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0136-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply v0.13.6 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '@version      0.13.5' pawchive-pw-media-filter.user.js
+          test "$(sha256sum .pawchive-v0136/patch.xz.b64 | awk '{print $1}')" = "fa627d89a4adb243afc83eeb3936b78244bfb79217e5dffe382df65994d7d996"
+          base64 -d .pawchive-v0136/patch.xz.b64 > /tmp/v0136.patch.xz
+          test "$(sha256sum /tmp/v0136.patch.xz | awk '{print $1}')" = "403793442698db4e5d3c858c852c64f02e7558ec7fa360fe45be4166d445f864"
+          xz -dc /tmp/v0136.patch.xz > /tmp/v0136.patch
+          test "$(sha256sum /tmp/v0136.patch | awk '{print $1}')" = "fda97f4f41a60efe31eac84894db185ba80c5b7cfded1e0bcbd6f4e9d739cbc1"
+          patch --batch --dry-run -p4 < /tmp/v0136.patch
+          patch --batch -p4 < /tmp/v0136.patch
+
+      - name: Validate v0.13.6
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 71
+          git diff --check
+          grep -q '@version      0.13.6' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.13.6'" pawchive-pw-media-filter.user.js
+          grep -q 'Pawchive Media Filter v0.13.6 creator catalogue, filters, portability, and settings polish tests passed.' tests/v0136-creator-catalogue-settings-polish.cjs
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('README.md').read_text(encoding='utf-8')
+          assert text.index('## Installation') < text.index('## v0.13.6')
+          assert 'raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js' in text
+          PY
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .pawchive-v0136
+          rm -f .github/workflows/apply-v0136.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Polish v0.13.6 creator catalogue filters and settings'
+          git push origin HEAD:master
