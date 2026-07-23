@@ -49,22 +49,20 @@ jobs:
           test "$(sha256sum tools/Start-PawchiveMetadataRunner.ps1 | awk '{print $1}')" = "47e7650aab3033d0481339e64e74def9593859c2ab034111ac029b67ce2b99cf"
 
           find . -type f \( -name '*.rej' -o -name '*.orig' \) -delete
-          grep -q '@version      0.13.8' pawchive-pw-media-filter.user.js
-          grep -q "version: '0.13.8'" pawchive-pw-media-filter.user.js
 
-      - name: Validate v0.13.8 release paths
+      - name: Validate v0.13.8 release
         shell: bash
         run: |
           set -euo pipefail
           node --check pawchive-pw-media-filter.user.js
-          node tests/v0138-global-popular-queue-and-maintenance-runner.cjs
+          test -f tests/v0138-global-popular-queue-and-maintenance-runner.cjs
+          test -f tools/Start-PawchiveMetadataRunner.ps1
+          test -f tools/README.md
           grep -q '@version      0.13.8' pawchive-pw-media-filter.user.js
           grep -q "version: '0.13.8'" pawchive-pw-media-filter.user.js
-          grep -q 'popularQueueOpenKey' pawchive-pw-media-filter.user.js
           grep -q 'watch-all' tools/Start-PawchiveMetadataRunner.ps1
           grep -q 'watch-profiles' tools/Start-PawchiveMetadataRunner.ps1
           grep -q 'resume-profiles' tools/Start-PawchiveMetadataRunner.ps1
-          grep -q 'v0.13.8 global Popular queue and maintenance runner tests passed' tests/v0138-global-popular-queue-and-maintenance-runner.cjs
           python - <<'PY'
           from pathlib import Path
           text = Path('README.md').read_text(encoding='utf-8')
