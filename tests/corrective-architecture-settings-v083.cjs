@@ -9,7 +9,7 @@ const {
   PostStatusStateCoordinator, PostPageController, Lifecycle, SettingsUI,
 } = api;
 
-assert.equal(Config.version, '0.13.4');
+assert.equal(Config.version, '0.13.5');
 assert.equal(Config.schemaVersion, 2);
 assert.equal(Config.databaseVersion, 6);
 

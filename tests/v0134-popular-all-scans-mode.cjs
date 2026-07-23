@@ -15,8 +15,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     App,
   } = api;
 
-  assert.equal(Config.version, '0.13.4');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.4/);
+  assert.equal(Config.version, '0.13.5');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
   assert.equal(Config.popularAggregatePeriodKey, 'pmf-popular-aggregate-period-v1');
   assert.equal(typeof Cache.getPopularEntriesForPeriods, 'function');
 
@@ -63,8 +63,9 @@ const { loadUserscript } = require('./test-helper.cjs');
 
   assert.match(PopularPageController.mountUI.toString(), /data-popular-mode="aggregate"/);
   assert.match(PopularPageController.mountUI.toString(), />All Scans<\/button>/);
-  assert.match(PopularPageController.syncAggregatePeriodControls.toString(), /\^\(day\|week\|month\)\$/i);
-  assert.match(PopularPageController.syncAggregatePeriodControls.toString(), /display','none','important'/);
+  assert.match(PopularPageController.mountUI.toString(), /pmf-popular-aggregate-picker/);
+  assert.match(PopularPageController.syncAggregatePeriodControls.toString(), /setVisible\(container,!aggregate\)/);
+  assert.match(PopularPageController.syncAggregatePeriodControls.toString(), /pmfAggregatePeriod===App\.popularAggregatePeriod/);
   assert.match(PopularPageController.setAggregatePeriod.toString(), /Config\.popularAggregatePeriodKey/);
   assert.match(PopularPageController.refresh.toString(), /PopularAggregate\.load/);
   assert.match(PopularPageController.renderLocal.toString(), /unique posts from/);
@@ -85,20 +86,24 @@ const { loadUserscript } = require('./test-helper.cjs');
   const nav = makeElement('nav');
   const heading = makeElement('h1');
   heading.textContent = 'Popular Posts For July 2026';
-  App.dom = { periodLinks:[previous,day,week,month,next], navContainers:[nav] };
+  const aggregateButtons = ['day','week','month'].map((period)=>{const button=makeElement('button');button.dataset.pmfAggregatePeriod=period;return button;});
+  const aggregatePicker = makeElement('div');
+  aggregatePicker.querySelectorAll = () => aggregateButtons;
+  App.dom = { periodLinks:[previous,day,week,month,next], navContainers:[nav], grid:makeElement('div') };
+  App.ui = { aggregatePicker };
   PopularPageController.nativeSnapshot = { heading:{node:heading,text:heading.textContent} };
   App.popularMode = 'aggregate';
   App.popularAggregatePeriod = 'week';
   PopularPageController.syncAggregatePeriodControls(App.dom);
-  assert.equal(previous.hidden, true);
-  assert.equal(next.hidden, true);
-  assert.equal(day.hidden, false);
-  assert.equal(week.dataset.pmfAggregatePeriod, 'week');
-  assert.equal(week.classList.contains('pmf-popular-aggregate-period-active'), true);
+  assert.equal(nav.hidden, true);
+  assert.equal(aggregatePicker.hidden, false);
+  assert.equal(aggregateButtons.find((button)=>button.dataset.pmfAggregatePeriod==='week').classList.contains('pmf-active'), true);
+  assert.equal(day.dataset.pmfPeriodType, 'day');
   assert.equal(heading.textContent, 'All Scanned Popular Posts · Week');
-  PopularPageController.restoreAggregatePeriodControls();
-  assert.equal(previous.hidden, false);
-  assert.equal(next.hidden, false);
+  App.popularMode = 'local';
+  PopularPageController.syncAggregatePeriodControls(App.dom);
+  assert.equal(nav.hidden, false);
+  assert.equal(aggregatePicker.hidden, true);
   assert.equal(heading.textContent, 'Popular Posts For July 2026');
 
   App.popularMode = 'aggregate';
@@ -133,6 +138,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(PopularPageController.refreshStateCurrent('local','day'), true);
   assert.equal(PopularPageController.refreshStateCurrent('aggregate','day'), false);
 
+  App.ui = null;
   const originalFlash = UI.flash;
   let flashes = 0;
   UI.flash = () => { flashes += 1; };
@@ -155,5 +161,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   PopularPageController.root = null;
   PopularPageController.context = null;
 
-  console.log('Pawchive Media Filter v0.13.4 All Scans Popular mode tests passed.');
+  console.log('Pawchive Media Filter v0.13.5 All Scans Popular mode tests passed.');
 })();

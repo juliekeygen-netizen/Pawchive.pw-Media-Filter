@@ -7,8 +7,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, originalSource, context } = loadUserscript();
   const { Config, Route, PopularScanner, PopularJobManager, PopularQueuePanel, QueuePanelView, Lifecycle } = api;
 
-  assert.equal(Config.version, '0.13.4');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.4/);
+  assert.equal(Config.version, '0.13.5');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
 
   const canonical = Route.canonicalPopularUrl('https://pawchive.pw/posts/popular');
   assert.match(canonical, /^https:\/\/pawchive\.pw\/posts\/popular\?/);
@@ -58,5 +58,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularScanner.run.toString(), /displayedFavoriteCount|putPopularEntries/,
     'Update must rewrite native rank/favorite entry data');
 
-  console.log('Pawchive Media Filter v0.13.4 Popular progress, canonical route, and incremental Update tests passed.');
+  console.log('Pawchive Media Filter v0.13.5 Popular progress, canonical route, and incremental Update tests passed.');
 })();

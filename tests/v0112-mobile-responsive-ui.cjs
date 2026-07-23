@@ -6,8 +6,8 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config, SettingsUI } = api;
 
-assert.equal(Config.version, '0.13.4');
-assert.match(originalSource, /\/\/ @version\s+0\.13\.4/);
+assert.equal(Config.version, '0.13.5');
+assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
 
 // Settings rows expose stable semantic classes so mobile CSS can stack
 // title and control without guessing from child order.

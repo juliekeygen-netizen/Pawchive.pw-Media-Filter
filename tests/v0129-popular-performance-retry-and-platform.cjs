@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularPageController,
   } = api;
 
-  assert.equal(Config.version, '0.13.4');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.4/);
+  assert.equal(Config.version, '0.13.5');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
 
   const button = {
     disabled: false,
@@ -123,5 +123,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularPageController.nativeState.toString(), /nextSibling/);
   assert.match(PopularPageController.restoreNode.toString(), /insertBefore/);
 
-  console.log('Pawchive Media Filter v0.13.4 Popular performance, retry, mirrored pagination, and platform-icon tests passed.');
+  console.log('Pawchive Media Filter v0.13.5 Popular performance, retry, mirrored pagination, and platform-icon tests passed.');
 })();

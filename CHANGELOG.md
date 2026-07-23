@@ -1,3 +1,15 @@
+# Changelog
+
+## 0.13.5
+
+- Added a PMF-owned Day/Week/Month selector for All Scans, eliminating stale native link highlights and intermittent Previous/Next visibility.
+- Added right-click custom-date navigation for Day, Week, and Month with the browser’s native date picker.
+- Normalized native Previous/Next period-link color across visited, hover, focus, and active states.
+- Enabled Popular, Publish date, and Post title sorting in Local and All Scans, including repeat-selection direction reversal and persisted sort state.
+- Removed stale cloned `picture source` data from reconstructed post cards and eagerly bound stored thumbnail URLs to prevent black Local/All Scans cards.
+- Suppressed the erroneous registered-users-only notice when Pawchive’s logged-in navigation is present.
+- Added focused regression coverage; all 70 executable tests pass.
+
 ## 0.13.4
 
 - Added an **All Scans** Popular mode beside Native and Local.
@@ -5,8 +17,6 @@
 - Deduplicated posts across snapshots by post key. When a post was observed more than once in the selected period type, the entry with the highest displayed favorite count is retained; ties use the newest observation.
 - Rebuilt aggregate ranks after deduplication, retained Local filtering/status controls and pagination, and refreshed the aggregate automatically when a matching Popular scan completes.
 - Added one-transaction multi-period entry loading plus regression coverage for aggregation, period switching, native-control restoration, and favorite-count selection. All 69 executable tests pass.
-
-# Changelog
 
 ## 0.13.3
 

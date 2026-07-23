@@ -6,6 +6,15 @@
 
 Open the link with Tampermonkey installed to install or update the script.
 
+## v0.13.5 Popular period controls, custom dates, sorting, and card reliability
+
+- Replaced the fragile All Scans reuse of Pawchive period links with a PMF-owned Day/Week/Month selector, so dated Previous/Next links stay hidden and the active aggregate period always updates correctly.
+- Right-click Day, Week, or Month to open a native date picker and jump directly to a custom dated period; period links show a small “Right click for custom date” tooltip.
+- Kept native Previous/Next period links permanently in Pawchive’s reddish link color instead of allowing stale white active/focus styling.
+- Enabled Popular, Publish date, and Post title sorting in Local and All Scans; selecting the active option reverses its direction.
+- Hardened reconstructed Popular thumbnails by removing stale cloned picture sources and eagerly loading the stored thumbnail URL.
+- Hidden the erroneous registered-users-only notice on Popular pages when the logged-in navigation is present.
+
 ## v0.13.4 All Scans Popular mode
 
 - Added a third **All Scans** mode beside Native and Local on Popular Posts pages.
