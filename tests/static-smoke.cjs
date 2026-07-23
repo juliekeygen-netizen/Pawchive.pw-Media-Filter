@@ -12,7 +12,7 @@ const {
 const json = (value) => JSON.parse(JSON.stringify(value));
 const creator = Route.parse('https://pawchive.pw/fanbox/user/12345?o=50&q=cat');
 
-assert.equal(Config.version, '0.13.5');
+assert.equal(Config.version, '0.13.6');
 assert.equal(Config.schemaVersion, 2);
 assert.equal(Config.databaseVersion, 6);
 assert.equal(Config.settingsKey, 'pmf-settings-v5');
@@ -88,11 +88,13 @@ assert.equal(CatalogueModel.button({ catalogue: covered }, { hasPosts: true }).l
 assert.equal(CatalogueModel.button(CatalogueModel.empty()).label, 'Scan');
 
 const settingsMethod = originalSource.slice(originalSource.indexOf('  const SettingsUI = {'),originalSource.indexOf('  UI.openSettings=SettingsUI.open;'));
-assert.ok(settingsMethod.includes("['scanning', 'Scanning']"));
+assert.ok(settingsMethod.includes("['scanning', 'Scanning & detection']"));
 assert.ok(settingsMethod.includes('Show attachment badges on post cards'));
 assert.ok(settingsMethod.includes('Attachment badge size'));
-assert.ok(settingsMethod.includes('Confirm creator card scans'));
-assert.ok(settingsMethod.includes('Clear all full catalogue scans'));
+assert.ok(!settingsMethod.includes('Confirm creator card scans'));
+assert.ok(settingsMethod.includes('Open catalogue maintenance'));
+assert.ok(settingsMethod.includes('Creator catalogue detection'));
+assert.ok(originalSource.includes('Clear all full catalogue scans'));
 assert.ok(!settingsMethod.includes('Display mode'));
 assert.ok(!settingsMethod.includes('Remember active preset'));
 

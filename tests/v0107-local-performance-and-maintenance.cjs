@@ -22,8 +22,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     SettingsUI,
   } = api;
 
-  assert.equal(Config.version, '0.13.5');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
+  assert.equal(Config.version, '0.13.6');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
   assert.ok(!CreatorIndexUI.render.toString().includes('repairVisible'));
   assert.ok(!CreatorIndexUI.renderCatalogue.toString().includes('repairVisible'));
   assert.ok(CreatorIndexUI.renderCatalogue.toString().includes('createDocumentFragment'));
@@ -140,21 +140,14 @@ const { loadUserscript } = require('./test-helper.cjs');
     return output;
   };
   const generalText = collectText(SettingsUI.buildGeneral(Settings.normalize(Settings.value))).join('\n');
+  const scanningText = collectText(SettingsUI.buildScanning(Settings.normalize(Settings.value))).join('\n');
   const dataText = collectText(SettingsUI.buildData(Settings.normalize(Settings.value))).join('\n');
-  for (const label of [
-    'Count method',
-    'Posts containing media',
-    'Total attachments/links from every post',
-    'Hide and don’t count posts with missing attachments',
-  ]) assert.ok(generalText.includes(label), `Missing visible General setting: ${label}`);
-  for (const label of [
-    'Update missing-attachment metadata',
-    'Repair creator profile metadata',
-    'Resume metadata update',
-    'Retry failed metadata',
-    'Resume creator repair',
-    'Retry failed creator repair',
-  ]) assert.ok(dataText.includes(label), `Missing visible Data action: ${label}`);
+  for (const label of ['Count method','Posts containing media','Total attachments/links from every post','Hide and don’t count posts with missing attachments']) {
+    assert.ok(scanningText.includes(label), `Missing visible Scanning & detection setting: ${label}`);
+    assert.equal(generalText.includes(label), false, `${label} is no longer in General`);
+  }
+  assert.ok(dataText.includes('Open catalogue maintenance'));
+  for (const label of ['Missing-attachment metadata','Repair creator profiles','Resume','Retry failed','Stop synchronization','Clear all full catalogue scans']) assert.ok(originalSource.toLocaleLowerCase().includes(label.toLocaleLowerCase()), `Missing maintenance action: ${label}`);
 
   // Verify profile HTML keeps avatar and banner extraction distinct and never
   // treats one og:image as both fields.

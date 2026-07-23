@@ -6,8 +6,8 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config, SettingsUI } = api;
 
-assert.equal(Config.version, '0.13.5');
-assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
+assert.equal(Config.version, '0.13.6');
+assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
 
 // Settings rows expose stable semantic classes so mobile CSS can stack
 // title and control without guessing from child order.
@@ -61,7 +61,7 @@ assert.ok(originalSource.includes('.pmf-split-primary>.pmf-split-chevron{grid-co
 
 // Floating menus widen to a useful mobile width, remain clamped to the
 // viewport, and may open above a trigger when space below is insufficient.
-assert.ok(originalSource.includes('preferredWidth=mobile?Math.max(rect.width,Math.min(286,viewportWidth-16))'));
+assert.ok(originalSource.includes('preferredWidth=mobile?Math.max(220,rect.width,Math.min(286,viewportWidth-16)):Math.max(190,rect.width)'));
 assert.ok(originalSource.includes('const spaceBelow=viewportHeight-rect.bottom-8'));
 assert.ok(originalSource.includes("menu.style.maxWidth='calc(100vw - 16px)'"));
 

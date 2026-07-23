@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.13.6
+
+- Centered the All Scans period selector with three equal Day/Week/Month columns.
+- Removed the duplicate Local creator count, added gray Pixiv Fanbox versus red Patreon catalogue-card treatments, and aligned Local sort arrows to the right.
+- Corrected Custom extensions and Advanced rules row/chevron behavior, allowed empty extension lists, removed per-rule Enabled controls, and repaired Between-rule sizing.
+- Reduced Seen/Hide status filters to Off and No match across creator search, creator pages, and Popular Posts.
+- Unified creator preset action menus around Rename, Duplicate, and Delete with a wider anchored menu.
+- Consolidated maintenance and native-favorite operations into a categorized maintenance dialog and moved creator detection settings into Scanning & detection.
+- Disabled obsolete creator-card scan confirmations and verified Popular/preset backup and restore coverage.
+- Added focused v0.13.6 regression coverage; all 71 executable tests pass.
+
 ## 0.13.5
 
 - Added a PMF-owned Day/Week/Month selector for All Scans, eliminating stale native link highlights and intermittent Previous/Next visibility.

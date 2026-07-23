@@ -14,8 +14,8 @@ const {
   CreatorCatalogueSummary,
 } = api;
 
-assert.equal(Config.version, '0.13.5');
-assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
+assert.equal(Config.version, '0.13.6');
+assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
 
 // The advanced sort follows the specified Images-first type order and remembers a safe default.
 assert.deepEqual(JSON.parse(JSON.stringify(CreatorSorter.mediaTypes)), ['images', 'videos', 'archives', 'projectFiles', 'externalLinks']);
@@ -183,8 +183,8 @@ assert.match(originalSource, /dynamicAggregateUpdatedAt/);
 assert.match(originalSource, /boundedDynamicMap/);
 
 assert.match(originalSource, /configure-date/);
-assert.match(originalSource, /configure-extensions/);
-assert.match(originalSource, /openMedia\('customExtensions',opener\)/);
+assert.match(originalSource, /data-creator-filter-editor="media:\$\{type\}"/);
+assert.match(originalSource, /openMedia\(editor\.slice\(6\),opener\)/);
 assert.doesNotMatch(originalSource, /pmf-creator-filter-popover\{width:min\(370px/);
 assert.match(originalSource, /pmf-creator-filter-popover\{max-width:calc\(100vw - 16px\)/);
 assert.match(originalSource, /const openAbove=spaceBelow/);

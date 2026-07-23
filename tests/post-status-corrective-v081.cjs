@@ -10,7 +10,7 @@ const {
 } = api;
 const json = (value) => JSON.parse(JSON.stringify(value));
 
-assert.equal(Config.version, '0.13.5');
+assert.equal(Config.version, '0.13.6');
 assert.equal(Config.databaseVersion, 6);
 assert.equal(Config.postStatusFiltersKey, 'pmf-post-status-filters-v1');
 assert.match(originalSource, /favoriteSnapshotEntries/);

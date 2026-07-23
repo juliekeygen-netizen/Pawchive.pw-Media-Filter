@@ -24,8 +24,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     App,
   } = api;
 
-  assert.equal(Config.version, '0.13.5');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
+  assert.equal(Config.version, '0.13.6');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
   assert.equal(Settings.value.settingsSchemaVersion, 6);
 
   const expectedHosts = [
@@ -234,7 +234,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   App.context = null;
   assert.equal(collectActions(SettingsUI.buildData(structuredClone(Settings.value))).includes('clear-creator'), false);
   App.context = { creatorKey };
-  assert.equal(collectActions(SettingsUI.buildData(structuredClone(Settings.value))).includes('clear-creator'), true);
+  assert.equal(collectActions(SettingsUI.buildData(structuredClone(Settings.value))).includes('clear-creator'), false);
+  assert.match(originalSource,/data-settings-action="clear-creator"/);
   App.context = null;
 
   assert.match(originalSource, /MissingAttachmentMaintenance\.cancelAndReset/);

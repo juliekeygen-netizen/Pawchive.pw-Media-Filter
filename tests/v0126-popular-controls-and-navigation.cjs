@@ -14,8 +14,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Lifecycle,
   } = api;
 
-  assert.equal(Config.version, '0.13.5');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.5/);
+  assert.equal(Config.version, '0.13.6');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.6/);
 
   assert.doesNotMatch(PopularNavigation.visit.toString(), /Turbo\.visit/,
     'Popular period navigation must use a full document navigation instead of Turbo');
@@ -68,5 +68,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.doesNotMatch(originalSource, /\.pmf-popular-period\{|\.pmf-popular-period-links/);
   assert.match(originalSource, /pmf-popular-native-paginator/);
 
-  console.log('Pawchive Media Filter v0.13.5 native Popular mirrored controls regression tests passed.');
+  console.log('Pawchive Media Filter v0.13.6 native Popular mirrored controls regression tests passed.');
 })();

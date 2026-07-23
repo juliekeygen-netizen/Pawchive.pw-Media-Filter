@@ -9,7 +9,7 @@ const { Config, Settings, AttachmentBadgeSizing } = api;
 Settings.load();
 assert.equal(Settings.value.postAttachmentBadgeSize, 'small');
 assert.equal(Settings.value.creatorAttachmentBadgeSize, 'small');
-assert.equal(Settings.value.confirmCreatorCardScan, true);
+assert.equal(Settings.value.confirmCreatorCardScan, false);
 
 const { small, medium, big } = AttachmentBadgeSizing.metrics;
 assert.deepEqual(

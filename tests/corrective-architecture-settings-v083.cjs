@@ -9,7 +9,7 @@ const {
   PostStatusStateCoordinator, PostPageController, Lifecycle, SettingsUI,
 } = api;
 
-assert.equal(Config.version, '0.13.5');
+assert.equal(Config.version, '0.13.6');
 assert.equal(Config.schemaVersion, 2);
 assert.equal(Config.databaseVersion, 6);
 
@@ -45,8 +45,9 @@ assert.equal(typeof SettingsUI.row,'function');
 assert.equal(typeof SettingsUI.toggle,'function');
 assert.equal(typeof SettingsUI.select,'function');
 assert.match(SettingsUI.buildGeneral.toString(),/Creator cards/);
-assert.match(SettingsUI.buildData.toString(),/Update missing-attachment metadata/);
-assert.match(SettingsUI.open.toString(),/MissingAttachmentMaintenance\.openScopeDialog/);
+assert.match(SettingsUI.buildData.toString(),/Open catalogue maintenance/);
+assert.match(originalSource,/const CatalogueMaintenanceUI = \{/);
+assert.match(originalSource,/MissingAttachmentMaintenance\.openScopeDialog/);
 
 assert.match(Lifecycle.ensureMounted.toString(),/mountingPageKey/);
 assert.match(Lifecycle.ensureMounted.toString(),/mountedPageKey/);

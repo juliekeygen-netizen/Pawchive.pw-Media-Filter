@@ -31,11 +31,9 @@ assert.deepEqual(JSON.parse(JSON.stringify(identity)), {
 assert.doesNotMatch(identity.displayName, /favorites|11379|2350|Patreon.*Patreon/);
 
 const openAction = api.ArtistsPageController.openAction.toString();
-assert.match(openAction, /title:`Scan \$\{name\}\?`/);
-assert.match(openAction, /This will scan every post for this creator and store the available post metadata locally/);
-assert.match(openAction, /if\(action==='update'\|\|!Settings\.value\.confirmCreatorCardScan\)\{start\(\);return;\}/);
+assert.match(openAction, /CatalogueJobManager\.enqueue\(info\.context,action,\{creatorName:name\}\)/);
 assert.match(openAction, /queuedForCreator/);
-assert.match(openAction, /confirmCreatorCardScan/);
+assert.doesNotMatch(openAction, /confirmCreatorCardScan|ConfirmDialog|title:`Scan/);
 assert.equal(ArtistsDOM.creatorCards({grid:null}).length, 0);
 
 console.log('Pawchive Media Filter creator display-name and dialog tests passed.');

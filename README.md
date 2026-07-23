@@ -6,6 +6,16 @@
 
 Open the link with Tampermonkey installed to install or update the script.
 
+## v0.13.6 Creator catalogue filters and settings polish
+
+- Centered the All Scans Day/Week/Month selector with equal-width period columns.
+- Removed the redundant Local creator-count text, restored service-specific Patreon/Fanbox card backdrops, and right-aligned the Local sort-direction indicator.
+- Made Custom extensions and Advanced rules toggle only from their checkbox rows while their chevrons exclusively open the editors; empty custom-extension lists can now be saved.
+- Simplified Seen/Hide quick filters to Off and No match, fixed Between-rule field geometry, and standardized creator preset menus to Rename, Duplicate, and Delete.
+- Reorganized catalogue repair, retry, native-favorite synchronization, and destructive actions into a categorized maintenance workspace.
+- Renamed Scanning to Scanning & detection, moved creator Count method and missing-attachment exclusion there, and removed creator-card scan confirmations.
+- Audited export/import coverage for Popular snapshots, aggregate state, statuses, and both post and creator presets.
+
 ## v0.13.5 Popular period controls, custom dates, sorting, and card reliability
 
 - Replaced the fragile All Scans reuse of Pawchive period links with a PMF-owned Day/Week/Month selector, so dated Previous/Next links stay hidden and the active aggregate period always updates correctly.
