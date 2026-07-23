@@ -55,9 +55,14 @@ jobs:
         run: |
           set -euo pipefail
           node --check pawchive-pw-media-filter.user.js
-          test -f tests/v0138-global-popular-queue-and-maintenance-runner.cjs
-          test -f tools/Start-PawchiveMetadataRunner.ps1
-          test -f tools/README.md
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 73
           grep -q '@version      0.13.8' pawchive-pw-media-filter.user.js
           grep -q "version: '0.13.8'" pawchive-pw-media-filter.user.js
           grep -q 'watch-all' tools/Start-PawchiveMetadataRunner.ps1
@@ -76,6 +81,7 @@ jobs:
           set -euo pipefail
           rm -rf .pawchive-v0138
           rm -f .github/workflows/apply-v0138.yml
+          rm -f .tmp-v0138-note
           rmdir .github/workflows 2>/dev/null || true
           rmdir .github 2>/dev/null || true
           git config user.name 'github-actions[bot]'
