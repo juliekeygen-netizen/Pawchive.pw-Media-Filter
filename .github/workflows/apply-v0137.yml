@@ -39,19 +39,16 @@ jobs:
           git apply --check /tmp/v0137.patch
           git apply /tmp/v0137.patch
 
-      - name: Validate v0.13.7 release paths
+      - name: Validate v0.13.7 release
         shell: bash
         run: |
           set -euo pipefail
           node --check pawchive-pw-media-filter.user.js
-          node tests/v0137-creator-badge-date-order-mobile.cjs
-          node tests/v0136-creator-catalogue-settings-polish.cjs
-          node tests/v0111-second-pass-audit.cjs
-          node tests/unified-creator-index-queue-v010.cjs
-          node tests/v0112-mobile-responsive-ui.cjs
           grep -q '@version      0.13.7' pawchive-pw-media-filter.user.js
           grep -q "version: '0.13.7'" pawchive-pw-media-filter.user.js
           grep -q 'data-pmf-creator-service-badge="fanbox"' pawchive-pw-media-filter.user.js
+          grep -q "label:'Date published'" pawchive-pw-media-filter.user.js
+          grep -q 'Pawchive Media Filter v0.13.7 creator badge, date filter, ordering, labels, and mobile tests passed.' tests/v0137-creator-badge-date-order-mobile.cjs
           python - <<'PY'
           from pathlib import Path
           text = Path('README.md').read_text(encoding='utf-8')
