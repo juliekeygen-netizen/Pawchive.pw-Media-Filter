@@ -29,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '@version      0.13.5' pawchive-pw-media-filter.user.js
-          cat .pawchive-v0136/part00 .pawchive-v0136/part01 .pawchive-v0136/rest00 .pawchive-v0136/rest01 .pawchive-v0136/rest02 .pawchive-v0136/rest03 .pawchive-v0136/rest04 > /tmp/v0136.patch.xz.b64
+          cat .pawchive-v0136/part00 .pawchive-v0136/mid00 .pawchive-v0136/mid01 .pawchive-v0136/mid02 .pawchive-v0136/rest00 .pawchive-v0136/rest01 .pawchive-v0136/rest02 .pawchive-v0136/rest03 .pawchive-v0136/rest04 > /tmp/v0136.patch.xz.b64
           test "$(sha256sum /tmp/v0136.patch.xz.b64 | awk '{print $1}')" = "fa627d89a4adb243afc83eeb3936b78244bfb79217e5dffe382df65994d7d996"
           base64 -d /tmp/v0136.patch.xz.b64 > /tmp/v0136.patch.xz
           test "$(sha256sum /tmp/v0136.patch.xz | awk '{print $1}')" = "403793442698db4e5d3c858c852c64f02e7558ec7fa360fe45be4166d445f864"
