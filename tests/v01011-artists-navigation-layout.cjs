@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     Lifecycle,
   } = api;
 
-  assert.equal(Config.version, '0.13.7');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
+  assert.equal(Config.version, '0.13.8');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
 
   // Local grid visibility must be authoritative even against display:grid!important.
   const localGrid = makeElement('section');

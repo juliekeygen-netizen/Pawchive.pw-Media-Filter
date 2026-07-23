@@ -9,8 +9,8 @@ const { loadUserscript } = require('./test-helper.cjs');
   const { api, context, originalSource, makeElement } = loadUserscript();
   const { Config, PopularDOM, PopularPeriod, PostNormalizer, Route } = api;
 
-  assert.equal(Config.version, '0.13.7');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
+  assert.equal(Config.version, '0.13.8');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
 
   const today = new Date().toISOString().slice(0, 10);
   assert.equal(
@@ -109,7 +109,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 
   const runner = fs.readFileSync(path.resolve(__dirname, '..', 'tools', 'Start-PawchiveMetadataRunner.ps1'), 'utf8');
   assert.match(runner, /\$maintenanceProcesses\s*=\s*@\(Get-MaintenanceProcesses/);
-  assert.match(runner, /return \$maintenanceProcesses\.Count -gt 0/);
+  assert.match(runner, /if \(\$maintenanceProcesses\.Count -gt 0\) \{ return \$true \}/);
   assert.doesNotMatch(runner, /return \(Get-MaintenanceProcesses[^\n]+\)\.Count/);
   assert.match(runner, /maintenance window opening briefly is expected/i);
   assert.match(runner, /--start-minimized/);

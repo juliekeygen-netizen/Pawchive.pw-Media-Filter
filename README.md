@@ -6,6 +6,13 @@
 
 Open the link with Tampermonkey installed to install or update the script.
 
+## v0.13.8 Persistent Popular queue and maintenance runner repairs
+
+- Made the Popular queue global across dated period navigation: active scans continue through Turbo period changes, queued periods remain visible, and interrupted/full-reload work restores automatically as Resume jobs.
+- Persisted an unlimited number of distinct queued Day, Week, and Month periods in both session and userscript storage; the queue panel's open state also survives period changes.
+- Fixed nested Catalogue Maintenance dialogs so **Start or choose scope** opens above the maintenance workspace instead of underneath it.
+- Expanded the PowerShell runner to support missing-attachment metadata, creator-profile repair, or both in one continuous `watch-all` session; it auto-detects the last-used Chromium profile and warns when Tampermonkey is missing.
+
 ## v0.13.7 Creator service badge, date filter, and mobile corrections
 
 - Restored creator-card artwork/backdrop rendering to the pre-v0.13.6 behavior; only the small Pixiv Fanbox service badge now receives the native dark neutral styling.

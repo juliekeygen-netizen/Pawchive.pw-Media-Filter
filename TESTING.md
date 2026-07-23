@@ -883,3 +883,12 @@ Record:
 - Open explicit Day, Week, and Month URLs and confirm Native/Local modes mount without requiring `post-card` classes or `data-id` attributes on Pawchive cards.
 - Confirm Scan parses all visible entries and subsequent fetched pages from their real `/service/user/id/post/id` links.
 - Run `Start-PawchiveMetadataRunner.ps1` under Windows PowerShell with a single matching maintenance process and confirm StrictMode does not throw a missing `.Count` property error.
+
+
+## v0.13.8 queue and external maintenance checks
+
+1. Start scanning one Popular period, navigate through at least five other Day/Week/Month periods, and queue each one. The original active job must continue, every distinct period must remain in Waiting, and the queue panel must stay open.
+2. Reload while a Popular period is active. It must restore automatically as a Resume job ahead of the remaining queued periods rather than becoming a detached recent issue.
+3. Open Settings → Catalogue Maintenance → Start or choose scope. The scope dialog must be the top overlay and fully clickable above the maintenance workspace.
+4. Close the browser and run `Start-PawchiveMetadataRunner.ps1` with its default `watch-all` mode. Confirm it auto-selects the last-used profile, runs missing-attachment work, then creator-profile repair, and writes diagnostics to the log.
+5. Test `-Mode watch-profiles`, `resume-profiles`, `retry-profiles`, and `start-profiles`; verify the profile-repair checkpoint and Stop/Resume UI remain synchronized.

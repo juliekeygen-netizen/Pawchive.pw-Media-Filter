@@ -6,14 +6,16 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api } = loadUserscript();
 const { Config, CreatorPageController, Lifecycle } = api;
 
-assert.equal(Config.version, '0.13.7');
+assert.equal(Config.version, '0.13.8');
 
 assert.match(CreatorPageController.cleanup.toString(), /retainSession&&App\.context/);
 assert.match(CreatorPageController.cleanup.toString(), /App\.persistUIState\(\);App\.detachPage\(\);return/);
 assert.match(Lifecycle.performEnsureMounted.toString(), /CreatorPageController\.cleanup\(\{retainSession:true\}\)/);
 assert.match(Lifecycle.ensureMounted.toString(), /route-mount-reused/);
 assert.match(Lifecycle.prepareSnapshot.toString(), /event\?\.persisted/);
-assert.match(Lifecycle.prepareSnapshot.toString(), /event\?\.persisted\|\|reason==='turbo:before-cache'/);
+assert.match(Lifecycle.prepareSnapshot.toString(), /reason==='turbo:before-cache'/);
+assert.match(Lifecycle.prepareSnapshot.toString(), /PopularJobManager\.persist\(\)/);
+assert.match(Lifecycle.prepareSnapshot.toString(), /if\(event\?\.persisted\).*PopularJobManager\.suspendForBfcache\(\)/s);
 assert.match(Lifecycle.handlePageShow.toString(), /CatalogueJobManager\.resumeFromBfcache\(\)/);
 assert.match(Lifecycle.handlePageShow.toString(), /if\(healthy\)\{Lifecycle\.activePageKey=Lifecycle\.pageKey\(page\);Lifecycle\.mountedPageKey=Lifecycle\.activePageKey;return;\}/);
 

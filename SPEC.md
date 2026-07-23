@@ -68,7 +68,7 @@ The v0.12.8 contract supersedes earlier Popular bullets that required a PMF peri
 - The custom period panel uses Pawchive's discovered Previous/Next URLs whenever available. PMF must not infer calendar boundaries when a real native link exists.
 - Popular native pagination exposes First, Previous, numbered pages, Next, and Last and navigates through full period URLs preserving `date` and `period`.
 - Native `All posts` and `Sort: Popular` controls are disabled, muted, and struck through. Queue state is left-aligned. The primary action is Scan for no stored entries, Resume for a partial/working snapshot, and Update for a completed snapshot.
-- `?pmf_maintenance=watch-missing|resume-missing|retry-missing|start-missing` starts the corresponding missing-attachment operation after Settings and queue state are loaded.
+- `?pmf_maintenance=watch-all|watch-missing|resume-missing|retry-missing|start-missing|watch-profiles|resume-profiles|retry-profiles|start-profiles` starts the corresponding missing-attachment and/or creator-profile operation after Settings and queue state are loaded.
 - `watch-missing` resumes outstanding work, retries retryable failures, and performs a bounded inventory check no more than once every five minutes after completion so newly added unknown posts can start another all-unknown pass.
 - The PowerShell runner must use the existing browser profile, launch a real minimized Chromium app window, disable background throttling/background mode, keep Windows awake unless disabled, and explain that a fully browser-free process cannot directly share Tampermonkey/IndexedDB state.
 - The untouched schema-5 known-host default migrates to include `iframely.net`; customized host lists are not modified.
@@ -106,7 +106,7 @@ The project is one Tampermonkey userscript, `pawchive-pw-media-filter.user.js`. 
 - Each scan walks every native result page for the selected period, captures rank and the displayed favorite count, and stores one period-entry observation per post. Shared post metadata remains in the normal `posts` store and is not duplicated per period.
 - Complete existing posts are reused. New or incomplete posts receive normal detail metadata through the shared request scheduler. Every successfully observed Popular card is marked known-no-missing at that observation time; later direct checks may supersede that evidence.
 - Update replaces the selected period's membership with the newly observed run, refreshes rank/favorite values, and removes stale period entries. Interrupted runs remain resumable through stored offsets and run IDs.
-- Popular jobs are keyed by period rather than creator, support multiple queued periods, persist through reload, and share the creator queue's maintenance slot/rate-limit scheduler.
+- Popular jobs are keyed by period rather than creator, support an unbounded number of distinct queued periods, remain global while the visible period changes, persist through reload, and share the creator queue's maintenance slot/rate-limit scheduler.
 - Local mode uses the shared post filter/preset/status/card engines and a period-specific saved filter/page/mode state. Search and alternate sort modes are unavailable; ordering is displayed favorite count descending, then native rank.
 - Popular period stores participate in `.pmfbackup` streaming export/import, cross-host remapping, Merge/Replace, memory fallback, and clear-current/clear-all maintenance.
 - `iframely.net` is part of the fresh default known-host list. User-customized host lists are migrated without being overwritten.

@@ -18,8 +18,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     DataPortability,
   } = api;
 
-  assert.equal(Config.version, '0.13.7');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
+  assert.equal(Config.version, '0.13.8');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
 
   Settings.load();
   assert.equal(Settings.value.confirmCreatorCardScan, false);
@@ -100,7 +100,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(DataPortability.exportPresets.toString(), /post:/);
   assert.match(DataPortability.exportPresets.toString(), /creator:/);
 
-  console.log('Pawchive Media Filter v0.13.7 creator catalogue, filters, portability, and settings polish tests passed.');
+  console.log('Pawchive Media Filter v0.13.8 creator catalogue, filters, portability, and settings polish tests passed.');
 
   function treeText(node, output = []) {
     if (!node) return output.join('\n');

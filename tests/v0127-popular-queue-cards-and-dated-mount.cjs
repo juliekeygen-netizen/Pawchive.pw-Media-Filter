@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularScanner,
   } = api;
 
-  assert.equal(Config.version, '0.13.7');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
+  assert.equal(Config.version, '0.13.8');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
 
   assert.equal(
     PopularPageController.routeDateEvidence({
@@ -62,7 +62,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularQueuePanel.row.toString(), /pmf-queue-row/);
   assert.match(PopularPageController.mountUI.toString(), /pmf-creator-queue-panel pmf-popular-queue-panel/);
   assert.match(PopularPageController.bind.toString(), /ui\.queueButton\.addEventListener/);
-  assert.match(PopularPageController.primaryAction.toString(), /PopularPageController\.queueOpen=true/,
+  assert.match(PopularPageController.primaryAction.toString(), /PopularPageController\.setQueueOpen\(true\)/,
     'A successfully queued Popular action opens the shared queue panel');
 
   assert.match(PopularCardDecorator.normalizeFooter.toString(), /footer\.replaceChildren\(row\)/,
@@ -90,5 +90,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(marked.missingStatsSource, 'popular-page');
   assert.equal(marked.missingStatsObservedAt, 1234);
 
-  console.log('Pawchive Media Filter v0.13.7 Popular queue, cards, paginator, and dated-mount tests passed.');
+  console.log('Pawchive Media Filter v0.13.8 Popular queue, cards, paginator, and dated-mount tests passed.');
 })();

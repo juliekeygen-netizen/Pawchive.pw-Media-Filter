@@ -10,9 +10,9 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularJobManager, DataPortability, PopularCardDecorator, PopularPageController, Lifecycle, App, UI,
   } = api;
 
-  assert.equal(Config.version, '0.13.7');
+  assert.equal(Config.version, '0.13.8');
   assert.equal(Config.databaseVersion, 6);
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.7/);
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
   assert.equal(Config.likelyHosts.includes('iframely.net'), true);
 
   const day = Route.parsePage('https://pawchive.pw/posts/popular?date=2026-07-14&period=day');
@@ -126,7 +126,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(PopularJobManager.pendingJobs.length, 2);
   assert.match(PopularJobManager.shutdown.toString(), /paused=true/);
   assert.match(PopularJobManager.pump.toString(), /PopularJobManager\.paused/);
-  assert.match(PopularJobManager.restore.toString(), /Math\.max\(PopularJobManager\.sequence/);
+  assert.match(PopularJobManager.restore.toString(), /PopularJobManager\.sequence=Math\.max/);
   PopularJobManager.pendingJobs = [];
   PopularJobManager.activeJob = null;
 

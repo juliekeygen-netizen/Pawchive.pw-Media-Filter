@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.13.8
+
+- Kept Popular scans and arbitrarily many queued period jobs alive across Day/Week/Month navigation, Turbo replacement, reload recovery, and BFCache pause/resume.
+- Persisted queue descriptors and the queue panel open state outside the currently mounted Popular page.
+- Portaled nested maintenance scope dialogs through the global overlay host with deterministic stack z-order.
+- Added `watch-all` and creator-profile repair modes to the PowerShell runner, plus last-used profile discovery, profile validation, and Tampermonkey diagnostics.
+
 ## 0.13.7
 
 - Restored creator-card backdrop behavior and limited Fanbox neutral styling to the service badge.

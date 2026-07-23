@@ -3,10 +3,10 @@ param(
     [ValidateSet('Auto', 'Chrome', 'Edge', 'Brave')]
     [string]$Browser = 'Auto',
 
-    [ValidateSet('watch-missing', 'resume-missing', 'retry-missing', 'start-missing')]
-    [string]$Mode = 'watch-missing',
+    [ValidateSet('watch-all', 'watch-missing', 'resume-missing', 'retry-missing', 'start-missing', 'watch-profiles', 'resume-profiles', 'retry-profiles', 'start-profiles')]
+    [string]$Mode = 'watch-all',
 
-    [string]$ProfileDirectory = 'Default',
+    [string]$ProfileDirectory = '',
     [string]$UserDataDirectory = '',
 
     [switch]$AllowBrowserAlreadyRunning,
@@ -93,6 +93,54 @@ function Resolve-Browser {
     return $match
 }
 
+
+function Resolve-ProfileDirectory {
+    param([Parameter(Mandatory)]$BrowserInfo)
+
+    if ($ProfileDirectory) {
+        $candidate = Join-Path $BrowserInfo.Data $ProfileDirectory
+        if (-not (Test-Path -LiteralPath $candidate)) {
+            $available = @(Get-ChildItem -LiteralPath $BrowserInfo.Data -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq 'Default' -or $_.Name -like 'Profile *' } |
+                Select-Object -ExpandProperty Name)
+            throw "Browser profile '$ProfileDirectory' was not found under $($BrowserInfo.Data). Available profiles: $($available -join ', ')"
+        }
+        return $ProfileDirectory
+    }
+
+    $localStatePath = Join-Path $BrowserInfo.Data 'Local State'
+    if (Test-Path -LiteralPath $localStatePath) {
+        try {
+            $localState = Get-Content -LiteralPath $localStatePath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $lastUsed = [string]$localState.profile.last_used
+            if ($lastUsed -and (Test-Path -LiteralPath (Join-Path $BrowserInfo.Data $lastUsed))) {
+                return $lastUsed
+            }
+        } catch {
+            Write-RunnerLog "Could not read Chromium's last-used profile from Local State: $($_.Exception.Message)"
+        }
+    }
+
+    if (Test-Path -LiteralPath (Join-Path $BrowserInfo.Data 'Default')) { return 'Default' }
+    $fallback = Get-ChildItem -LiteralPath $BrowserInfo.Data -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like 'Profile *' } | Sort-Object Name | Select-Object -First 1
+    if ($fallback) { return $fallback.Name }
+    throw "No Chromium profile directory was found under $($BrowserInfo.Data)."
+}
+
+function Test-TampermonkeyInstalled {
+    param([Parameter(Mandatory)]$BrowserInfo, [Parameter(Mandatory)][string]$ResolvedProfile)
+    $extensions = Join-Path (Join-Path $BrowserInfo.Data $ResolvedProfile) 'Extensions'
+    if (-not (Test-Path -LiteralPath $extensions)) { return $false }
+    if (Test-Path -LiteralPath (Join-Path $extensions 'dhdgffkkebhmkfjojejmpbldmpobfkfo')) { return $true }
+    try {
+        foreach ($manifest in Get-ChildItem -LiteralPath $extensions -Filter manifest.json -File -Recurse -ErrorAction SilentlyContinue) {
+            if ((Get-Content -LiteralPath $manifest.FullName -Raw -ErrorAction SilentlyContinue) -match 'Tampermonkey') { return $true }
+        }
+    } catch { }
+    return $false
+}
+
 function Get-MaintenanceProcesses {
     param([Parameter(Mandatory)]$BrowserInfo)
     $needle = 'pmf_maintenance=' + $Mode
@@ -113,7 +161,11 @@ function Test-MaintenanceBrowserRunning {
     }
 
     $maintenanceProcesses = @(Get-MaintenanceProcesses -BrowserInfo $BrowserInfo)
-    return $maintenanceProcesses.Count -gt 0
+    if ($maintenanceProcesses.Count -gt 0) { return $true }
+    if ($AllowBrowserAlreadyRunning -and $script:MaintenanceSessionStarted) {
+        return (@(Get-Process -Name $BrowserInfo.Process -ErrorAction SilentlyContinue).Count -gt 0)
+    }
+    return $false
 }
 
 function Minimize-MaintenanceWindows {
@@ -131,8 +183,9 @@ function Start-MaintenanceBrowser {
     param([Parameter(Mandatory)]$BrowserInfo)
 
     $running = @(Get-Process -Name $BrowserInfo.Process -ErrorAction SilentlyContinue)
-    if ($running.Count -gt 0 -and -not $AllowBrowserAlreadyRunning -and -not $script:MaintenanceSessionStarted) {
-        throw "$($BrowserInfo.Name) is already running. Close it first so this runner can safely use the same profile and Pawchive IndexedDB. Alternatively pass -AllowBrowserAlreadyRunning, but the maintenance page will then belong to your normal browser session."
+    $existingMaintenance = @(Get-MaintenanceProcesses -BrowserInfo $BrowserInfo)
+    if ($running.Count -gt 0 -and $existingMaintenance.Count -eq 0 -and -not $AllowBrowserAlreadyRunning) {
+        throw "$($BrowserInfo.Name) is already running. Close every $($BrowserInfo.Name) window and background process, then rerun this command. To deliberately open maintenance in the existing browser session, pass -AllowBrowserAlreadyRunning."
     }
 
     $url = "https://pawchive.pw/artists?pmf_maintenance=$Mode"
@@ -169,8 +222,12 @@ function Start-MaintenanceBrowser {
 }
 
 $browserInfo = Resolve-Browser
+$ProfileDirectory = Resolve-ProfileDirectory -BrowserInfo $browserInfo
 Write-RunnerLog "Using $($browserInfo.Name): $($browserInfo.Executable)"
 Write-RunnerLog "User data: $($browserInfo.Data); profile: $ProfileDirectory"
+if (-not (Test-TampermonkeyInstalled -BrowserInfo $browserInfo -ResolvedProfile $ProfileDirectory)) {
+    Write-RunnerLog 'WARNING: Tampermonkey was not detected in this profile. Install/enable Tampermonkey and Pawchive Media Filter in the selected profile before continuing.'
+}
 Write-RunnerLog 'This runner uses a real minimized browser engine because Tampermonkey storage and Pawchive IndexedDB are browser-profile data.'
 Write-RunnerLog 'A Chrome, Edge, or Brave maintenance window opening briefly is expected; the runner minimizes it after launch.'
 
