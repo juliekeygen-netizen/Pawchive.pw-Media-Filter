@@ -25,18 +25,39 @@ jobs:
           fetch-depth: 0
 
       - name: Recover and apply v0.13.8 patch
+        id: recover
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
+          set -o pipefail
+          exec > >(tee /tmp/v0138-apply.log) 2>&1
+          set -euxo pipefail
+          echo BASE_SCRIPT_HASH=$(git hash-object pawchive-pw-media-filter.user.js)
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c941e31e3090bb9357d2e828a28bbcc95324245e"
           grep -q '@version      0.13.7' pawchive-pw-media-filter.user.js
           cat .pawchive-v0138/part00 .pawchive-v0138/part01 > /tmp/v0138.patch.xz.b64
+          sha256sum /tmp/v0138.patch.xz.b64
           test "$(sha256sum /tmp/v0138.patch.xz.b64 | awk '{print $1}')" = "e3660d9030137eebfff3502ea6ded20b12d0838e08eaa826be3209cfbfcb03c6"
           base64 -d /tmp/v0138.patch.xz.b64 > /tmp/v0138.patch.xz
+          sha256sum /tmp/v0138.patch.xz
           test "$(sha256sum /tmp/v0138.patch.xz | awk '{print $1}')" = "f7c1636fc6bb021a3b0443a62c898b327cd3a86f1c94869b494f8aceab504560"
           xz -dc /tmp/v0138.patch.xz > /tmp/v0138.patch
+          sha256sum /tmp/v0138.patch
           test "$(sha256sum /tmp/v0138.patch | awk '{print $1}')" = "bf9faa6cd829217ea5448a87fa5d013a0f4bd28d653b220af86dc21e132807cb"
           git apply --3way --whitespace=nowarn /tmp/v0138.patch
+
+      - name: Upload patch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0138-patch-diagnostics
+          path: /tmp/v0138-apply.log
+          if-no-files-found: error
+
+      - name: Enforce patch result
+        if: steps.recover.outcome != 'success'
+        shell: bash
+        run: exit 1
 
       - name: Validate v0.13.8
         shell: bash
