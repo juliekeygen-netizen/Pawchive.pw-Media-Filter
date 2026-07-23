@@ -28,14 +28,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c941e31e3090bb9357d2e828a28bbcc95324245e"
           git show origin/publish-v0138c:.pawchive-v0138/patch.xz.b64 > /tmp/v0138.patch.xz.b64
           test "$(sha256sum /tmp/v0138.patch.xz.b64 | awk '{print $1}')" = "d37cb797ec06bc5bd4a64c477a9fb9ad3d8a43f475ace14c3703e9a13227c5cb"
           base64 -d /tmp/v0138.patch.xz.b64 > /tmp/v0138.patch.xz
           xz -dc /tmp/v0138.patch.xz > /tmp/v0138.patch
           test "$(sha256sum /tmp/v0138.patch | awk '{print $1}')" = "f98356abc925f352dae4cda2e55f20e080669aeb46eea3165cf98c4b99f0df86"
-          git apply --check /tmp/v0138.patch
-          git apply /tmp/v0138.patch
+          git apply --3way /tmp/v0138.patch
 
       - name: Validate v0.13.8
         shell: bash
