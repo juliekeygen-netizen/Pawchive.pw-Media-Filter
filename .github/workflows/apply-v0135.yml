@@ -58,7 +58,7 @@ jobs:
           grep -q "version: '0.13.5'" pawchive-pw-media-filter.user.js
           grep -q 'const PopularDatePicker' pawchive-pw-media-filter.user.js
           grep -q 'Right click for custom date' pawchive-pw-media-filter.user.js
-          grep -q 'v0.13.5 Popular period, date, sort, notice, and thumbnail tests passed' tests/v0135-popular-period-date-sort-and-thumbnail.cjs
+          grep -q 'v0.13.5 Popular period, custom-date, sort, thumbnail, and notice tests passed' tests/v0135-popular-period-date-sort-and-thumbnail.cjs
 
       - name: Publish directly to master
         shell: bash
