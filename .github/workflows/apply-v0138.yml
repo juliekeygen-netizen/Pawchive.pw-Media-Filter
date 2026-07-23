@@ -1,0 +1,79 @@
+name: Apply Pawchive v0.13.8
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0138/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0138-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Recover and apply v0.13.8 patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "c941e31e3090bb9357d2e828a28bbcc95324245e"
+          grep -q '@version      0.13.7' pawchive-pw-media-filter.user.js
+          cat .pawchive-v0138/part00 .pawchive-v0138/part01 > /tmp/v0138.patch.xz.b64
+          test "$(sha256sum /tmp/v0138.patch.xz.b64 | awk '{print $1}')" = "e3660d9030137eebfff3502ea6ded20b12d0838e08eaa826be3209cfbfcb03c6"
+          base64 -d /tmp/v0138.patch.xz.b64 > /tmp/v0138.patch.xz
+          test "$(sha256sum /tmp/v0138.patch.xz | awk '{print $1}')" = "f7c1636fc6bb021a3b0443a62c898b327cd3a86f1c94869b494f8aceab504560"
+          xz -dc /tmp/v0138.patch.xz > /tmp/v0138.patch
+          test "$(sha256sum /tmp/v0138.patch | awk '{print $1}')" = "bf9faa6cd829217ea5448a87fa5d013a0f4bd28d653b220af86dc21e132807cb"
+          git apply --check /tmp/v0138.patch
+          git apply /tmp/v0138.patch
+
+      - name: Validate v0.13.8
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          test_count=0
+          while IFS= read -r test_file; do
+            echo "Running $test_file"
+            node "$test_file"
+            test_count=$((test_count + 1))
+          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
+          echo "Executable tests: $test_count"
+          test "$test_count" -eq 73
+          git diff --check
+          grep -q '@version      0.13.8' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.13.8'" pawchive-pw-media-filter.user.js
+          grep -q "watch-all" tools/Start-PawchiveMetadataRunner.ps1
+          grep -q 'v0.13.8 global Popular queue and maintenance runner tests passed' tests/v0138-global-popular-queue-and-maintenance-runner.cjs
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('README.md').read_text(encoding='utf-8')
+          assert text.index('## Installation') < text.index('## v0.13.8')
+          assert 'raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js' in text
+          PY
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .pawchive-v0138
+          rm -f .github/workflows/apply-v0138.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.13.8 global Popular queue and maintenance runner'
+          git push origin HEAD:master
