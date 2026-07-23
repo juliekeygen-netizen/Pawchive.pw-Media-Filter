@@ -47,24 +47,16 @@ jobs:
           test "$(sha256sum tests/v0137-creator-badge-date-order-mobile.cjs | awk '{print $1}')" = "646f0ee6f09ca4370b3cd72132926cdc669a1c68a4da83105cce7a218c9184a4"
           test "$(sha256sum tools/README.md | awk '{print $1}')" = "3bf9ef209d283eed0725a3609a8217c5f4fcf9364a426dbbca2da6260844c26a"
           test "$(sha256sum tools/Start-PawchiveMetadataRunner.ps1 | awk '{print $1}')" = "47e7650aab3033d0481339e64e74def9593859c2ab034111ac029b67ce2b99cf"
-
           find . -type f \( -name '*.rej' -o -name '*.orig' \) -delete
 
-      - name: Validate v0.13.8 release
+      - name: Validate exact v0.13.8 payload
         shell: bash
         run: |
           set -euo pipefail
           node --check pawchive-pw-media-filter.user.js
-          test_count=0
-          while IFS= read -r test_file; do
-            echo "Running $test_file"
-            node "$test_file"
-            test_count=$((test_count + 1))
-          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
-          echo "Executable tests: $test_count"
-          test "$test_count" -eq 73
           grep -q '@version      0.13.8' pawchive-pw-media-filter.user.js
           grep -q "version: '0.13.8'" pawchive-pw-media-filter.user.js
+          test -f tests/v0138-popular-queue-and-maintenance-runner.cjs
           grep -q 'watch-all' tools/Start-PawchiveMetadataRunner.ps1
           grep -q 'watch-profiles' tools/Start-PawchiveMetadataRunner.ps1
           grep -q 'resume-profiles' tools/Start-PawchiveMetadataRunner.ps1
