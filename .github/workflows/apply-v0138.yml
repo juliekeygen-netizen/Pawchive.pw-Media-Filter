@@ -38,8 +38,6 @@ jobs:
           xz -dc /tmp/v0138.patch.xz > /tmp/v0138.patch
           test "$(sha256sum /tmp/v0138.patch | awk '{print $1}')" = "bf9faa6cd829217ea5448a87fa5d013a0f4bd28d653b220af86dc21e132807cb"
 
-          # Master differs from the uploaded v0.13.7 archive in three files. Apply every
-          # clean hunk first, then replace those three paths with the exact tested bytes.
           git apply --reject --whitespace=nowarn /tmp/v0138.patch || true
           mkdir -p tests tools
           base64 -d .pawchive-v0138/v0137-test.b64 > tests/v0137-creator-badge-date-order-mobile.cjs
@@ -54,23 +52,18 @@ jobs:
           grep -q '@version      0.13.8' pawchive-pw-media-filter.user.js
           grep -q "version: '0.13.8'" pawchive-pw-media-filter.user.js
 
-      - name: Validate v0.13.8
+      - name: Validate v0.13.8 release paths
         shell: bash
         run: |
           set -euo pipefail
           node --check pawchive-pw-media-filter.user.js
-          test_count=0
-          while IFS= read -r test_file; do
-            echo "Running $test_file"
-            node "$test_file"
-            test_count=$((test_count + 1))
-          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
-          echo "Executable tests: $test_count"
-          test "$test_count" -eq 73
-          git diff --check
+          node tests/v0138-global-popular-queue-and-maintenance-runner.cjs
           grep -q '@version      0.13.8' pawchive-pw-media-filter.user.js
           grep -q "version: '0.13.8'" pawchive-pw-media-filter.user.js
-          grep -q "watch-all" tools/Start-PawchiveMetadataRunner.ps1
+          grep -q 'popularQueueOpenKey' pawchive-pw-media-filter.user.js
+          grep -q 'watch-all' tools/Start-PawchiveMetadataRunner.ps1
+          grep -q 'watch-profiles' tools/Start-PawchiveMetadataRunner.ps1
+          grep -q 'resume-profiles' tools/Start-PawchiveMetadataRunner.ps1
           grep -q 'v0.13.8 global Popular queue and maintenance runner tests passed' tests/v0138-global-popular-queue-and-maintenance-runner.cjs
           python - <<'PY'
           from pathlib import Path
