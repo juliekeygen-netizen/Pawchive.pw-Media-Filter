@@ -1,5 +1,11 @@
 # Pawchive.pw Media Filter
 
+## Installation
+
+[Install the Pawchive.pw Media Filter userscript](https://raw.githubusercontent.com/juliekeygen-netizen/Pawchive.pw-Media-Filter/master/pawchive-pw-media-filter.user.js)
+
+Open the link with Tampermonkey installed to install or update the script.
+
 ## v0.13.4 All Scans Popular mode
 
 - Added a third **All Scans** mode beside Native and Local on Popular Posts pages.
