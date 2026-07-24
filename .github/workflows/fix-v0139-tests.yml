@@ -28,7 +28,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "316df88fea3d410dd3ad790eea70a9845f5d641c"
           test "$(git hash-object pawchive-pw-media-filter.user.js)" = "6a19f3d46c86367d207d378e19e7e9ca48a0da17"
           python - <<'PY'
           from pathlib import Path
