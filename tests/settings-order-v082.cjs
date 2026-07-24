@@ -6,7 +6,7 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config, Settings, SettingsUI } = api;
 
-assert.equal(Config.version, '0.13.8');
+assert.equal(Config.version, '0.13.9');
 Settings.load();
 const collectText = (node, output = []) => {
   if (!node) return output;
@@ -28,4 +28,4 @@ for (const text of ['Synchronize native favorites during Scan and Update','Count
 assert.match(originalSource, /Seen dim strength/);
 assert.doesNotMatch(originalSource, /Confirm initial and resumed scans from creator cards|Confirm creator card scans/);
 
-console.log('Pawchive Media Filter v0.13.8 settings order tests passed.');
+console.log('Pawchive Media Filter v0.13.9 settings order tests passed.');

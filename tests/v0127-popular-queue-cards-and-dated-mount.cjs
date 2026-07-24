@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularScanner,
   } = api;
 
-  assert.equal(Config.version, '0.13.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
+  assert.equal(Config.version, '0.13.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.9/);
 
   assert.equal(
     PopularPageController.routeDateEvidence({
@@ -90,5 +90,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.equal(marked.missingStatsSource, 'popular-page');
   assert.equal(marked.missingStatsObservedAt, 1234);
 
-  console.log('Pawchive Media Filter v0.13.8 Popular queue, cards, paginator, and dated-mount tests passed.');
+  console.log('Pawchive Media Filter v0.13.9 Popular queue, cards, paginator, and dated-mount tests passed.');
 })();

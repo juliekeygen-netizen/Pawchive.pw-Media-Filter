@@ -6,8 +6,8 @@ const { loadUserscript } = require('./test-helper.cjs');
 (() => {
   const { api, originalSource } = loadUserscript();
   const { Config, CreatorFilterUI, CreatorCardReconstructor, UI } = api;
-  assert.equal(Config.version, '0.13.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
+  assert.equal(Config.version, '0.13.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.9/);
 
   const buildTemplate = CreatorCardReconstructor.buildFromTemplate.toString();
   const buildFallback = CreatorCardReconstructor.build.toString();
@@ -45,5 +45,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(originalSource, /\.pmf-page-controls\{max-width:100%;flex-wrap:wrap/);
   assert.match(originalSource, /\.pmf-reconstructed-creator-content\{padding-left:86px;padding-right:48px\}/);
 
-  console.log('Pawchive Media Filter v0.13.8 creator badge, date filter, ordering, labels, and mobile tests passed.');
+  console.log('Pawchive Media Filter v0.13.9 creator badge, date filter, ordering, labels, and mobile tests passed.');
 })();

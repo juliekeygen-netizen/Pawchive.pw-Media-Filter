@@ -6,7 +6,7 @@ const { loadUserscript, makeClassList } = require('./test-helper.cjs');
 const { api, context, originalSource } = loadUserscript();
 const { Config, CardRenderer, CompactGridScale, CompactThumbnailRatio, App } = api;
 
-assert.equal(Config.version, '0.13.8');
+assert.equal(Config.version, '0.13.9');
 
 function makeStyle(initial = {}) {
   const values = new Map(Object.entries(initial).map(([name, value]) => [name, { value, priority:'' }]));

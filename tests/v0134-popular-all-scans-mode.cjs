@@ -15,8 +15,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     App,
   } = api;
 
-  assert.equal(Config.version, '0.13.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
+  assert.equal(Config.version, '0.13.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.9/);
   assert.equal(Config.popularAggregatePeriodKey, 'pmf-popular-aggregate-period-v1');
   assert.equal(typeof Cache.getPopularEntriesForPeriods, 'function');
 
@@ -161,5 +161,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   PopularPageController.root = null;
   PopularPageController.context = null;
 
-  console.log('Pawchive Media Filter v0.13.8 All Scans Popular mode tests passed.');
+  console.log('Pawchive Media Filter v0.13.9 All Scans Popular mode tests passed.');
 })();

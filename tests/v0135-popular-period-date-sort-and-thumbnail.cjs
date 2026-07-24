@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     App,
   } = api;
 
-  assert.equal(Config.version, '0.13.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
+  assert.equal(Config.version, '0.13.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.9/);
 
   assert.equal(PopularDatePicker.label('day'), 'Day');
   assert.equal(PopularDatePicker.label('week'), 'Week');
@@ -83,5 +83,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularPageController.applyNativeControlVisibility.toString(), /restrictionNotices/);
   assert.match(PopularPageController.saveNative.toString(), /notices:/);
 
-  console.log('Pawchive Media Filter v0.13.8 Popular period, custom-date, sort, thumbnail, and notice tests passed.');
+  console.log('Pawchive Media Filter v0.13.9 Popular period, custom-date, sort, thumbnail, and notice tests passed.');
 })();

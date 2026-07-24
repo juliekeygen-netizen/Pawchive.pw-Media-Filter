@@ -17,7 +17,7 @@ const { loadUserscript } = require('./test-helper.cjs');
     QueuePanelView,
   } = api;
 
-  assert.equal(Config.version, '0.13.8');
+  assert.equal(Config.version, '0.13.9');
   assert.doesNotMatch(originalSource, /pmf-popular-period-card|pmf-popular-period-title|data-popular-period-nav/,
     'PMF must not render a second period/date selector');
   assert.match(PopularPageController.mountUI.toString(), /pmf-popular-native-paginator/,
@@ -109,5 +109,5 @@ const { loadUserscript } = require('./test-helper.cjs');
     'The single stored count remains on the right side');
   assert.match(originalSource, /\.pmf-popular-local-grid \.post-card__footer\{text-align:left!important/);
 
-  console.log('Pawchive Media Filter v0.13.8 native period, mirrored pagination, action-state, queue reuse, and Local-card tests passed.');
+  console.log('Pawchive Media Filter v0.13.9 native period, mirrored pagination, action-state, queue reuse, and Local-card tests passed.');
 })();

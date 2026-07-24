@@ -11,8 +11,8 @@ const {
   CatalogueJobManager, NativeActionAlignment,
 } = api;
 
-assert.equal(Config.version, '0.13.8');
-assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
+assert.equal(Config.version, '0.13.9');
+assert.match(originalSource, /\/\/ @version\s+0\.13\.9/);
 assert.equal(Config.databaseVersion, 6);
 assert.match(originalSource, /createObjectStore\('creatorDirectory'/);
 assert.match(originalSource, /createObjectStore\('creatorStates'/);

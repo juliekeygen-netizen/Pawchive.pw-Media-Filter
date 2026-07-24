@@ -12,8 +12,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularPageController,
   } = api;
 
-  assert.equal(Config.version, '0.13.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
+  assert.equal(Config.version, '0.13.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.9/);
 
   const mountSource = PopularPageController.mountUI.toString();
   assert.match(mountSource, /nativeTopMirror/);
@@ -85,5 +85,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.doesNotMatch(visibility, /showPaginators|placeNativeTopControls/);
   assert.doesNotMatch(originalSource, /placeNativeTopControls\(/);
 
-  console.log('Pawchive Media Filter v0.13.8 mirrored Native Popular paginator tests passed.');
+  console.log('Pawchive Media Filter v0.13.9 mirrored Native Popular paginator tests passed.');
 })();

@@ -8,8 +8,8 @@ const { loadUserscript } = require('./test-helper.cjs');
 const { api, originalSource } = loadUserscript();
 const { Config, Util, CatalogueJobManager, CreatorBulkSelection, NativeArtistsProxy } = api;
 
-assert.equal(Config.version, '0.13.8');
-assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
+assert.equal(Config.version, '0.13.9');
+assert.match(originalSource, /\/\/ @version\s+0\.13\.9/);
 for (const [name, source] of [
   ['userscript', originalSource],
   ...['README.md', 'SPEC.md', 'TESTING.md'].map((name) => [
