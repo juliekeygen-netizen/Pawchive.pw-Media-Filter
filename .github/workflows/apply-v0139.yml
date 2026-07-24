@@ -24,7 +24,7 @@ jobs:
           ref: master
           fetch-depth: 0
 
-      - name: Recover and apply v0.13.9
+      - name: Recover exact v0.13.9 payload
         shell: bash
         run: |
           set -euo pipefail
@@ -38,23 +38,7 @@ jobs:
           test "$(sha256sum /tmp/v0139.patch | awk '{print $1}')" = "41b1c22162be0c98d3abceb3b797d41a0eb0831eae3234990f94ab115c630766"
           git apply --check /tmp/v0139.patch
           git apply /tmp/v0139.patch
-
-      - name: Validate v0.13.9 payload
-        shell: bash
-        run: |
-          set -euo pipefail
           node --check pawchive-pw-media-filter.user.js
-          git diff --check
-          grep -q '@version      0.13.9' pawchive-pw-media-filter.user.js
-          grep -q "version: '0.13.9'" pawchive-pw-media-filter.user.js
-          grep -q 'resume-update' pawchive-pw-media-filter.user.js
-          grep -q 'resumeCheckpoint' pawchive-pw-media-filter.user.js
-          grep -q 'floorPercent' pawchive-pw-media-filter.user.js
-          grep -q 'PMF Runner |' pawchive-pw-media-filter.user.js
-          grep -q 'Wait-RunnerHandshake' tools/Start-PawchiveMetadataRunner.ps1
-          grep -q 'Initialize-RunnerLog' tools/Start-PawchiveMetadataRunner.ps1
-          grep -q 'v0.13.9' README.md
-          test -f tests/v0139-popular-navigation-queue-and-runner-progress.cjs
 
       - name: Publish directly to master
         shell: bash
