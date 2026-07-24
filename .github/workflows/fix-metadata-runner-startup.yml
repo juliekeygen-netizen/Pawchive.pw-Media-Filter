@@ -1,0 +1,158 @@
+name: Fix Pawchive metadata runner startup
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-runner-startup-fix/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-runner-startup-fix
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    runs-on: windows-latest
+    steps:
+      - name: Check out current master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Apply exact PowerShell fixes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'tools/Start-PawchiveMetadataRunner.ps1'
+          $text = [IO.File]::ReadAllText($path)
+
+          $oldDefault = '    [string]$LogPath = "$PSScriptRoot\PawchiveMetadataRunner.log"'
+          $newDefault = "    [string]`$LogPath = ''"
+          if (($text.Split($oldDefault).Count - 1) -ne 1) { throw 'Unexpected LogPath parameter source.' }
+          $text = $text.Replace($oldDefault, $newDefault)
+
+          $oldInitialize = @'
+function Initialize-RunnerLog {
+    try {
+        $expanded = [Environment]::ExpandEnvironmentVariables($LogPath)
+        if (-not [IO.Path]::IsPathRooted($expanded)) {
+            $expanded = Join-Path (Get-Location) $expanded
+        }
+'@
+          $newInitialize = @'
+function Initialize-RunnerLog {
+    try {
+        $requestedLogPath = if ([string]::IsNullOrWhiteSpace($LogPath)) {
+            Join-Path $PSScriptRoot 'PawchiveMetadataRunner.log'
+        } else {
+            $LogPath
+        }
+        $expanded = [Environment]::ExpandEnvironmentVariables($requestedLogPath)
+        if (-not [IO.Path]::IsPathRooted($expanded)) {
+            $expanded = Join-Path $PSScriptRoot $expanded
+        }
+'@
+          if (($text.Split($oldInitialize).Count - 1) -ne 1) { throw 'Unexpected Initialize-RunnerLog source.' }
+          $text = $text.Replace($oldInitialize, $newInitialize)
+
+          $oldWarning = '        Write-Warning "Could not initialize the requested log path ''$LogPath''. Falling back to ''$fallback'': $($_.Exception.Message)"'
+          $newWarning = '        Write-Warning "Could not initialize the requested log path ''$requestedLogPath''. Falling back to ''$fallback'': $($_.Exception.Message)"'
+          if (($text.Split($oldWarning).Count - 1) -ne 1) { throw 'Unexpected log warning source.' }
+          $text = $text.Replace($oldWarning, $newWarning)
+
+          $oldTitle = '    return @($candidates | Where-Object { $_ -like ''PMF Runner |*'' } | Select-Object -First 1)[0]'
+          $newTitle = @'
+    $statusTitle = $candidates | Where-Object { $_ -like 'PMF Runner |*' } | Select-Object -First 1
+    if ($null -eq $statusTitle) { return '' }
+    return [string]$statusTitle
+'@
+          if (($text.Split($oldTitle).Count - 1) -ne 1) { throw 'Unexpected Get-MaintenanceStatusTitle source.' }
+          $text = $text.Replace($oldTitle, $newTitle.TrimEnd("`r", "`n"))
+
+          [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+
+          $testPath = 'tests/v0139-metadata-runner-startup.cjs'
+          @'
+'use strict';
+
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const source = fs.readFileSync(path.join(__dirname, '..', 'tools', 'Start-PawchiveMetadataRunner.ps1'), 'utf8');
+
+assert.match(source, /\[string\]\$LogPath = ''/);
+assert.match(source, /\$requestedLogPath = if \(\[string\]::IsNullOrWhiteSpace\(\$LogPath\)\)/);
+assert.match(source, /Join-Path \$PSScriptRoot 'PawchiveMetadataRunner\.log'/);
+assert.match(source, /\$expanded = Join-Path \$PSScriptRoot \$expanded/);
+assert.match(source, /\$statusTitle = \$candidates \| Where-Object/);
+assert.match(source, /if \(\$null -eq \$statusTitle\) \{ return '' \}/);
+assert.doesNotMatch(source, /Select-Object -First 1\)\[0\]/);
+
+console.log('Pawchive metadata runner startup and default log-path regression checks passed.');
+'@ | Set-Content -LiteralPath $testPath -Encoding utf8NoBOM
+
+          $changelog = [IO.File]::ReadAllText('CHANGELOG.md')
+          $anchor = "## 0.13.9`n`n"
+          $notes = "- Fixed the PowerShell runner startup crash when the PMF maintenance window has not published its first title heartbeat yet.`n- Corrected the default runner log location so it resolves beside the script under ``tools`` instead of the current drive root.`n"
+          if (-not $changelog.Contains($anchor)) { throw 'Could not find the v0.13.9 changelog section.' }
+          $changelog = $changelog.Replace($anchor, $anchor + $notes, 1)
+          [IO.File]::WriteAllText('CHANGELOG.md', $changelog, [Text.UTF8Encoding]::new($false))
+
+      - name: Validate PowerShell behavior
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = (Resolve-Path 'tools/Start-PawchiveMetadataRunner.ps1').Path
+          $tokens = $null
+          $errors = $null
+          $ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          if ($errors.Count) { throw ($errors | ForEach-Object Message | Out-String) }
+
+          $functionAst = $ast.Find({
+              param($node)
+              $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+              $node.Name -eq 'Get-MaintenanceStatusTitle'
+          }, $true)
+          if (-not $functionAst) { throw 'Get-MaintenanceStatusTitle was not found.' }
+
+          Invoke-Expression $functionAst.Extent.Text
+          function Get-MaintenanceProcesses { param($BrowserInfo) return @() }
+          $script:MaintenanceRootProcessId = 0
+          Set-StrictMode -Version Latest
+          $result = Get-MaintenanceStatusTitle -BrowserInfo @{ Process = 'pmf-process-that-does-not-exist' }
+          if ([string]$result -ne '') { throw "Expected an empty title before the PMF heartbeat; received '$result'." }
+          Write-Host 'Empty pre-handshake title returns safely.'
+
+      - name: Run complete regression suite
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node --check pawchive-pw-media-filter.user.js
+          $tests = @(Get-ChildItem tests -Filter '*.cjs' -File | Where-Object Name -ne 'test-helper.cjs' | Sort-Object Name)
+          foreach ($test in $tests) {
+              Write-Host "Running $($test.FullName)"
+              node $test.FullName
+              if ($LASTEXITCODE -ne 0) { throw "Test failed: $($test.Name)" }
+          }
+          if ($tests.Count -ne 73) { throw "Expected 73 executable tests, found $($tests.Count)." }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
+
+      - name: Publish directly to master
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Remove-Item '.github/workflows/fix-metadata-runner-startup.yml' -Force
+          if (Test-Path '.github/workflows' -PathType Container -and -not (Get-ChildItem '.github/workflows' -Force)) { Remove-Item '.github/workflows' -Force }
+          if (Test-Path '.github' -PathType Container -and -not (Get-ChildItem '.github' -Force)) { Remove-Item '.github' -Force }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix metadata runner startup and log path'
+          git push origin HEAD:master
