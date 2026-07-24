@@ -46,25 +46,69 @@ jobs:
           PY
 
       - name: Run complete regression suite
+        id: regression
         shell: bash
         run: |
-          set -euo pipefail
-          node --check pawchive-pw-media-filter.user.js
+          set +e
+          report="$GITHUB_WORKSPACE/v0139-test-results.txt"
+          : > "$report"
+          failures=0
           test_count=0
+          node --check pawchive-pw-media-filter.user.js > /tmp/node-check.txt 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            failures=$((failures + 1))
+            echo 'FAIL: node --check pawchive-pw-media-filter.user.js' >> "$report"
+            cat /tmp/node-check.txt >> "$report"
+          fi
           while IFS= read -r test_file; do
-            echo "Running $test_file"
-            node "$test_file"
             test_count=$((test_count + 1))
+            node "$test_file" > /tmp/test-output.txt 2>&1
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              failures=$((failures + 1))
+              echo >> "$report"
+              echo "FAIL: $test_file" >> "$report"
+              cat /tmp/test-output.txt >> "$report"
+            fi
           done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
-          echo "Executable tests: $test_count"
-          test "$test_count" -eq 73
-          git diff --check
-          grep -R -n -E '0\.13\.8|0\\\.13\\\.8' tests && exit 1 || true
+          echo >> "$report"
+          echo "Executable tests: $test_count" >> "$report"
+          echo "Failures: $failures" >> "$report"
+          if [ "$test_count" -ne 73 ]; then
+            failures=$((failures + 1))
+            echo "FAIL: expected 73 executable tests, found $test_count" >> "$report"
+          fi
+          git diff --check > /tmp/diff-check.txt 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            failures=$((failures + 1))
+            echo 'FAIL: git diff --check' >> "$report"
+            cat /tmp/diff-check.txt >> "$report"
+          fi
+          stale=$(grep -R -n -E '0\.13\.8|0\\\.13\\\.8' tests || true)
+          if [ -n "$stale" ]; then
+            failures=$((failures + 1))
+            echo 'FAIL: stale v0.13.8 test references remain' >> "$report"
+            printf '%s\n' "$stale" >> "$report"
+          fi
+          cat "$report"
+          if [ "$failures" -ne 0 ]; then exit 1; fi
+
+      - name: Upload regression result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v0139-test-results
+          path: v0139-test-results.txt
+          if-no-files-found: error
 
       - name: Commit finalized test suite to master
+        if: success()
         shell: bash
         run: |
           set -euo pipefail
+          rm -f v0139-test-results.txt
           rm -f .github/workflows/fix-v0139-tests.yml
           rmdir .github/workflows 2>/dev/null || true
           rmdir .github 2>/dev/null || true
