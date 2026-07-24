@@ -28,12 +28,18 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          function Assert-ExactlyOnce {
+              param([string]$Text, [string]$Needle, [string]$Label)
+              $count = [regex]::Matches($Text, [regex]::Escape($Needle)).Count
+              if ($count -ne 1) { throw "Expected exactly one $Label source block, found $count." }
+          }
+
           $path = 'tools/Start-PawchiveMetadataRunner.ps1'
           $text = [IO.File]::ReadAllText($path)
 
           $oldDefault = '    [string]$LogPath = "$PSScriptRoot\PawchiveMetadataRunner.log"'
           $newDefault = "    [string]`$LogPath = ''"
-          if (($text.Split($oldDefault).Count - 1) -ne 1) { throw 'Unexpected LogPath parameter source.' }
+          Assert-ExactlyOnce $text $oldDefault 'LogPath parameter'
           $text = $text.Replace($oldDefault, $newDefault)
 
           $oldInitialize = @'
@@ -57,12 +63,12 @@ function Initialize-RunnerLog {
             $expanded = Join-Path $PSScriptRoot $expanded
         }
 '@
-          if (($text.Split($oldInitialize).Count - 1) -ne 1) { throw 'Unexpected Initialize-RunnerLog source.' }
+          Assert-ExactlyOnce $text $oldInitialize 'Initialize-RunnerLog'
           $text = $text.Replace($oldInitialize, $newInitialize)
 
           $oldWarning = '        Write-Warning "Could not initialize the requested log path ''$LogPath''. Falling back to ''$fallback'': $($_.Exception.Message)"'
           $newWarning = '        Write-Warning "Could not initialize the requested log path ''$requestedLogPath''. Falling back to ''$fallback'': $($_.Exception.Message)"'
-          if (($text.Split($oldWarning).Count - 1) -ne 1) { throw 'Unexpected log warning source.' }
+          Assert-ExactlyOnce $text $oldWarning 'log warning'
           $text = $text.Replace($oldWarning, $newWarning)
 
           $oldTitle = '    return @($candidates | Where-Object { $_ -like ''PMF Runner |*'' } | Select-Object -First 1)[0]'
@@ -71,9 +77,8 @@ function Initialize-RunnerLog {
     if ($null -eq $statusTitle) { return '' }
     return [string]$statusTitle
 '@
-          if (($text.Split($oldTitle).Count - 1) -ne 1) { throw 'Unexpected Get-MaintenanceStatusTitle source.' }
+          Assert-ExactlyOnce $text $oldTitle 'Get-MaintenanceStatusTitle return'
           $text = $text.Replace($oldTitle, $newTitle.TrimEnd("`r", "`n"))
-
           [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
 
           $testPath = 'tests/v0139-metadata-runner-startup.cjs'
@@ -97,12 +102,14 @@ assert.doesNotMatch(source, /Select-Object -First 1\)\[0\]/);
 console.log('Pawchive metadata runner startup and default log-path regression checks passed.');
 '@ | Set-Content -LiteralPath $testPath -Encoding utf8NoBOM
 
-          $changelog = [IO.File]::ReadAllText('CHANGELOG.md')
+          $changelogPath = 'CHANGELOG.md'
+          $changelog = [IO.File]::ReadAllText($changelogPath)
           $anchor = "## 0.13.9`n`n"
           $notes = "- Fixed the PowerShell runner startup crash when the PMF maintenance window has not published its first title heartbeat yet.`n- Corrected the default runner log location so it resolves beside the script under ``tools`` instead of the current drive root.`n"
-          if (-not $changelog.Contains($anchor)) { throw 'Could not find the v0.13.9 changelog section.' }
-          $changelog = $changelog.Replace($anchor, $anchor + $notes, 1)
-          [IO.File]::WriteAllText('CHANGELOG.md', $changelog, [Text.UTF8Encoding]::new($false))
+          $anchorIndex = $changelog.IndexOf($anchor, [StringComparison]::Ordinal)
+          if ($anchorIndex -lt 0) { throw 'Could not find the v0.13.9 changelog section.' }
+          $changelog = $changelog.Insert($anchorIndex + $anchor.Length, $notes)
+          [IO.File]::WriteAllText($changelogPath, $changelog, [Text.UTF8Encoding]::new($false))
 
       - name: Validate PowerShell behavior
         shell: pwsh
@@ -111,12 +118,12 @@ console.log('Pawchive metadata runner startup and default log-path regression ch
           $path = (Resolve-Path 'tools/Start-PawchiveMetadataRunner.ps1').Path
           $tokens = $null
           $errors = $null
-          $ast = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+          $ast = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
           if ($errors.Count) { throw ($errors | ForEach-Object Message | Out-String) }
 
           $functionAst = $ast.Find({
               param($node)
-              $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+              $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
               $node.Name -eq 'Get-MaintenanceStatusTitle'
           }, $true)
           if (-not $functionAst) { throw 'Get-MaintenanceStatusTitle was not found.' }
@@ -134,6 +141,7 @@ console.log('Pawchive metadata runner startup and default log-path regression ch
         run: |
           $ErrorActionPreference = 'Stop'
           node --check pawchive-pw-media-filter.user.js
+          if ($LASTEXITCODE -ne 0) { throw 'Userscript syntax validation failed.' }
           $tests = @(Get-ChildItem tests -Filter '*.cjs' -File | Where-Object Name -ne 'test-helper.cjs' | Sort-Object Name)
           foreach ($test in $tests) {
               Write-Host "Running $($test.FullName)"
@@ -149,8 +157,8 @@ console.log('Pawchive metadata runner startup and default log-path regression ch
         run: |
           $ErrorActionPreference = 'Stop'
           Remove-Item '.github/workflows/fix-metadata-runner-startup.yml' -Force
-          if (Test-Path '.github/workflows' -PathType Container -and -not (Get-ChildItem '.github/workflows' -Force)) { Remove-Item '.github/workflows' -Force }
-          if (Test-Path '.github' -PathType Container -and -not (Get-ChildItem '.github' -Force)) { Remove-Item '.github' -Force }
+          if ((Test-Path '.github/workflows' -PathType Container) -and -not @(Get-ChildItem '.github/workflows' -Force).Count) { Remove-Item '.github/workflows' -Force }
+          if ((Test-Path '.github' -PathType Container) -and -not @(Get-ChildItem '.github' -Force).Count) { Remove-Item '.github' -Force }
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
