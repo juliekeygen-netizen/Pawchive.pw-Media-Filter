@@ -572,3 +572,11 @@ They contain identifiers and geometry/state only, never post content or media UR
 ## Verification boundary
 
 Automated tests cover normalization and static contracts, Catalogue pipeline behavior, migration fixtures, sorting, badge metrics, identity parsing, page clamping, native page identity, and stale-generation cancellation. They do not prove real Tampermonkey BFCache behavior, Pawchive DOM timing, browser side-button navigation, IndexedDB migration in an existing profile, or rendered visual overlap. Those require [TESTING.md](TESTING.md).
+## v0.13.9 Popular navigation and maintenance-runner contract
+
+- Popular jobs are identified by period key and the pending list has no intentional length cap. A Day/Week/Month route change must not replace the active job or any waiting period.
+- Active job progress is periodically persisted to both session and userscript storage. On a full document navigation, the replacement userscript instance restores the active descriptor as a resumable job, loads the period checkpoint, retains a non-decreasing display floor, and continues from committed covered offsets. Interrupted Updates resume their working run rather than becoming a new Update from page one.
+- The metadata runner remains a real Chromium-profile runner because PMF data lives in Tampermonkey and Pawchive-origin IndexedDB. In maintenance mode the userscript publishes a one-second heartbeat and progress summary in the maintenance window title. The PowerShell watchdog reads that title, renders live terminal progress, and periodically writes it to an explicitly initialized log file.
+- A missing maintenance heartbeat is an actionable failure state: the runner reports the selected profile and tells the user to verify login, Tampermonkey, and the installed PMF version.
+- Nested maintenance scope dialogs are modal overlays above the Catalogue Maintenance workspace, not children hidden inside its stacking layer.
+

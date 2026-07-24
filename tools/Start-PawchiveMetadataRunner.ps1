@@ -17,6 +17,12 @@ param(
     [ValidateRange(5, 300)]
     [int]$RestartDelaySeconds = 15,
 
+    [ValidateRange(1, 30)]
+    [int]$StatusPollSeconds = 2,
+
+    [ValidateRange(5, 300)]
+    [int]$ProgressLogIntervalSeconds = 30,
+
     [string]$LogPath = "$PSScriptRoot\PawchiveMetadataRunner.log"
 )
 
@@ -43,13 +49,50 @@ $SW_MINIMIZE = 6
 
 $script:MaintenanceRootProcessId = 0
 $script:MaintenanceSessionStarted = $false
+$script:ResolvedLogPath = ''
+$script:LogFailureReported = $false
+$script:LastProgressTitle = ''
+$script:LastProgressLogAt = [datetime]::MinValue
+$script:HandshakeEstablished = $false
+
+function Initialize-RunnerLog {
+    try {
+        $expanded = [Environment]::ExpandEnvironmentVariables($LogPath)
+        if (-not [IO.Path]::IsPathRooted($expanded)) {
+            $expanded = Join-Path (Get-Location) $expanded
+        }
+        $full = [IO.Path]::GetFullPath($expanded)
+        $parent = Split-Path -Parent $full
+        if ($parent -and -not (Test-Path -LiteralPath $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+        if (-not (Test-Path -LiteralPath $full)) {
+            New-Item -ItemType File -Path $full -Force | Out-Null
+        }
+        $script:ResolvedLogPath = $full
+    } catch {
+        $fallback = Join-Path $env:TEMP 'PawchiveMetadataRunner.log'
+        New-Item -ItemType File -Path $fallback -Force -ErrorAction SilentlyContinue | Out-Null
+        $script:ResolvedLogPath = $fallback
+        Write-Warning "Could not initialize the requested log path '$LogPath'. Falling back to '$fallback': $($_.Exception.Message)"
+    }
+}
 
 function Write-RunnerLog {
     param([Parameter(Mandatory)][string]$Message)
     $line = "[{0}] {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
     Write-Host $line
-    try { Add-Content -LiteralPath $LogPath -Value $line -Encoding UTF8 } catch { }
+    try {
+        if (-not $script:ResolvedLogPath) { Initialize-RunnerLog }
+        Add-Content -LiteralPath $script:ResolvedLogPath -Value $line -Encoding UTF8 -ErrorAction Stop
+    } catch {
+        if (-not $script:LogFailureReported) {
+            $script:LogFailureReported = $true
+            Write-Warning "Could not write the Pawchive runner log '$script:ResolvedLogPath': $($_.Exception.Message)"
+        }
+    }
 }
+
 
 function Resolve-Browser {
     $candidates = @()
@@ -179,6 +222,72 @@ function Minimize-MaintenanceWindows {
     }
 }
 
+function Get-MaintenanceStatusTitle {
+    param([Parameter(Mandatory)]$BrowserInfo)
+    $candidates = @()
+    foreach ($item in @(Get-MaintenanceProcesses -BrowserInfo $BrowserInfo)) {
+        $process = Get-Process -Id $item.ProcessId -ErrorAction SilentlyContinue
+        if ($process -and $process.MainWindowTitle) { $candidates += [string]$process.MainWindowTitle }
+    }
+    if (-not $candidates.Count -and $script:MaintenanceRootProcessId -gt 0) {
+        $root = Get-Process -Id $script:MaintenanceRootProcessId -ErrorAction SilentlyContinue
+        if ($root -and $root.MainWindowTitle) { $candidates += [string]$root.MainWindowTitle }
+    }
+    if (-not $candidates.Count) {
+        $candidates += @(Get-Process -Name $BrowserInfo.Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.MainWindowTitle -like 'PMF Runner |*' } |
+            ForEach-Object { [string]$_.MainWindowTitle })
+    }
+    return @($candidates | Where-Object { $_ -like 'PMF Runner |*' } | Select-Object -First 1)[0]
+}
+
+function Update-RunnerProgress {
+    param([Parameter(Mandatory)]$BrowserInfo, [switch]$ForceLog)
+    $title = Get-MaintenanceStatusTitle -BrowserInfo $BrowserInfo
+    if (-not $title) { return $false }
+
+    $status = $title -replace '^PMF Runner\s*\|\s*', ''
+    $percent = -1
+    if ($status -match '\((\d{1,3})%\)') {
+        $percent = [Math]::Max(0, [Math]::Min(100, [int]$Matches[1]))
+    }
+    if ($percent -ge 0) {
+        Write-Progress -Id 137 -Activity 'Pawchive metadata runner' -Status $status -PercentComplete $percent
+    } else {
+        Write-Progress -Id 137 -Activity 'Pawchive metadata runner' -Status $status
+    }
+
+    $now = Get-Date
+    $changedPhase = $title -ne $script:LastProgressTitle
+    $logDue = ($now - $script:LastProgressLogAt).TotalSeconds -ge $ProgressLogIntervalSeconds
+    if ($ForceLog -or -not $script:HandshakeEstablished -or $logDue) {
+        if (-not $script:HandshakeEstablished) {
+            Write-RunnerLog 'PMF userscript handshake established. Live progress is now available in this terminal.'
+            $script:HandshakeEstablished = $true
+        }
+        Write-RunnerLog "Progress: $status"
+        $script:LastProgressLogAt = $now
+    } elseif ($changedPhase -and ($status -match 'complete|failed|stopped|Waiting|Planning')) {
+        Write-RunnerLog "Progress: $status"
+        $script:LastProgressLogAt = $now
+    }
+    $script:LastProgressTitle = $title
+    return $true
+}
+
+function Wait-RunnerHandshake {
+    param([Parameter(Mandatory)]$BrowserInfo, [int]$TimeoutSeconds = 45)
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Update-RunnerProgress -BrowserInfo $BrowserInfo -ForceLog) { return $true }
+        if (-not (Test-MaintenanceBrowserRunning -BrowserInfo $BrowserInfo)) { break }
+        Start-Sleep -Seconds 1
+    }
+    Write-RunnerLog 'WARNING: The browser started, but Pawchive Media Filter did not publish a maintenance heartbeat within 45 seconds.'
+    Write-RunnerLog 'Open the minimized maintenance window and confirm that Pawchive is logged in, Tampermonkey is enabled, and Pawchive Media Filter v0.13.9 or newer is installed in this exact profile.'
+    return $false
+}
+
 function Start-MaintenanceBrowser {
     param([Parameter(Mandatory)]$BrowserInfo)
 
@@ -221,8 +330,10 @@ function Start-MaintenanceBrowser {
     }
 }
 
+Initialize-RunnerLog
 $browserInfo = Resolve-Browser
 $ProfileDirectory = Resolve-ProfileDirectory -BrowserInfo $browserInfo
+Write-RunnerLog "Log file: $script:ResolvedLogPath"
 Write-RunnerLog "Using $($browserInfo.Name): $($browserInfo.Executable)"
 Write-RunnerLog "User data: $($browserInfo.Data); profile: $ProfileDirectory"
 if (-not (Test-TampermonkeyInstalled -BrowserInfo $browserInfo -ResolvedProfile $ProfileDirectory)) {
@@ -238,6 +349,7 @@ try {
     }
 
     Start-MaintenanceBrowser -BrowserInfo $browserInfo
+    [void](Wait-RunnerHandshake -BrowserInfo $browserInfo)
 
     if ($Once) {
         Write-RunnerLog 'Once mode selected. The browser was launched; the PowerShell watchdog is exiting.'
@@ -245,20 +357,29 @@ try {
     }
 
     Write-RunnerLog 'Watchdog is active. Press Ctrl+C to stop the PowerShell runner.'
+    $nextProcessCheck = (Get-Date).AddSeconds($RestartDelaySeconds)
     while ($true) {
-        Start-Sleep -Seconds $RestartDelaySeconds
+        Start-Sleep -Seconds $StatusPollSeconds
         if (-not $NoKeepAwake) {
             [void][PmfRunnerNative]::SetThreadExecutionState($ES_CONTINUOUS -bor $ES_SYSTEM_REQUIRED -bor $ES_AWAYMODE_REQUIRED)
         }
+        [void](Update-RunnerProgress -BrowserInfo $browserInfo)
+        if ((Get-Date) -lt $nextProcessCheck) { continue }
+        $nextProcessCheck = (Get-Date).AddSeconds($RestartDelaySeconds)
         if (-not (Test-MaintenanceBrowserRunning -BrowserInfo $browserInfo)) {
+            Write-Progress -Id 137 -Activity 'Pawchive metadata runner' -Completed
+            $script:HandshakeEstablished = $false
+            $script:LastProgressTitle = ''
             Write-RunnerLog 'Maintenance browser was no longer running; restarting it.'
             Start-MaintenanceBrowser -BrowserInfo $browserInfo
+            [void](Wait-RunnerHandshake -BrowserInfo $browserInfo)
         } else {
             Minimize-MaintenanceWindows -BrowserInfo $browserInfo
         }
     }
 }
 finally {
+    Write-Progress -Id 137 -Activity 'Pawchive metadata runner' -Completed
     if (-not $NoKeepAwake) {
         [void][PmfRunnerNative]::SetThreadExecutionState($ES_CONTINUOUS)
     }

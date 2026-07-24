@@ -892,3 +892,40 @@ Record:
 3. Open Settings → Catalogue Maintenance → Start or choose scope. The scope dialog must be the top overlay and fully clickable above the maintenance workspace.
 4. Close the browser and run `Start-PawchiveMetadataRunner.ps1` with its default `watch-all` mode. Confirm it auto-selects the last-used profile, runs missing-attachment work, then creator-profile repair, and writes diagnostics to the log.
 5. Test `-Mode watch-profiles`, `resume-profiles`, `retry-profiles`, and `start-profiles`; verify the profile-repair checkpoint and Stop/Resume UI remain synchronized.
+## v0.13.9 Popular queue navigation and PowerShell runner
+
+### Popular progress through period navigation
+
+1. Open a dated Month period in Native mode and start a scan.
+2. Wait until the active row is clearly beyond one page and note its percentage.
+3. Click another Day, Week, or Month period while the scan is active.
+4. Queue that second period, then navigate to at least three more distinct periods and queue each.
+5. Open the queue on every route.
+
+Expected:
+
+- the original active period remains represented;
+- its visible percentage never returns to zero;
+- after reload recovery it resumes from committed pages, although the currently half-finished page may be repeated;
+- every distinct period remains in FIFO waiting order;
+- there is no queue-length rejection or replacement of an earlier period.
+
+### Metadata runner heartbeat and log
+
+1. Close every instance of the selected Chromium browser.
+2. Install/update PMF v0.13.9 in the profile containing the catalogue.
+3. Run `powershell -ExecutionPolicy Bypass -File ".\tools\Start-PawchiveMetadataRunner.ps1" -Browser Chrome`.
+4. Confirm the terminal prints the exact log path and creates that file immediately.
+5. Within 45 seconds confirm the terminal reports `PMF userscript handshake established`.
+6. Keep the runner open for at least one minute.
+
+Expected:
+
+- PowerShell displays a live progress row with task, completed/total, percentage, remaining count, and ETA when calculable;
+- the log receives periodic `Progress:` lines;
+- if the wrong profile, missing Tampermonkey, logged-out Pawchive, or an old script prevents startup, the runner emits a visible handshake warning instead of silently appearing idle.
+
+### Missing-attachment scope dialog
+
+Open Settings → Catalogue Maintenance and press **Start or choose scope**. The scope dialog must appear above the maintenance window, remain keyboard-focusable, and close independently without closing the maintenance workspace.
+

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.13.9
+
+- Persisted live Popular job progress and committed scan checkpoints so full period navigation cannot reset the visible queue to zero.
+- Added interrupted Update resumption through the same working run and covered offsets used by Scan/Resume.
+- Kept the Popular pending queue uncapped and period-keyed across navigation and reload restoration.
+- Added a userscript-to-PowerShell status bridge through the maintenance window title, live `Write-Progress` output, periodic progress logging, an explicit log path, and startup handshake diagnostics.
+- Raised the missing-attachment scope dialog above the maintenance workspace with deterministic nested-overlay ownership.
+- Added focused v0.13.9 queue/navigation/runner regression coverage.
+
 ## 0.13.8
 
 - Kept Popular scans and arbitrarily many queued period jobs alive across Day/Week/Month navigation, Turbo replacement, reload recovery, and BFCache pause/resume.

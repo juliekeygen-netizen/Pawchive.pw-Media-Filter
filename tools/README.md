@@ -33,6 +33,25 @@ The default mode is `watch-all`. It:
 
 Press `Ctrl+C` in PowerShell to stop the watchdog.
 
+### Live terminal progress
+
+PMF v0.13.9 publishes a maintenance heartbeat through the minimized browser window title. The PowerShell watchdog reads it and shows live progress containing:
+
+- the active maintenance phase;
+- completed and total items;
+- percentage;
+- remaining items;
+- failure count;
+- ETA when enough rate data exists.
+
+At startup the terminal prints the exact log location and creates the file immediately. It then waits up to 45 seconds for a PMF userscript handshake. If no handshake appears, open the minimized window and confirm that Pawchive is logged in, Tampermonkey is enabled, and PMF v0.13.9 or newer is installed in the selected profile.
+
+By default, a progress snapshot is appended to `tools\PawchiveMetadataRunner.log` every 30 seconds. Change the terminal polling or log interval with:
+
+```powershell
+.\tools\Start-PawchiveMetadataRunner.ps1 -StatusPollSeconds 2 -ProgressLogIntervalSeconds 30
+```
+
 ## Browser and profile examples
 
 Use Brave and automatically select Chromium's last-used profile:
@@ -104,7 +123,7 @@ The corresponding maintenance URLs are:
 - Do not use a separate empty browser profile unless you intentionally want a separate empty Pawchive catalogue.
 - `-AllowBrowserAlreadyRunning` is available, but then the maintenance page joins the existing browser session and may stop when that browser closes.
 - Chromium background timer throttling, native-window occlusion throttling, renderer backgrounding, and background mode are disabled for the maintenance app.
-- The runner writes `tools\PawchiveMetadataRunner.log`.
+- The runner creates the configured log file immediately, prints its absolute path, and reports any write failure. The default is `tools\PawchiveMetadataRunner.log`.
 - Use `-NoKeepAwake` to allow Windows to sleep.
 - Use `-CloseBrowserOnExit` to close the maintenance app process when the PowerShell runner exits.
 

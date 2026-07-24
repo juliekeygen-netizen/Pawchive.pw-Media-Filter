@@ -6,6 +6,14 @@
 
 Open the link with Tampermonkey installed to install or update the script.
 
+## v0.13.9 Navigation-safe Popular progress and observable metadata runner
+
+- Persisted active Popular progress while it changes, preserved a non-decreasing progress floor across full Day/Week/Month navigation reloads, and resumed interrupted Scan or Update work from committed period offsets instead of visually returning to zero.
+- Retained the uncapped FIFO queue for distinct Popular periods; switching periods can add any number of Day, Week, and Month jobs without replacing the active job or prior waiting entries.
+- Added an explicit maintenance-runner heartbeat and live terminal progress for missing-attachment and creator-profile work, including completed/total, percent, remaining, failures, rate-derived ETA, and periodic log entries.
+- Made the PowerShell log path explicit at startup, creates the log file immediately, reports write failures instead of swallowing them, and warns when the selected browser profile never establishes a PMF userscript handshake.
+- Forced the nested missing-attachment scope picker above the Catalogue Maintenance workspace and isolated its click handling.
+
 ## v0.13.8 Persistent Popular queue and maintenance runner repairs
 
 - Made the Popular queue global across dated period navigation: active scans continue through Turbo period changes, queued periods remain visible, and interrupted/full-reload work restores automatically as Resume jobs.

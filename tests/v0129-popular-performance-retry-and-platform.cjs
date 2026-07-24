@@ -16,8 +16,8 @@ const { loadUserscript } = require('./test-helper.cjs');
     PopularPageController,
   } = api;
 
-  assert.equal(Config.version, '0.13.8');
-  assert.match(originalSource, /\/\/ @version\s+0\.13\.8/);
+  assert.equal(Config.version, '0.13.9');
+  assert.match(originalSource, /\/\/ @version\s+0\.13\.9/);
 
   const button = {
     disabled: false,
@@ -113,7 +113,7 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularScanner.preparePage.toString(), /Config\.catalogueDetailConcurrency/);
   assert.match(PopularScanner.preparePage.toString(), /,2,items\.length/);
 
-  assert.match(PopularJobManager.restore.toString(), /resumable=\['running','interrupted'\]\.includes/);
+  assert.match(PopularJobManager.restore.toString(), /Boolean\(descriptor\.resumeCheckpoint\)\|\|\['running','interrupted'\]\.includes/);
   assert.match(PopularJobManager.restore.toString(), /status:recent\?descriptor\.status:'queued'/);
   assert.match(PopularJobManager.restore.toString(), /recentJobs\.set/);
   assert.match(PopularJobManager.snapshot.toString(), /'interrupted'/);
@@ -124,5 +124,5 @@ const { loadUserscript } = require('./test-helper.cjs');
   assert.match(PopularPageController.nativeState.toString(), /nextSibling/);
   assert.match(PopularPageController.restoreNode.toString(), /insertBefore/);
 
-  console.log('Pawchive Media Filter v0.13.8 Popular performance, retry, mirrored pagination, and platform-icon tests passed.');
+  console.log('Pawchive Media Filter v0.13.9 Popular performance, retry, mirrored pagination, and platform-icon tests passed.');
 })();
