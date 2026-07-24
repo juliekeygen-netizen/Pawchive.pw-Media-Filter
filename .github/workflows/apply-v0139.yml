@@ -1,0 +1,81 @@
+name: Apply Pawchive v0.13.9
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.pawchive-v0139/trigger'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pawchive-v0139-publication
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact publication payload
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Preserve and verify payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum .pawchive-v0139/part00 | awk '{print $1}')" = "645c397cfd509bc34b7772ca8dc2902ffdae68d24dcf742f4a3335764720f523"
+          test "$(sha256sum .pawchive-v0139/part01 | awk '{print $1}')" = "e8378d0d96ea63876f549ca2f58f1cfba665e9a95b95082029fd2de5d2294489"
+          test "$(sha256sum .pawchive-v0139/part02 | awk '{print $1}')" = "868f5a4875f0a0fb4b3accf7b5c00b0889c7b3258a2f86dee8c29124a3b60e17"
+          test "$(sha256sum .pawchive-v0139/part03 | awk '{print $1}')" = "d4f7608ec62cb2eaf1b0d2f16c2f68b19dd46e22b52db704289c9dfdecbd2ead"
+          test "$(sha256sum .pawchive-v0139/part04 | awk '{print $1}')" = "1bc8c6f520e162b8cdcdd0d5277fd80de681068800e9b32fe87d796aef76554f"
+          cat .pawchive-v0139/part00 .pawchive-v0139/part01 .pawchive-v0139/part02 .pawchive-v0139/part03 .pawchive-v0139/part04 > /tmp/v0139.patch.xz.b64
+          test "$(sha256sum /tmp/v0139.patch.xz.b64 | awk '{print $1}')" = "42492eb582962a1b363230f6441f56922ef6fc3aaf42ecefa848dea97ca21e07"
+
+      - name: Apply exact v0.13.9 patch to current master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin master
+          git checkout -B master origin/master
+          test "$(git rev-parse HEAD)" = "3a91bf122581818a8dcd688f7d7b75d0af3ea527"
+          test "$(git hash-object pawchive-pw-media-filter.user.js)" = "6200d6b16c42c5c21a7209edde979af32bcd874b"
+          test "$(git hash-object tools/Start-PawchiveMetadataRunner.ps1)" = "38d4eb6112cf67dbf601232559ef29fb11db8fcb"
+          base64 -d /tmp/v0139.patch.xz.b64 > /tmp/v0139.patch.xz
+          test "$(sha256sum /tmp/v0139.patch.xz | awk '{print $1}')" = "5ed30a10d38923e72c8f47c5c4b609ea6542756443dd045e39ce9d7a90d451e3"
+          xz -dc /tmp/v0139.patch.xz > /tmp/v0139.patch
+          test "$(sha256sum /tmp/v0139.patch | awk '{print $1}')" = "8552c500f8dcd16a346c4c10fa0d6fc46d5e9e9ecd4e80758dc75c942c97fdf5"
+          git apply --check /tmp/v0139.patch
+          git apply /tmp/v0139.patch
+          test "$(sha256sum pawchive-pw-media-filter.user.js | awk '{print $1}')" = "8f3c0a39bf67a34784c917c38898164d434cafa57ab8a52e9c45d79d061735d5"
+          test "$(sha256sum tools/Start-PawchiveMetadataRunner.ps1 | awk '{print $1}')" = "afabbb8581283e6076c23dee4d401ee6bdf4e4155a8f89b5b0f28a49c34d0e67"
+          test "$(sha256sum tests/v0139-popular-progress-and-runner-status.cjs | awk '{print $1}')" = "dda3af41de2510d95a859481dd84aa7c7be7c340581323584bd5abb6daadb53e"
+
+      - name: Validate exact release
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pawchive-pw-media-filter.user.js
+          count=0
+          for file in tests/*.cjs; do
+            node "$file"
+            count=$((count + 1))
+          done
+          test "$count" = "74"
+          grep -q '@version      0.13.9' pawchive-pw-media-filter.user.js
+          grep -q "version: '0.13.9'" pawchive-pw-media-filter.user.js
+          echo "ALL TESTS PASSED ($count)"
+
+      - name: Publish directly to master
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix v0.13.9 Popular progress and runner status'
+          git push origin HEAD:master
