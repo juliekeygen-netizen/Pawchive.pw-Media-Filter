@@ -2,6 +2,8 @@
 
 ## 0.13.9
 
+- Fixed the PowerShell runner startup crash when the PMF maintenance window has not published its first title heartbeat yet.
+- Corrected the default runner log location so it resolves beside the script under `tools` instead of the current drive root.
 - Persisted live Popular job progress and committed scan checkpoints so full period navigation cannot reset the visible queue to zero.
 - Added interrupted Update resumption through the same working run and covered offsets used by Scan/Resume.
 - Kept the Popular pending queue uncapped and period-keyed across navigation and reload restoration.

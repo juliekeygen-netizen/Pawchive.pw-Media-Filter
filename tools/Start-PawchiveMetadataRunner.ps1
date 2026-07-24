@@ -23,7 +23,7 @@ param(
     [ValidateRange(5, 300)]
     [int]$ProgressLogIntervalSeconds = 30,
 
-    [string]$LogPath = "$PSScriptRoot\PawchiveMetadataRunner.log"
+    [string]$LogPath = ''
 )
 
 Set-StrictMode -Version Latest
@@ -57,9 +57,14 @@ $script:HandshakeEstablished = $false
 
 function Initialize-RunnerLog {
     try {
-        $expanded = [Environment]::ExpandEnvironmentVariables($LogPath)
+        $requestedLogPath = if ([string]::IsNullOrWhiteSpace($LogPath)) {
+            Join-Path $PSScriptRoot 'PawchiveMetadataRunner.log'
+        } else {
+            $LogPath
+        }
+        $expanded = [Environment]::ExpandEnvironmentVariables($requestedLogPath)
         if (-not [IO.Path]::IsPathRooted($expanded)) {
-            $expanded = Join-Path (Get-Location) $expanded
+            $expanded = Join-Path $PSScriptRoot $expanded
         }
         $full = [IO.Path]::GetFullPath($expanded)
         $parent = Split-Path -Parent $full
@@ -74,7 +79,7 @@ function Initialize-RunnerLog {
         $fallback = Join-Path $env:TEMP 'PawchiveMetadataRunner.log'
         New-Item -ItemType File -Path $fallback -Force -ErrorAction SilentlyContinue | Out-Null
         $script:ResolvedLogPath = $fallback
-        Write-Warning "Could not initialize the requested log path '$LogPath'. Falling back to '$fallback': $($_.Exception.Message)"
+        Write-Warning "Could not initialize the requested log path '$requestedLogPath'. Falling back to '$fallback': $($_.Exception.Message)"
     }
 }
 
@@ -238,7 +243,9 @@ function Get-MaintenanceStatusTitle {
             Where-Object { $_.MainWindowTitle -like 'PMF Runner |*' } |
             ForEach-Object { [string]$_.MainWindowTitle })
     }
-    return @($candidates | Where-Object { $_ -like 'PMF Runner |*' } | Select-Object -First 1)[0]
+    $statusTitle = $candidates | Where-Object { $_ -like 'PMF Runner |*' } | Select-Object -First 1
+    if ($null -eq $statusTitle) { return '' }
+    return [string]$statusTitle
 }
 
 function Update-RunnerProgress {
