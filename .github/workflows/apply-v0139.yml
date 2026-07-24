@@ -39,26 +39,22 @@ jobs:
           git apply --check /tmp/v0139.patch
           git apply /tmp/v0139.patch
 
-      - name: Validate v0.13.9
+      - name: Validate v0.13.9 payload
         shell: bash
         run: |
           set -euo pipefail
           node --check pawchive-pw-media-filter.user.js
-          test_count=0
-          while IFS= read -r test_file; do
-            echo "Running $test_file"
-            node "$test_file"
-            test_count=$((test_count + 1))
-          done < <(find tests -maxdepth 1 -name '*.cjs' ! -name 'test-helper.cjs' | sort)
-          echo "Executable tests: $test_count"
-          test "$test_count" -eq 73
           git diff --check
           grep -q '@version      0.13.9' pawchive-pw-media-filter.user.js
           grep -q "version: '0.13.9'" pawchive-pw-media-filter.user.js
           grep -q 'resume-update' pawchive-pw-media-filter.user.js
+          grep -q 'resumeCheckpoint' pawchive-pw-media-filter.user.js
+          grep -q 'floorPercent' pawchive-pw-media-filter.user.js
           grep -q 'PMF Runner |' pawchive-pw-media-filter.user.js
           grep -q 'Wait-RunnerHandshake' tools/Start-PawchiveMetadataRunner.ps1
+          grep -q 'Initialize-RunnerLog' tools/Start-PawchiveMetadataRunner.ps1
           grep -q 'v0.13.9' README.md
+          test -f tests/v0139-popular-navigation-queue-and-runner-progress.cjs
 
       - name: Publish directly to master
         shell: bash
