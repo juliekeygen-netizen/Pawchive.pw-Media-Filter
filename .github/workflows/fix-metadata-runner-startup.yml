@@ -25,91 +25,92 @@ jobs:
           fetch-depth: 0
 
       - name: Apply exact PowerShell fixes
-        shell: pwsh
+        shell: python
         run: |
-          $ErrorActionPreference = 'Stop'
-          function Assert-ExactlyOnce {
-              param([string]$Text, [string]$Needle, [string]$Label)
-              $count = [regex]::Matches($Text, [regex]::Escape($Needle)).Count
-              if ($count -ne 1) { throw "Expected exactly one $Label source block, found $count." }
-          }
+          from pathlib import Path
 
-          $path = 'tools/Start-PawchiveMetadataRunner.ps1'
-          $text = [IO.File]::ReadAllText($path)
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"Expected exactly one {label} source block, found {count}.")
+              return text.replace(old, new, 1)
 
-          $oldDefault = '    [string]$LogPath = "$PSScriptRoot\PawchiveMetadataRunner.log"'
-          $newDefault = "    [string]`$LogPath = ''"
-          Assert-ExactlyOnce $text $oldDefault 'LogPath parameter'
-          $text = $text.Replace($oldDefault, $newDefault)
+          script_path = Path("tools/Start-PawchiveMetadataRunner.ps1")
+          text = script_path.read_text(encoding="utf-8")
 
-          $oldInitialize = @'
-function Initialize-RunnerLog {
-    try {
-        $expanded = [Environment]::ExpandEnvironmentVariables($LogPath)
-        if (-not [IO.Path]::IsPathRooted($expanded)) {
-            $expanded = Join-Path (Get-Location) $expanded
-        }
-'@
-          $newInitialize = @'
-function Initialize-RunnerLog {
-    try {
-        $requestedLogPath = if ([string]::IsNullOrWhiteSpace($LogPath)) {
-            Join-Path $PSScriptRoot 'PawchiveMetadataRunner.log'
-        } else {
-            $LogPath
-        }
-        $expanded = [Environment]::ExpandEnvironmentVariables($requestedLogPath)
-        if (-not [IO.Path]::IsPathRooted($expanded)) {
-            $expanded = Join-Path $PSScriptRoot $expanded
-        }
-'@
-          Assert-ExactlyOnce $text $oldInitialize 'Initialize-RunnerLog'
-          $text = $text.Replace($oldInitialize, $newInitialize)
+          text = replace_once(
+              text,
+              '    [string]$LogPath = "$PSScriptRoot\\PawchiveMetadataRunner.log"',
+              "    [string]$LogPath = ''",
+              "LogPath parameter",
+          )
 
-          $oldWarning = '        Write-Warning "Could not initialize the requested log path ''$LogPath''. Falling back to ''$fallback'': $($_.Exception.Message)"'
-          $newWarning = '        Write-Warning "Could not initialize the requested log path ''$requestedLogPath''. Falling back to ''$fallback'': $($_.Exception.Message)"'
-          Assert-ExactlyOnce $text $oldWarning 'log warning'
-          $text = $text.Replace($oldWarning, $newWarning)
+          old_initialize = """function Initialize-RunnerLog {
+              try {
+                  $expanded = [Environment]::ExpandEnvironmentVariables($LogPath)
+                  if (-not [IO.Path]::IsPathRooted($expanded)) {
+                      $expanded = Join-Path (Get-Location) $expanded
+                  }
+          """.replace("              ", "")
+          new_initialize = """function Initialize-RunnerLog {
+              try {
+                  $requestedLogPath = if ([string]::IsNullOrWhiteSpace($LogPath)) {
+                      Join-Path $PSScriptRoot 'PawchiveMetadataRunner.log'
+                  } else {
+                      $LogPath
+                  }
+                  $expanded = [Environment]::ExpandEnvironmentVariables($requestedLogPath)
+                  if (-not [IO.Path]::IsPathRooted($expanded)) {
+                      $expanded = Join-Path $PSScriptRoot $expanded
+                  }
+          """.replace("              ", "")
+          text = replace_once(text, old_initialize, new_initialize, "Initialize-RunnerLog")
 
-          $oldTitle = '    return @($candidates | Where-Object { $_ -like ''PMF Runner |*'' } | Select-Object -First 1)[0]'
-          $newTitle = @'
-    $statusTitle = $candidates | Where-Object { $_ -like 'PMF Runner |*' } | Select-Object -First 1
-    if ($null -eq $statusTitle) { return '' }
-    return [string]$statusTitle
-'@
-          Assert-ExactlyOnce $text $oldTitle 'Get-MaintenanceStatusTitle return'
-          $text = $text.Replace($oldTitle, $newTitle.TrimEnd("`r", "`n"))
-          [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+          text = replace_once(
+              text,
+              "        Write-Warning \"Could not initialize the requested log path '$LogPath'. Falling back to '$fallback': $($_.Exception.Message)\"",
+              "        Write-Warning \"Could not initialize the requested log path '$requestedLogPath'. Falling back to '$fallback': $($_.Exception.Message)\"",
+              "log warning",
+          )
 
-          $testPath = 'tests/v0139-metadata-runner-startup.cjs'
-          @'
-'use strict';
+          text = replace_once(
+              text,
+              "    return @($candidates | Where-Object { $_ -like 'PMF Runner |*' } | Select-Object -First 1)[0]",
+              "    $statusTitle = $candidates | Where-Object { $_ -like 'PMF Runner |*' } | Select-Object -First 1\n    if ($null -eq $statusTitle) { return '' }\n    return [string]$statusTitle",
+              "Get-MaintenanceStatusTitle return",
+          )
+          script_path.write_text(text, encoding="utf-8", newline="\n")
 
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
+          test_path = Path("tests/v0139-metadata-runner-startup.cjs")
+          test_path.write_text("""'use strict';
 
-const source = fs.readFileSync(path.join(__dirname, '..', 'tools', 'Start-PawchiveMetadataRunner.ps1'), 'utf8');
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const path = require('node:path');
 
-assert.match(source, /\[string\]\$LogPath = ''/);
-assert.match(source, /\$requestedLogPath = if \(\[string\]::IsNullOrWhiteSpace\(\$LogPath\)\)/);
-assert.match(source, /Join-Path \$PSScriptRoot 'PawchiveMetadataRunner\.log'/);
-assert.match(source, /\$expanded = Join-Path \$PSScriptRoot \$expanded/);
-assert.match(source, /\$statusTitle = \$candidates \| Where-Object/);
-assert.match(source, /if \(\$null -eq \$statusTitle\) \{ return '' \}/);
-assert.doesNotMatch(source, /Select-Object -First 1\)\[0\]/);
+          const source = fs.readFileSync(path.join(__dirname, '..', 'tools', 'Start-PawchiveMetadataRunner.ps1'), 'utf8');
 
-console.log('Pawchive metadata runner startup and default log-path regression checks passed.');
-'@ | Set-Content -LiteralPath $testPath -Encoding utf8NoBOM
+          assert.match(source, /\\[string\\]\\$LogPath = ''/);
+          assert.match(source, /\\$requestedLogPath = if \\(\\[string\\]::IsNullOrWhiteSpace\\(\\$LogPath\\)\\)/);
+          assert.match(source, /Join-Path \\$PSScriptRoot 'PawchiveMetadataRunner\\.log'/);
+          assert.match(source, /\\$expanded = Join-Path \\$PSScriptRoot \\$expanded/);
+          assert.match(source, /\\$statusTitle = \\$candidates \\| Where-Object/);
+          assert.match(source, /if \\(\\$null -eq \\$statusTitle\\) \\{ return '' \\}/);
+          assert.doesNotMatch(source, /Select-Object -First 1\\)\\[0\\]/);
 
-          $changelogPath = 'CHANGELOG.md'
-          $changelog = [IO.File]::ReadAllText($changelogPath)
-          $anchor = "## 0.13.9`n`n"
-          $notes = "- Fixed the PowerShell runner startup crash when the PMF maintenance window has not published its first title heartbeat yet.`n- Corrected the default runner log location so it resolves beside the script under ``tools`` instead of the current drive root.`n"
-          $anchorIndex = $changelog.IndexOf($anchor, [StringComparison]::Ordinal)
-          if ($anchorIndex -lt 0) { throw 'Could not find the v0.13.9 changelog section.' }
-          $changelog = $changelog.Insert($anchorIndex + $anchor.Length, $notes)
-          [IO.File]::WriteAllText($changelogPath, $changelog, [Text.UTF8Encoding]::new($false))
+          console.log('Pawchive metadata runner startup and default log-path regression checks passed.');
+          """.replace("          ", ""), encoding="utf-8", newline="\n")
+
+          changelog_path = Path("CHANGELOG.md")
+          changelog = changelog_path.read_text(encoding="utf-8")
+          anchor = "## 0.13.9\n\n"
+          notes = (
+              "- Fixed the PowerShell runner startup crash when the PMF maintenance window has not published its first title heartbeat yet.\n"
+              "- Corrected the default runner log location so it resolves beside the script under `tools` instead of the current drive root.\n"
+          )
+          if anchor not in changelog:
+              raise RuntimeError("Could not find the v0.13.9 changelog section.")
+          changelog_path.write_text(changelog.replace(anchor, anchor + notes, 1), encoding="utf-8", newline="\n")
 
       - name: Validate PowerShell behavior
         shell: pwsh
